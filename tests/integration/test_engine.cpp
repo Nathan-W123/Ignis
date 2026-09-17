@@ -200,6 +200,11 @@ TEST_CASE("constrained optimisation respects its constraints", "[integration][op
   spec.max_evaluations = 400;
   spec.outer_iterations = 4;
 
+  // Every check below reads this one result.  They were SECTIONs, which made
+  // Catch2 re-run the whole body -- and so the whole optimisation -- once per
+  // section: six 400-evaluation campaigns instead of one, and 60 % of the
+  // suite's wall time.  Plain scopes with an INFO label read the same and cost
+  // one campaign.
   const auto res = optimize(engine, spec);
   INFO(res.summary(spec));
   REQUIRE(res.feasible);
@@ -207,7 +212,8 @@ TEST_CASE("constrained optimisation respects its constraints", "[integration][op
   REQUIRE(res.evaluations <= spec.max_evaluations + 50);
   REQUIRE(res.x.size() == spec.variables.size());
 
-  SECTION("the reported optimum satisfies every constraint") {
+  {  // the reported optimum satisfies every constraint
+    INFO("the reported optimum satisfies every constraint");
     for (std::size_t c = 0; c < spec.constraints.size(); ++c) {
       INFO("constraint on " << spec.constraints[c].metric);
       REQUIRE(res.constraint_violations[c] <= 1.0e-9);
@@ -217,32 +223,37 @@ TEST_CASE("constrained optimisation respects its constraints", "[integration][op
         REQUIRE(res.constraint_values[c] >= spec.constraints[c].bound * (1.0 - 1e-9));
     }
   }
-  SECTION("every variable is inside its bounds") {
+  {  // every variable is inside its bounds
+    INFO("every variable is inside its bounds");
     for (std::size_t i = 0; i < res.x.size(); ++i) {
       REQUIRE(res.x[i] >= spec.variables[i].min - 1e-9);
       REQUIRE(res.x[i] <= spec.variables[i].max + 1e-9);
     }
   }
-  SECTION("the optimum is at least as good as the starting design") {
+  {  // the optimum is at least as good as the starting design
+    INFO("the optimum is at least as good as the starting design");
     auto start = engine.config();
     for (const auto& v : spec.variables)
       if (v.start > 0.0) applyParameter(start, v.parameter, v.start);
     const auto base = engine.runWith(start);
     REQUIRE(res.objective >= readMetric(base, spec.objective) - 1e-9);
   }
-  SECTION("rerunning the reported design reproduces the reported objective") {
+  {  // rerunning the reported design reproduces the reported objective
+    INFO("rerunning the reported design reproduces the reported objective");
     auto best = engine.config();
     for (std::size_t i = 0; i < res.x.size(); ++i)
       applyParameter(best, res.variable_names[i], res.x[i]);
     const auto check = engine.runWith(best);
     REQUIRE(readMetric(check, spec.objective) == Approx(res.objective).epsilon(1e-9));
   }
-  SECTION("the convergence history is exported") {
+  {  // the convergence history is exported
+    INFO("the convergence history is exported");
     const auto t = res.historyTable(spec);
     REQUIRE(t.rows() == res.history.size());
     REQUIRE(t.rows() == static_cast<std::size_t>(res.evaluations));
   }
-  SECTION("an impossible constraint set is reported, not silently relaxed") {
+  {  // an impossible constraint set is reported, not silently relaxed
+    INFO("an impossible constraint set is reported, not silently relaxed");
     auto impossible = spec;
     impossible.constraints.push_back({"cooling.max_wall_temperature", "<=", 100.0, 0.0});
     impossible.starts = 1;

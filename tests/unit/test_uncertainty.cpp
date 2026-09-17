@@ -105,24 +105,29 @@ TEST_CASE("drawn inputs follow the requested distributions", "[uncertainty]") {
   const auto engine = cheapEngine();
   auto spec = cheapSpec(4000);
   spec.threads = 0;
+  // One campaign feeds every check below.  As SECTIONs they re-ran the
+  // whole 4000-sample campaign once each.
   const auto res = runMonteCarlo(engine, spec);
   REQUIRE(res.succeeded > 3900);
 
-  SECTION("the normal inputs reproduce their mean and standard deviation") {
+  {  // the normal inputs reproduce their mean and standard deviation
+    INFO("the normal inputs reproduce their mean and standard deviation");
     const auto& pc = res.samples.numeric(0);
     const auto st = computeStatistics(pc);
     REQUIRE(st.mean == Approx(5.5e6).epsilon(0.01));
     REQUIRE(st.stddev == Approx(1.1e5).epsilon(0.06));
     REQUIRE(std::abs(st.skewness) < 0.15);
   }
-  SECTION("bounds are respected") {
+  {  // bounds are respected
+    INFO("bounds are respected");
     const auto& mr = res.samples.numeric(1);
     for (double v : mr) {
       REQUIRE(v >= 2.5);
       REQUIRE(v <= 4.5);
     }
   }
-  SECTION("the triangular input stays inside its support and is skewed") {
+  {  // the triangular input stays inside its support and is skewed
+    INFO("the triangular input stays inside its support and is skewed");
     const auto& eta = res.samples.numeric(3);
     const auto st = computeStatistics(eta);
     REQUIRE(st.minimum >= 0.93);
@@ -130,7 +135,8 @@ TEST_CASE("drawn inputs follow the requested distributions", "[uncertainty]") {
     // Mean of a triangular distribution is (low + mode + high)/3.
     REQUIRE(st.mean == Approx((0.93 + 0.96 + 0.98) / 3.0).epsilon(0.01));
   }
-  SECTION("percentiles are ordered") {
+  {  // percentiles are ordered
+    INFO("percentiles are ordered");
     for (const auto& name : spec.outputs) {
       const auto& s = res.statistics.at(name);
       INFO("output " << name);
@@ -147,6 +153,7 @@ TEST_CASE("drawn inputs follow the requested distributions", "[uncertainty]") {
 TEST_CASE("sensitivity rankings recover known dependencies", "[uncertainty][sensitivity]") {
   const auto engine = cheapEngine();
   auto spec = cheapSpec(1500);
+  // One campaign feeds every ranking check below; SECTIONs would re-run it.
   const auto res = runMonteCarlo(engine, spec);
   REQUIRE(res.sensitivity.size() == spec.outputs.size());
 
@@ -161,7 +168,8 @@ TEST_CASE("sensitivity rankings recover known dependencies", "[uncertainty][sens
     throw std::runtime_error("missing input " + in);
   };
 
-  SECTION("mass flow is driven by chamber pressure and throat area") {
+  {  // mass flow is driven by chamber pressure and throat area
+    INFO("mass flow is driven by chamber pressure and throat area");
     const auto s = find("performance.mdot");
     REQUIRE(s.r_squared > 0.95);
     const double src_pc = std::abs(s.src[indexOf("chamber.pressure")]);
@@ -173,18 +181,21 @@ TEST_CASE("sensitivity rankings recover known dependencies", "[uncertainty][sens
     REQUIRE(s.elasticity[indexOf("chamber.pressure")] == Approx(1.0).epsilon(0.05));
     REQUIRE(s.elasticity[indexOf("nozzle.throat_radius")] == Approx(2.0).epsilon(0.05));
   }
-  SECTION("flame temperature is driven by mixture ratio") {
+  {  // flame temperature is driven by mixture ratio
+    INFO("flame temperature is driven by mixture ratio");
     const auto s = find("chamber.temperature");
     const double src_mr = std::abs(s.src[indexOf("propellants.mixture_ratio")]);
     for (std::size_t i = 0; i < res.input_names.size(); ++i)
       if (res.input_names[i] != "propellants.mixture_ratio")
         REQUIRE(src_mr > std::abs(s.src[i]));
   }
-  SECTION("specific impulse is insensitive to throat size at fixed area ratio") {
+  {  // specific impulse is insensitive to throat size at fixed area ratio
+    INFO("specific impulse is insensitive to throat size at fixed area ratio");
     const auto s = find("performance.isp");
     REQUIRE(std::abs(s.elasticity[indexOf("nozzle.throat_radius")]) < 0.05);
   }
-  SECTION("Spearman and SRC agree in sign for the dominant inputs") {
+  {  // Spearman and SRC agree in sign for the dominant inputs
+    INFO("Spearman and SRC agree in sign for the dominant inputs");
     for (const auto& s : res.sensitivity)
       for (std::size_t i = 0; i < res.input_names.size(); ++i)
         if (std::abs(s.src[i]) > 0.3) REQUIRE(s.src[i] * s.spearman[i] > 0.0);
