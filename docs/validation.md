@@ -220,7 +220,7 @@ for the conceptual engine. Each is a statement the physics must satisfy:
 
 | Trend | Checked |
 |---|---|
-| Shifting equilibrium recovers more impulse than frozen | Measured: **370.41 s** vs **343.56 s** vacuum I<sub>sp</sub>, a **7.82 %** gain. The test requires the gain to lie between 2 % and 15 %, the band physically expected for LOX/CH<sub>4</sub>; a frozen model that accidentally shifted, or a shifting model that accidentally froze, would fall outside it. |
+| Shifting equilibrium recovers more impulse than frozen | Measured at p<sub>c</sub> = 5.5 MPa, O/F 3.4, ε = 45: **370.41 s** vs **343.56 s** vacuum I<sub>sp</sub>, a **7.82 %** gain. The test requires the gain to lie between 2 % and 15 %, the band physically expected for LOX/CH<sub>4</sub>; a frozen model that accidentally shifted, or a shifting model that accidentally froze, would fall outside it. |
 | I<sub>sp</sub> rises monotonically with altitude for a fixed nozzle | Checked over 0–80 km. |
 | Thrust splits into momentum and pressure terms that sum exactly | Checked at every altitude; the pressure term is negative when over-expanded. |
 | Peak flame temperature occurs slightly fuel-rich of stoichiometric | Checked over O/F 2–5: the maximum sits near O/F 3.5 (φ ≈ 1.14), not at φ = 1, because dissociation costs more than the extra oxidiser returns. |

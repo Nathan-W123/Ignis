@@ -31,6 +31,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# --quick shortens the three stages that dominate the wall time: the optimiser,
+# the Monte Carlo campaign and the benchmark harness.  It also drops the
+# fixed-step RK4 comparison, which is a minute of arithmetic on its own.
 MC_SAMPLES=2000
 OPT_EVALS=2500
 if [[ $QUICK -eq 1 ]]; then MC_SAMPLES=300; OPT_EVALS=600; fi
@@ -104,14 +107,19 @@ if has transient; then
   banner "startup and shutdown transient"
   "$BIN/ignis_transient" --config configs/startup_transient.yaml \
                          | tee "$RESULTS/startup_transient_report.txt"
-  banner "integrator comparison (fixed-step RK4)"
-  "$BIN/ignis_transient" --config configs/startup_transient.yaml --integrator rk4 --dt 2e-6 \
-                         --prefix startup_rk4 --no-interp-check --quiet
+  if [[ $QUICK -eq 0 ]]; then
+    banner "integrator comparison (fixed-step RK4)"
+    "$BIN/ignis_transient" --config configs/startup_transient.yaml --integrator rk4 --dt 2e-6 \
+                           --prefix startup_rk4 --no-interp-check --quiet
+  else
+    banner "integrator comparison (fixed-step RK4) -- skipped by --quick"
+  fi
 fi
 
 if has optimize; then
   banner "constrained design optimisation"
   "$BIN/ignis_sweep" --config configs/optimization.yaml --mode optimize \
+                     --max-evaluations "$OPT_EVALS" \
                      | tee "$RESULTS/optimization_report.txt"
 fi
 
@@ -138,7 +146,14 @@ fi
 
 if has bench; then
   banner "benchmarks"
-  "$BIN/ignis_bench" --output "$RESULTS/benchmarks" | tee "$RESULTS/benchmark_report.txt"
+  BENCH_ARGS=()
+  if [[ $QUICK -eq 1 ]]; then
+    # Enough to prove the harness runs; the published numbers come from a full
+    # run, and docs/benchmarks.md says which machine produced them.
+    BENCH_ARGS=(--repeats 10 --mc-samples 60 --skip-transient)
+  fi
+  "$BIN/ignis_bench" --output "$RESULTS/benchmarks" "${BENCH_ARGS[@]}" \
+                     | tee "$RESULTS/benchmark_report.txt"
 fi
 
 if has figures; then

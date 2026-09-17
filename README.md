@@ -45,7 +45,8 @@ equation of state. The nozzle panel is the converged steady solution — see
 Chemical equilibrium by constrained Gibbs-energy minimisation in the
 Gordon–McBride descent formulation, solved in (ln n<sub>j</sub>, ln n,
 π<sub>i</sub>, ln T). The per-species unknowns are eliminated analytically, so
-the Newton system is (E+2)×(E+2) — **5×5 for a C/H/O system regardless of how
+the Newton system is (E+1)×(E+1) at fixed temperature and (E+2)×(E+2) when the
+temperature is unknown — **4×4 or 5×5 for a C/H/O system, regardless of how
 many species are carried**. Constant-(T,p), constant-(h,p), constant-(s,p) and
 constant-(u,v) problems, plus the full equilibrium derivative set
 (c<sub>p,eff</sub>, ∂lnV/∂lnT, ∂lnV/∂lnp, γ<sub>s</sub>, sound speed).
@@ -183,9 +184,10 @@ the peak heat flux, and its heat capacity still holds the wall 131 K cooler.
 
 ### Frozen against shifting equilibrium
 
-At ε = 40, LOX/CH<sub>4</sub>: shifting **370.41 s** against frozen **343.56 s**
-— recombination in the nozzle is worth **7.8 %** of vacuum impulse. Both are
-computed; neither is presented as *the* answer.
+LOX/CH<sub>4</sub> at p<sub>c</sub> = 5.5 MPa, O/F 3.4, ε = 45: shifting
+**370.41 s** against frozen **343.56 s** — recombination in the nozzle is worth
+**7.82 %** of vacuum impulse. Both are computed; neither is presented as *the*
+answer.
 
 ### Constrained optimisation
 

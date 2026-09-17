@@ -19,6 +19,8 @@ int main(int argc, char** argv) {
     const std::vector<CliOption> options = {
         {"mode", "NAME", "sweep, optimize or both", "both when the configuration has both"},
         {"threads", "N", "worker threads for the sweep", "hardware concurrency"},
+        {"max-evaluations", "N", "cap the optimiser's objective evaluations", "from the configuration"},
+        {"starts", "N", "Latin-hypercube multi-start count", "from the configuration"},
         {"list-parameters", "", "print every settable parameter and readable metric, then exit", ""},
     };
     if (!parseCommandLine(argc, argv, "ignis_sweep",
@@ -76,7 +78,18 @@ int main(int argc, char** argv) {
     }
 
     if (has_opt && (mode == "optimize" || mode == "both")) {
-      const auto spec = parseOptimization(root);
+      auto spec = parseOptimization(root);
+      // Both exist so that a short run can be asked for without editing the
+      // configuration: run_all.sh --quick and CI use them.
+      if (flagPresent(cli, "max-evaluations")) {
+        spec.max_evaluations = flagInt(cli, "max-evaluations", spec.max_evaluations);
+        if (spec.max_evaluations < 1)
+          throw ConfigError("--max-evaluations must be at least 1");
+      }
+      if (flagPresent(cli, "starts")) {
+        spec.starts = flagInt(cli, "starts", spec.starts);
+        if (spec.starts < 1) throw ConfigError("--starts must be at least 1");
+      }
       const auto t0 = std::chrono::steady_clock::now();
       const auto res = optimize(engine, spec);
       const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();

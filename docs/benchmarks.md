@@ -50,12 +50,13 @@ Worst residuals over those 500 adiabatic solves: element **2.21e-14**, Gibbs
 | 18 | 0.0308 ms | 2.34× |
 | 26 | 0.0586 ms | 4.44× |
 
-The Newton system is (E+2)×(E+2) — 5×5 for a C/H/O system — **independent of
-the species count**, because the per-species unknowns are eliminated
-analytically. The growth above is the O(N·E) assembly of that system and the
-per-species Gibbs evaluations, not a growing linear solve. The measured
-exponent is ≈ 1.25 over this range, consistent with linear assembly plus a
-fixed overhead.
+The Newton system is (E+1)×(E+1) at fixed temperature and (E+2)×(E+2) when the
+temperature is unknown — 4×4 or 5×5 for a C/H/O system, **independent of the
+species count**, because the per-species unknowns are eliminated analytically.
+(These are adiabatic solves, so 5×5.) The growth above is the O(N·E) assembly
+of that system and the per-species Gibbs evaluations, not a growing linear
+solve. The measured exponent is 1.27 over this range, consistent with linear
+assembly plus a fixed overhead.
 
 ## Nozzle
 
