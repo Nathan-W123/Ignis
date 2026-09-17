@@ -90,6 +90,18 @@ SpeciesDatabase SpeciesDatabase::loadYaml(const std::string& path) {
   return db;
 }
 
+SpeciesDatabase SpeciesDatabase::fromSpecies(std::vector<Species> species,
+                                             std::map<std::string, double> atomic_weights) {
+  SpeciesDatabase db;
+  db.species_ = std::move(species);
+  db.atomic_weight_ = std::move(atomic_weights);
+  db.provenance_.path = "<in-memory>";
+  db.provenance_.sources.push_back("constructed programmatically");
+  if (db.species_.empty()) throw ConfigError("fromSpecies: no species supplied");
+  db.rebuild();
+  return db;
+}
+
 void SpeciesDatabase::rebuild() {
   index_.clear();
   for (std::size_t j = 0; j < species_.size(); ++j) {

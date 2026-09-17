@@ -146,9 +146,17 @@ Closure close(const EquilibriumTable& tab, const TransientSpec& spec, const Stat
   c.c_star = tab.cStarAt(c.mr, c.T, c.p);
   c.h = c.u + c.p / c.rho;
 
-  // Nozzle outflow.
+  // Nozzle outflow.  The choked branch uses the tabulated characteristic
+  // velocity, which carries the exact variable-property sonic solution through
+  // the correction factor kappa.  The sub-critical branch is the constant-gamma
+  // orifice relation, and it is divided by the same kappa so that the two
+  // branches agree exactly at the critical pressure ratio.  Without that the
+  // mass flow would step by a few percent as the chamber chokes, and a single
+  // discontinuity in the right-hand side drops the observed order of any
+  // Runge-Kutta integrator to one.
   const double pa = spec.ambient_pressure;
   const double g = c.gamma;
+  const double kappa = tab.cStarCorrection(c.mr, c.p);
   const double crit = std::pow(2.0 / (g + 1.0), g / (g - 1.0));
   if (c.p <= pa) {
     c.mdot_out = 0.0;
@@ -161,7 +169,7 @@ Closure close(const EquilibriumTable& tab, const TransientSpec& spec, const Stat
     const double pr = pa / c.p;
     const double term = std::pow(pr, 2.0 / g) - std::pow(pr, (g + 1.0) / g);
     c.mdot_out = spec.throat_area * c.p *
-                 std::sqrt(std::max(0.0, 2.0 * g / ((g - 1.0) * R * c.T) * term));
+                 std::sqrt(std::max(0.0, 2.0 * g / ((g - 1.0) * R * c.T) * term)) / kappa;
     c.choked = false;
   }
   return c;

@@ -114,12 +114,16 @@ NozzleFlow::NozzleFlow(const EquilibriumSolver& solver, CompositionModel model,
     throw ConvergenceError(os.str());
   }
 
-  // Establish the lowest static pressure at which the thermodynamic data is
-  // still valid.  Expanding further would need enthalpies below the 200 K
-  // floor of the NASA polynomials, so the solver reports that limit instead of
-  // extrapolating silently.
-  double ok = throat_.gas.p, bad = 0.0;
-  double probe = throat_.gas.p;
+}
+
+
+void NozzleFlow::computeFloor() const {
+  if (floor_known_) return;
+  // Walk down in halvings until the expansion leaves the validated property
+  // range, then refine geometrically.  This is only needed when a caller asks
+  // how far the nozzle *could* expand; ordinary station queries bracket
+  // themselves and never reach here.
+  double ok = throat_.gas.p, bad = 0.0, probe = throat_.gas.p;
   for (int i = 0; i < 200; ++i) {
     probe *= 0.5;
     bool good = true;
@@ -128,11 +132,16 @@ NozzleFlow::NozzleFlow(const EquilibriumSolver& solver, CompositionModel model,
     } catch (const IgnisError&) {
       good = false;
     }
-    if (good) { ok = probe; if (probe < 1.0e-12 * p0_) break; }
-    else { bad = probe; break; }
+    if (good) {
+      ok = probe;
+      if (probe < 1.0e-12 * p0_) break;
+    } else {
+      bad = probe;
+      break;
+    }
   }
   if (bad > 0.0) {
-    for (int i = 0; i < 100 && ok / bad > 1.0005; ++i) {
+    for (int i = 0; i < 40 && ok / bad > 1.02; ++i) {
       const double mid = std::sqrt(ok * bad);
       bool good = true;
       try {
@@ -145,6 +154,7 @@ NozzleFlow::NozzleFlow(const EquilibriumSolver& solver, CompositionModel model,
   }
   p_floor_ = ok;
   max_area_ratio_ = throat_.mass_flux / atPressure(p_floor_).mass_flux;
+  floor_known_ = true;
 }
 
 ExpansionState NozzleFlow::buildState(const GasState& gas) const {
@@ -202,30 +212,52 @@ ExpansionState NozzleFlow::atAreaRatio(double area_ratio, bool supersonic) const
   const double p_star = throat_.gas.p;
   const double target = throat_.mass_flux / area_ratio;  // required rho u
 
-  double lo, hi;
+  auto flux = [&](double p) { return atPressure(p).mass_flux; };
+
+  double lo, hi, f_lo, f_hi;
   if (supersonic) {
-    if (area_ratio > max_area_ratio_) {
-      std::ostringstream os;
-      os << "nozzle flow: area ratio " << area_ratio << " exceeds the largest expansion the "
-         << "species data supports (" << max_area_ratio_ << ", reached at p = " << p_floor_
-         << " Pa where the static temperature hits the lower limit of the NASA polynomial "
-         << "fits). Reduce the expansion ratio or extend the species database.";
-      throw InfeasibleError(os.str());
-    }
-    lo = p_floor_;
+    // Mass flux falls monotonically as the pressure drops on the supersonic
+    // branch, so the bracket is found by halving from the throat.  Descending
+    // only as far as this particular area ratio needs keeps the search away
+    // from the low-pressure end of the property data, which is both expensive
+    // to probe and irrelevant here.
     hi = p_star;
+    f_hi = flux(hi) - target;
+    lo = p_star;
+    f_lo = f_hi;
+    bool bracketed = false;
+    for (int i = 0; i < 200; ++i) {
+      lo *= 0.5;
+      try {
+        f_lo = flux(lo) - target;
+      } catch (const IgnisError& e) {
+        computeFloor();
+        std::ostringstream os;
+        os << "nozzle flow: area ratio " << area_ratio << " exceeds the largest expansion the "
+           << "species data supports (" << max_area_ratio_ << ", reached at p = " << p_floor_
+           << " Pa where the static temperature hits the lower limit of the NASA polynomial "
+           << "fits). Reduce the expansion ratio or extend the species database. Underlying "
+           << "limit: " << e.what();
+        throw InfeasibleError(os.str());
+      }
+      if (f_lo < 0.0) { bracketed = true; break; }
+      hi = lo;
+      f_hi = f_lo;
+    }
+    if (!bracketed)
+      throw ConvergenceError("nozzle flow: could not bracket the supersonic solution for A/At = " +
+                             std::to_string(area_ratio));
   } else {
     lo = p_star;
     hi = p0_ * (1.0 - 1.0e-12);
-  }
-
-  auto flux = [&](double p) { return atPressure(p).mass_flux; };
-  double f_lo = flux(lo) - target, f_hi = flux(hi) - target;
-  if (f_lo * f_hi > 0.0) {
-    std::ostringstream os;
-    os << "nozzle flow: could not bracket the " << (supersonic ? "supersonic" : "subsonic")
-       << " solution for A/At = " << area_ratio << " (residuals " << f_lo << ", " << f_hi << ")";
-    throw ConvergenceError(os.str());
+    f_lo = flux(lo) - target;
+    f_hi = flux(hi) - target;
+    if (f_lo * f_hi > 0.0) {
+      std::ostringstream os;
+      os << "nozzle flow: could not bracket the subsonic solution for A/At = " << area_ratio
+         << " (residuals " << f_lo << ", " << f_hi << ")";
+      throw ConvergenceError(os.str());
+    }
   }
   const double p_sol = illinois([&](double p) { return flux(p) - target; }, lo, hi, f_lo, f_hi,
                                 1.0e-13 * p0_, 1.0e-11 * target);
@@ -568,21 +600,45 @@ NozzlePerformance evaluateNozzle(const NozzleFlow& flow, const NozzleGeometry& g
   // --- empirical separation diagnostic ----------------------------------
   if (opts.separation != SeparationCriterion::kNone && p_ambient > 0.0 &&
       !perf.shock_in_nozzle && perf.regime == ExpansionRegime::kOverExpanded) {
-    const double xt = geom.throatPosition();
-    for (const auto& st : geom.stations()) {
-      if (st.x <= xt || st.area_ratio <= 1.0) continue;
-      ExpansionState e;
-      try {
-        e = flow.atAreaRatio(st.area_ratio, true);
-      } catch (const IgnisError&) {
-        continue;
+    // Wall pressure falls and Mach number rises monotonically along the
+    // divergent, so the separation margin p_wall - p_sep(M) is monotone and the
+    // onset can be bisected instead of marched station by station.
+    auto margin = [&](double eps) {
+      const auto e = flow.atAreaRatio(eps, true);
+      return e.gas.p - separationPressure(opts.separation, p_ambient, e.mach);
+    };
+    double lo = 1.0 + 1.0e-9, hi = perf.area_ratio;
+    bool ok = true;
+    double f_lo = 0.0, f_hi = 0.0;
+    try {
+      f_lo = margin(lo);
+      f_hi = margin(hi);
+    } catch (const IgnisError&) {
+      ok = false;
+    }
+    if (ok && f_hi < 0.0) {
+      if (f_lo < 0.0) {
+        // Separated from the throat onwards.
+        perf.separation_area_ratio = lo;
+      } else {
+        for (int i = 0; i < 60; ++i) {
+          const double mid = 0.5 * (lo + hi);
+          double fm;
+          try {
+            fm = margin(mid);
+          } catch (const IgnisError&) {
+            break;
+          }
+          if (fm > 0.0) lo = mid; else hi = mid;
+          if (hi - lo < 1.0e-4 * perf.area_ratio) break;
+        }
+        perf.separation_area_ratio = hi;
       }
-      if (e.gas.p < separationPressure(opts.separation, p_ambient, e.mach)) {
-        perf.separation_predicted = true;
-        perf.separation_area_ratio = st.area_ratio;
-        perf.separation_x = st.x;
-        break;
-      }
+      perf.separation_predicted = true;
+      perf.separation_x = geom.exitPosition();
+      for (const auto& st : geom.stations())
+        if (st.x >= geom.throatPosition() && st.area_ratio <= perf.separation_area_ratio)
+          perf.separation_x = st.x;
     }
   }
   return perf;

@@ -131,23 +131,26 @@ class NozzleFlow {
   double energyResidual(const ExpansionState& st) const;
 
   /// Lowest static pressure at which the species polynomials remain valid, Pa.
-  double pressureFloor() const { return p_floor_; }
+  /// Computed on first use, since an ordinary station query never needs it.
+  double pressureFloor() const { computeFloor(); return p_floor_; }
   /// Largest area ratio reachable before the property data runs out.
-  double maxAreaRatio() const { return max_area_ratio_; }
+  double maxAreaRatio() const { computeFloor(); return max_area_ratio_; }
 
  private:
   ExpansionState buildState(const GasState& gas) const;
+  void computeFloor() const;
 
   const EquilibriumSolver* solver_;
   CompositionModel model_;
   ChamberReference ref_;
   double h0_ = 0.0, s0_ = 0.0, p0_ = 0.0;
-  double p_floor_ = 0.0;
+  mutable double p_floor_ = 0.0;
+  mutable double max_area_ratio_ = 0.0;
+  mutable bool floor_known_ = false;
   /// Warm-start cache: the last converged composition and its temperature.
   mutable Eigen::VectorXd last_n_;
   mutable double last_T_ = 0.0;
   mutable bool has_last_ = false;
-  double max_area_ratio_ = 0.0;
   ExpansionState throat_;
 };
 

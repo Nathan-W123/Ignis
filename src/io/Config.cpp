@@ -236,7 +236,7 @@ EngineConfig EngineConfig::load(const std::string& path) {
     c.requireOnly({"enabled", "coolant", "num_channels", "width_mode", "width_fraction",
                    "channel_width", "channel_height", "min_land_width", "wall_thickness",
                    "roughness", "coolant_fuel_fraction", "inlet_temperature", "inlet_pressure",
-                   "counterflow", "x_start", "x_end", "nusselt_correlation",
+                   "counterflow", "x_start", "x_end", "x_end_area_ratio", "nusselt_correlation",
                    "nusselt_multiplier", "bartz_multiplier", "gas_emissivity", "material",
                    "segments"});
     cfg.cooling_enabled = c.optional("enabled").boolean(true);
@@ -255,6 +255,7 @@ EngineConfig EngineConfig::load(const std::string& path) {
     s.counterflow = c.optional("counterflow").boolean(true);
     s.x_start = c.optional("x_start").number(0.0);
     s.x_end = c.optional("x_end").number(-1.0);
+    s.x_end_area_ratio = c.optional("x_end_area_ratio").number(0.0, 1000.0, 0.0);
     s.nusselt_correlation = c.optional("nusselt_correlation").text("dittus-boelter");
     s.nusselt_multiplier = c.optional("nusselt_multiplier").number(0.1, 10.0, 1.0);
     s.bartz_multiplier = c.optional("bartz_multiplier").number(0.1, 10.0, 1.0);

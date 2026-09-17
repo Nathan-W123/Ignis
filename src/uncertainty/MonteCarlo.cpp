@@ -181,6 +181,18 @@ MonteCarloResult runMonteCarlo(const SteadyEngine& engine, const MonteCarloSpec&
   for (std::size_t i = 0; i < ni; ++i)
     nominal[i] = readParameter(engine.config(), spec.inputs[i].parameter);
 
+  // Pre-flight: an inconsistent distribution or an unusable parameter must stop
+  // the campaign here, on the calling thread, with a clear message.  An
+  // exception escaping a worker would otherwise call std::terminate.
+  {
+    std::mt19937_64 probe(spec.seed ^ 0xA5A5A5A5u);
+    EngineConfig trial = engine.config();
+    for (std::size_t i = 0; i < ni; ++i) {
+      const double v = draw(spec.inputs[i], nominal[i], probe);
+      applyParameter(trial, spec.inputs[i].parameter, v);
+    }
+  }
+
   const unsigned hw = std::max(1u, std::thread::hardware_concurrency());
   const int nthreads = spec.threads > 0 ? spec.threads : static_cast<int>(hw);
   std::atomic<std::size_t> next{0};
@@ -194,12 +206,12 @@ MonteCarloResult runMonteCarlo(const SteadyEngine& engine, const MonteCarloSpec&
       std::mt19937_64 rng(s);
       EngineConfig cfg = engine.config();
       cfg.sample_profile = false;
-      for (std::size_t i = 0; i < ni; ++i) {
-        const double v = draw(spec.inputs[i], nominal[i], rng);
-        xs[i][k] = v;
-        applyParameter(cfg, spec.inputs[i].parameter, v);
-      }
       try {
+        for (std::size_t i = 0; i < ni; ++i) {
+          const double v = draw(spec.inputs[i], nominal[i], rng);
+          xs[i][k] = v;
+          applyParameter(cfg, spec.inputs[i].parameter, v);
+        }
         const auto res = engine.runWith(cfg);
         for (std::size_t o = 0; o < no; ++o) ys[o][k] = readMetric(res, spec.outputs[o]);
         if (res.has_cooling) {

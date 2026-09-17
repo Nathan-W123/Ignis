@@ -120,10 +120,25 @@ CoolingResult solveCoolingImpl(const NozzleFlow& flow, const NozzleGeometry& geo
                                const TransportModel& transport, bool coupled,
                                double prescribed_wall) {
   const double x_lo = spec.x_start;
-  const double x_hi = (spec.x_end > 0.0) ? spec.x_end : geom.exitPosition();
+  double x_hi = (spec.x_end > 0.0) ? spec.x_end : geom.exitPosition();
+  if (spec.x_end_area_ratio > 1.0) {
+    if (spec.x_end_area_ratio > geom.expansionRatio()) {
+      x_hi = geom.exitPosition();
+    } else {
+      // Walk the divergent to the first station at or beyond the requested area
+      // ratio; the contour is monotone there so this is unambiguous.
+      x_hi = geom.exitPosition();
+      for (const auto& st : geom.stations()) {
+        if (st.x <= geom.throatPosition()) continue;
+        if (st.area_ratio >= spec.x_end_area_ratio) { x_hi = st.x; break; }
+      }
+    }
+  }
   if (!(x_hi > x_lo)) throw ConfigError("cooling: x_end must exceed x_start");
   if (x_lo < 0.0 || x_hi > geom.exitPosition() * (1.0 + 1e-12))
     throw ConfigError("cooling: the cooled extent lies outside the contour");
+  if (spec.x_end > 0.0 && spec.x_end_area_ratio > 1.0)
+    throw ConfigError("cooling: give either x_end or x_end_area_ratio, not both");
   if (spec.num_segments < 10) throw ConfigError("cooling: num_segments must be at least 10");
   if (spec.num_channels < 1) throw ConfigError("cooling: num_channels must be at least 1");
   if (!(spec.wall_thickness > 0.0)) throw ConfigError("cooling: wall_thickness must be positive");

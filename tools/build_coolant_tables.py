@@ -58,12 +58,33 @@ try:
 except ImportError:  # pragma: no cover
     sys.exit("CoolProp is required to regenerate the tables: pip install CoolProp")
 
-# fluid -> (CoolProp name, T grid, p grid)
+# fluid -> (CoolProp name, lowest T, highest T, pressure grid)
+#
+# The temperature axis is deliberately non-uniform: transport properties and cp
+# vary steeply through the near-critical and pseudo-critical region and are
+# smooth well above it, so the grid is refined below 1.5 T_crit and coarsened
+# at high temperature.  This keeps the interpolation error small without
+# inflating the committed file.
 FLUIDS = {
-    "methane":  dict(cp_name="Methane",  t=(95.0, 1100.0, 10.0),  p=(0.5e6, 40.0e6, 41)),
-    "hydrogen": dict(cp_name="Hydrogen", t=(22.0, 1100.0, 10.0),  p=(0.5e6, 40.0e6, 41)),
-    "oxygen":   dict(cp_name="Oxygen",   t=(60.0, 1000.0, 10.0),  p=(0.5e6, 40.0e6, 41)),
+    "methane":  dict(cp_name="Methane",  t_min=95.0, t_max=1100.0, p=(0.5e6, 40.0e6, 41)),
+    "hydrogen": dict(cp_name="Hydrogen", t_min=22.0, t_max=1100.0, p=(0.5e6, 40.0e6, 41)),
+    "oxygen":   dict(cp_name="Oxygen",   t_min=60.0, t_max=1000.0, p=(0.5e6, 40.0e6, 41)),
 }
+
+
+def temperature_axis(t_min, t_max, t_crit):
+    """Refined below 1.5 T_crit, moderate to 2.5 T_crit, coarse above."""
+    knees = [(t_min, min(1.5 * t_crit, t_max), 2.0),
+             (min(1.5 * t_crit, t_max), min(2.5 * t_crit, t_max), 8.0),
+             (min(2.5 * t_crit, t_max), t_max, 25.0)]
+    pts = []
+    for lo, hi, step in knees:
+        if hi <= lo:
+            continue
+        n = max(1, int(round((hi - lo) / step)))
+        pts.extend(lo + (hi - lo) * i / n for i in range(n))
+    pts.append(t_max)
+    return np.array(sorted(set(round(v, 6) for v in pts)))
 
 
 def main(argv=None) -> int:
@@ -76,11 +97,10 @@ def main(argv=None) -> int:
 
     for name, spec in FLUIDS.items():
         cpn = spec["cp_name"]
-        t0, t1, dt = spec["t"]
-        T = np.arange(t0, t1 + 0.5 * dt, dt)
+        Tc = CP.PropsSI("Tcrit", cpn)
+        T = temperature_axis(spec["t_min"], spec["t_max"], Tc)
         p = np.geomspace(spec["p"][0], spec["p"][1], spec["p"][2])
 
-        Tc = CP.PropsSI("Tcrit", cpn)
         pc = CP.PropsSI("pcrit", cpn)
         Tt = CP.PropsSI("Ttriple", cpn)
         M = CP.PropsSI("M", cpn)

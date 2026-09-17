@@ -83,11 +83,12 @@ SweepResult runSweep(const SteadyEngine& engine, const SweepSpec& spec) {
       decode(k, values);
       EngineConfig cfg = engine.config();
       cfg.sample_profile = false;
-      for (std::size_t a = 0; a < spec.axes.size(); ++a) {
-        applyParameter(cfg, spec.axes[a].parameter, values[a]);
-        inputs[a][k] = values[a];
-      }
+      for (std::size_t a = 0; a < spec.axes.size(); ++a) inputs[a][k] = values[a];
+      // Everything that can throw has to stay inside the guard: an exception
+      // escaping a worker thread would call std::terminate.
       try {
+        for (std::size_t a = 0; a < spec.axes.size(); ++a)
+          applyParameter(cfg, spec.axes[a].parameter, values[a]);
         const auto res = engine.runWith(cfg);
         for (std::size_t m = 0; m < spec.metrics.size(); ++m)
           outputs[m][k] = readMetric(res, spec.metrics[m]);

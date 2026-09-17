@@ -177,13 +177,16 @@ double hermite(const std::vector<double>& ax, std::size_t i, double v,
 
 double EquilibriumTable::interp3(const std::vector<double>& f, double mr, double T,
                                  double p) const {
-  // Tensor-product cubic Hermite in (mixture ratio, temperature) -- the two
-  // directions carrying real curvature -- and linear in ln p, where the
-  // tabulated functions are close to straight.
+  // Tensor-product cubic Hermite in all three directions.  Linear
+  // interpolation in any direction would leave the tabulated equation of state
+  // only C0 there, and a right-hand side with a kink caps the observed order of
+  // the Runge-Kutta integrators at two however small the step; the C1
+  // interpolant recovers close to third order.  (Fourth would need C2, i.e. a
+  // spline, and is not worth the extra machinery here.)
   const std::size_t i = locateInterval(mr_, mr);
   const std::size_t j = locateInterval(t_, T);
   const std::size_t k = locateInterval(p_, p);
-  const double fp = (std::log(p) - lnp_[k]) / (lnp_[k + 1] - lnp_[k]);
+  const double lnp = std::log(p);
 
   auto clampIdx = [](std::size_t base, int off, std::size_t n) {
     long v = static_cast<long>(base) + off - 1;
@@ -192,40 +195,42 @@ double EquilibriumTable::interp3(const std::vector<double>& f, double mr, double
     return static_cast<int>(v);
   };
 
-  double out = 0.0;
-  for (int dk = 0; dk < 2; ++dk) {
-    std::array<double, 4> along_mr{};
-    for (int a = 0; a < 4; ++a) {
-      const int ii = clampIdx(i, a, mr_.size());
-      std::array<double, 4> along_t{};
-      for (int b = 0; b < 4; ++b) {
-        const int jj = clampIdx(j, b, t_.size());
-        along_t[static_cast<std::size_t>(b)] = f[idx(ii, jj, static_cast<int>(k) + dk)];
+  std::array<double, 4> along_mr{};
+  for (int a = 0; a < 4; ++a) {
+    const int ii = clampIdx(i, a, mr_.size());
+    std::array<double, 4> along_t{};
+    for (int b = 0; b < 4; ++b) {
+      const int jj = clampIdx(j, b, t_.size());
+      std::array<double, 4> along_p{};
+      for (int c = 0; c < 4; ++c) {
+        const int kk = clampIdx(k, c, p_.size());
+        along_p[static_cast<std::size_t>(c)] = f[idx(ii, jj, kk)];
       }
-      along_mr[static_cast<std::size_t>(a)] = hermite(t_, j, T, along_t);
+      along_t[static_cast<std::size_t>(b)] = hermite(lnp_, k, lnp, along_p);
     }
-    const double v = hermite(mr_, i, mr, along_mr);
-    out += (dk ? fp : 1.0 - fp) * v;
+    along_mr[static_cast<std::size_t>(a)] = hermite(t_, j, T, along_t);
   }
-  return out;
+  return hermite(mr_, i, mr, along_mr);
 }
 
 double EquilibriumTable::interp2(const std::vector<double>& f, double mr, double p) const {
   const std::size_t i = locateInterval(mr_, mr);
   const std::size_t k = locateInterval(p_, p);
-  const double fp = (std::log(p) - lnp_[k]) / (lnp_[k + 1] - lnp_[k]);
+  const double lnp = std::log(p);
   const std::size_t np = p_.size();
-  auto clampIdx = [&](int off) {
-    long v = static_cast<long>(i) + off - 1;
+  auto clampIdx = [](std::size_t base, int off, std::size_t n) {
+    long v = static_cast<long>(base) + off - 1;
     if (v < 0) v = 0;
-    if (v > static_cast<long>(mr_.size()) - 1) v = static_cast<long>(mr_.size()) - 1;
+    if (v > static_cast<long>(n) - 1) v = static_cast<long>(n) - 1;
     return static_cast<std::size_t>(v);
   };
   std::array<double, 4> along_mr{};
   for (int a = 0; a < 4; ++a) {
-    const std::size_t ii = clampIdx(a);
-    along_mr[static_cast<std::size_t>(a)] =
-        (1 - fp) * f[ii * np + k] + fp * f[ii * np + k + 1];
+    const std::size_t ii = clampIdx(i, a, mr_.size());
+    std::array<double, 4> along_p{};
+    for (int c = 0; c < 4; ++c)
+      along_p[static_cast<std::size_t>(c)] = f[ii * np + clampIdx(k, c, np)];
+    along_mr[static_cast<std::size_t>(a)] = hermite(lnp_, k, lnp, along_p);
   }
   return hermite(mr_, i, mr, along_mr);
 }
@@ -356,12 +361,20 @@ void EquilibriumTable::solveState(double mr, double u, double rho, double& T, do
   }
   if (f_lo >= 0.0) { T = lo; p = pressureAt(lo); return; }
   if (f_hi <= 0.0) { T = hi; p = pressureAt(hi); return; }
+  // Safeguarded Newton on the internal energy: cv is available from the table,
+  // and keeping the bracket guarantees the iteration cannot escape.  The
+  // tolerance is pushed to round-off so that the transient integrator's own
+  // truncation error, not this inversion, sets the accuracy of a run.
   T = 0.5 * (lo + hi);
   for (int i = 0; i < 200; ++i) {
-    T = 0.5 * (lo + hi);
     const double f = residual(T);
-    if (f > 0.0) hi = T; else lo = T;
-    if (hi - lo < 1e-9 * std::max(1.0, T)) break;
+    if (f > 0.0) { hi = T; f_hi = f; } else { lo = T; f_lo = f; }
+    if (std::abs(f) < 1.0e-14 * std::max(1.0, std::abs(u))) break;
+    const double cv_here = interp3(cv_, mr, T, pressureAt(T));
+    double T_new = (cv_here > 0.0) ? T - f / cv_here : 0.5 * (lo + hi);
+    if (!(T_new > lo && T_new < hi)) T_new = 0.5 * (lo + hi);
+    if (std::abs(T_new - T) < 1.0e-14 * T) { T = T_new; break; }
+    T = T_new;
   }
   p = pressureAt(T);
 }

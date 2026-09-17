@@ -30,6 +30,12 @@ class SpeciesDatabase {
   /// Load every species in the YAML file at `path`.
   static SpeciesDatabase loadYaml(const std::string& path);
 
+  /// Build a database directly from species objects.  Used by the verification
+  /// suite to construct synthetic gases (for example a calorically perfect one)
+  /// without going through a file.
+  static SpeciesDatabase fromSpecies(std::vector<Species> species,
+                                     std::map<std::string, double> atomic_weights);
+
   /// Return the subset containing exactly `names`, preserving that order.
   /// Throws ConfigError if a name is unknown.
   SpeciesDatabase subset(const std::vector<std::string>& names) const;

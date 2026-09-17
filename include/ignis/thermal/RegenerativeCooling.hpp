@@ -96,6 +96,15 @@ struct CoolingSpec {
   bool counterflow = true;          ///< coolant enters at the nozzle exit
   double x_start = 0.0;             ///< cooled extent, m (injector side)
   double x_end = -1.0;              ///< cooled extent, m (-1 => nozzle exit)
+  /// Alternative to `x_end`: end the jacket where the divergent reaches this
+  /// area ratio.  Real engines regeneratively cool the chamber, throat and the
+  /// first part of the divergent and then switch to a radiation-cooled or
+  /// film-cooled extension, and expressing the extent as an area ratio keeps
+  /// that split meaningful while the expansion ratio is being swept or
+  /// optimised.  Values <= 1 disable it.  The uncooled extension is NOT
+  /// modelled: its wall temperature is not predicted and its (small) heat load
+  /// is not counted.
+  double x_end_area_ratio = 0.0;
   std::string nusselt_correlation = "dittus-boelter";
   double nusselt_multiplier = 1.0;
   double bartz_multiplier = 1.0;

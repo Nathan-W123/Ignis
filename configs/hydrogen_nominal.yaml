@@ -53,16 +53,18 @@ cooling:
   enabled: true
   coolant: hydrogen
   material: CuCrZr
-  num_channels: 280
+  num_channels: 240
   width_mode: fraction_of_pitch
   width_fraction: 0.50
-  channel_height: 4.0e-3
+  channel_height: 6.0e-3
   wall_thickness: 0.7e-3
   roughness: 5.0e-6
   coolant_fuel_fraction: 1.0
   inlet_temperature: 25.0         # K, slightly above the LH2 boiling point
   inlet_pressure: 12.0e6          # Pa, well above the 1.3 MPa critical pressure
   counterflow: true
+  x_end_area_ratio: 12.0          # jacket ends here; the extension beyond is
+                                  # assumed radiation cooled and is not modelled
   nusselt_correlation: dittus-boelter
   nusselt_multiplier: 1.0
   bartz_multiplier: 1.0

@@ -63,7 +63,9 @@ cooling:
   coolant_fuel_fraction: 1.0      # all of the fuel passes through the jacket
   inlet_temperature: 111.66       # K
   inlet_pressure: 15.0e6          # Pa
-  counterflow: true               # coolant enters at the nozzle exit
+  counterflow: true               # coolant enters at the downstream end
+  x_end_area_ratio: 10.0          # jacket ends here; the extension beyond is
+                                  # assumed radiation cooled and is not modelled
   nusselt_correlation: dittus-boelter
   nusselt_multiplier: 1.0
   bartz_multiplier: 1.0

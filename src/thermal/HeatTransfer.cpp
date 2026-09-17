@@ -13,11 +13,20 @@
 namespace ignis {
 
 double WallMaterial::conductivity(double T) const {
-  const double k = conductivity_reference + conductivity_slope * (T - reference_temperature);
+  // Bracketing the coupled wall balance evaluates the flux at wall temperatures
+  // that are nowhere near a solution, and those can push a linear conductivity
+  // model negative.  Clamping the *evaluation* temperature keeps every iterate
+  // physical; whether the converged answer sits inside the fitted range is
+  // reported separately by the caller through inValidRange().
+  const double lo = 0.2 * valid_min;
+  const double hi = 3.0 * valid_max;
+  const double Tc = std::min(std::max(T, lo), hi);
+  const double k = conductivity_reference + conductivity_slope * (Tc - reference_temperature);
   if (!(k > 0.0)) {
     std::ostringstream os;
     os << "material " << name << ": the linear conductivity model gives k = " << k
-       << " W/(m K) at " << T << " K, which is unphysical";
+       << " W/(m K) even at the clamped temperature " << Tc
+       << " K. The fit coefficients are inconsistent.";
     throw RangeError(os.str());
   }
   return k;

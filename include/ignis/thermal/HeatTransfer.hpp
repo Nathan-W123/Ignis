@@ -72,6 +72,12 @@ struct WallMaterial {
   std::string source;
 
   /// Thermal conductivity at a temperature, W/(m K).
+  ///
+  /// The evaluation temperature is clamped to a wide safety window around the
+  /// fitted range so that an intermediate iterate cannot drive the linear model
+  /// to a negative conductivity.  The window is far outside anything a
+  /// converged solution reaches, and `inValidRange` still reports honestly
+  /// whether the requested temperature was inside the fit.
   double conductivity(double T) const;
   /// True when T lies inside the fitted range of the conductivity model.
   bool inValidRange(double T) const { return T >= valid_min && T <= valid_max; }
