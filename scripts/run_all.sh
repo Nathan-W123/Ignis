@@ -35,6 +35,11 @@ MC_SAMPLES=2000
 OPT_EVALS=2500
 if [[ $QUICK -eq 1 ]]; then MC_SAMPLES=300; OPT_EVALS=600; fi
 
+# The applications create their own output subdirectories, but the report files
+# are written by `tee`, which opens its target as the pipeline starts.  Without
+# this the first stage fails on a clean checkout where results/ does not exist.
+mkdir -p "$RESULTS"
+
 START_SECONDS=$SECONDS
 banner() { printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
 has()    { [[ " $STAGES " == *" $1 "* ]]; }
