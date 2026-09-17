@@ -24,7 +24,7 @@ console report, and `scripts/run_all.sh` runs it as the `bench` stage.
 | Catch2 | 3.4.0 (system) / 3.5.2 (fetched) |
 | CMake | 3.28.3 |
 | Python | NumPy 2.4.6, pandas 3.0.5, Matplotlib 3.11.2 |
-| Ignis | 1.0.0 |
+| Ignis | 1.0.0, built from the `v1.0.0` tag |
 
 Timings are the **mean** of *n* repeats after a warm-up; the min and max of the
 same set are reported so the spread is visible. The benchmark harness
@@ -35,8 +35,8 @@ pass unnoticed.
 
 | Benchmark | Mean | Min | Max | n | Secondary |
 |---|---:|---:|---:|---:|---|
-| Adiabatic (h,p) equilibrium, 26 species | **0.0577 ms** | 0.0533 | 0.1654 | 500 | 24.0 mean Newton iterations |
-| Isentropic (s,p) equilibrium, 26 species | **0.1404 ms** | 0.1238 | 0.4558 | 500 | — |
+| Adiabatic (h,p) equilibrium, 26 species | **0.0528 ms** | 0.0476 | 0.2018 | 500 | 24.0 mean Newton iterations |
+| Isentropic (s,p) equilibrium, 26 species | **0.1274 ms** | 0.1108 | 0.3573 | 500 | — |
 
 Worst residuals over those 500 adiabatic solves: element **2.21e-14**, Gibbs
 **5.68e-14**, enthalpy **4.12e-14**. Speed is not being bought with tolerance.
@@ -45,35 +45,35 @@ Worst residuals over those 500 adiabatic solves: element **2.21e-14**, Gibbs
 
 | Species | Mean time | Relative to 8 species |
 |---:|---:|---:|
-| 8 | 0.0132 ms | 1.00× |
-| 12 | 0.0241 ms | 1.83× |
-| 18 | 0.0308 ms | 2.34× |
-| 26 | 0.0586 ms | 4.44× |
+| 8 | 0.0102 ms | 1.00× |
+| 12 | 0.0237 ms | 2.32× |
+| 18 | 0.0285 ms | 2.79× |
+| 26 | 0.0510 ms | 5.00× |
 
 The Newton system is (E+1)×(E+1) at fixed temperature and (E+2)×(E+2) when the
 temperature is unknown — 4×4 or 5×5 for a C/H/O system, **independent of the
 species count**, because the per-species unknowns are eliminated analytically.
 (These are adiabatic solves, so 5×5.) The growth above is the O(N·E) assembly
 of that system and the per-species Gibbs evaluations, not a growing linear
-solve. The measured exponent is 1.27 over this range, consistent with linear
+solve. The measured exponent is 1.37 over this range, consistent with linear
 assembly plus a fixed overhead.
 
 ## Nozzle
 
 | Benchmark | Mean | Min | Max | n |
 |---|---:|---:|---:|---:|
-| Chamber + throat + exit state (no profile, no cooling) | **7.99 ms** | 7.56 | 12.02 | 50 |
+| Chamber + throat + exit state (no profile, no cooling) | **7.34 ms** | 6.92 | 8.85 | 50 |
 
 ### Scaling with station count
 
 | Stations | Mean time | ms per station |
 |---:|---:|---:|
-| 50 | 33.02 ms | 0.660 |
-| 100 | 49.89 ms | 0.499 |
-| 200 | 88.13 ms | 0.441 |
-| 400 | 163.51 ms | 0.409 |
-| 800 | 319.46 ms | 0.399 |
-| 1600 | 625.99 ms | 0.391 |
+| 50 | 30.61 ms | 0.612 |
+| 100 | 46.57 ms | 0.466 |
+| 200 | 80.58 ms | 0.403 |
+| 400 | 155.59 ms | 0.389 |
+| 800 | 290.88 ms | 0.364 |
+| 1600 | 570.04 ms | 0.356 |
 
 Linear in station count, as a marching scheme must be, with the fixed chamber
 and throat solve amortised away by 400 stations. Each station is a full
@@ -84,8 +84,8 @@ why a station costs ≈ 0.4 ms while a bare equilibrium solve costs 0.06 ms.
 
 | Benchmark | Mean | Min | Max | n |
 |---|---:|---:|---:|---:|
-| Chamber + nozzle + 400-station profile + cooling + feed | **263.24 ms** | 258.55 | 275.88 | 12 |
-| The same without the regenerative jacket | **161.71 ms** | 160.68 | 163.14 | 12 |
+| Chamber + nozzle + 400-station profile + cooling + feed | **241.47 ms** | 237.11 | 253.05 | 12 |
+| The same without the regenerative jacket | **151.09 ms** | 147.30 | 157.54 | 12 |
 
 Worst residuals during those runs: cooling energy balance **1.75e-10**, local
 flux **4.36e-10**, nozzle mass flow **1.68e-13**.
@@ -100,9 +100,9 @@ suggest.
 
 | Benchmark | Mean | n | Secondary |
 |---|---:|---:|---|
-| Equilibrium table build (41 × 97 × 13) | **1215.8 ms** | 1 | 51 701 equilibrium solves |
-| Adaptive RK4(5), 0.8 s of physical time | **1237.5 ms** | 3 | 4624 accepted steps |
-| Fixed-step RK4 at dt = 2 µs, 0.8 s | **65 626 ms** | 1 | 400 155 steps |
+| Equilibrium table build (41 × 97 × 13) | **1142.4 ms** | 1 | 51 701 equilibrium solves |
+| Adaptive RK4(5), 0.8 s of physical time | **1080.8 ms** | 3 | 4624 accepted steps |
+| Fixed-step RK4 at dt = 2 µs, 0.8 s | **58 104 ms** | 1 | 400 155 steps |
 
 Conservation residuals on the adaptive run: mass **5.71e-15**, energy
 **2.60e-13**. Table interpolation error over 100 random interior points:
@@ -127,9 +127,9 @@ Two things are worth reading off this table:
 
 | Threads | Wall time | Samples/s | Speed-up | Efficiency |
 |---:|---:|---:|---:|---:|
-| 1 | 46.58 s | 8.59 | 1.00× | 100 % |
-| 2 | 24.75 s | 16.16 | 1.88× | 94 % |
-| 4 | 13.70 s | 29.20 | **3.40×** | 85 % |
+| 1 | 43.99 s | 9.09 | 1.00× | 100 % |
+| 2 | 23.23 s | 17.22 | 1.89× | 95 % |
+| 4 | 12.92 s | 30.97 | **3.41×** | 85 % |
 
 On 4 hardware threads the production campaign (2000 samples) completes in
 **58.20 s at 34.4 samples/s** — slightly faster per sample than the benchmark
@@ -148,15 +148,15 @@ Measured during the full reproduction (`scripts/run_all.sh`):
 
 | Study | Points / samples | Wall time |
 |---|---:|---:|
-| Mixture-ratio sweep | 31 | 0.91 s |
+| Mixture-ratio sweep | 31 | 0.85 s |
 | Expansion-ratio sweep | 160 | 0.10 s |
 | Chamber-pressure sweep | 21 (2 infeasible) | 0.63 s |
-| Altitude sweep | 81 | 0.05 s |
+| Altitude sweep | 81 | 0.04 s |
 | Cooling design space | 169 (52 infeasible) | 4.48 s |
-| Start-up transient (RK4(5)) | 0.8 s physical | 1.30 s |
-| Constrained optimisation | 2500 evaluations (116 failed) | 245.06 s |
-| Monte Carlo campaign | 2000 samples | 58.20 s |
-| Benchmark suite | — | 169.03 s |
+| Start-up transient (RK4(5)) | 0.8 s physical | 1.08 s |
+| Constrained ascent trade study | 2500 evaluations, 12 starts (4 failed analyses) | 232.44 s |
+| Monte Carlo campaign | 2000 samples | 54.89 s |
+| Benchmark suite | — | 155.01 s |
 | Test suite (CTest, 4 jobs) | 78 cases | 60.22 s |
 
 The expansion-ratio sweep is fast because only the nozzle is re-solved; the
@@ -169,7 +169,7 @@ point runs a full jacket march.
 |---|---:|
 | Configure from an empty build directory | **0.3 s** |
 | Clean build, 45 translation units, `-j4`, Release + `-Werror` | **36 s** |
-| Full reproduction from a fresh clone, build included (`scripts/run_all.sh`) | **13 min 49 s** |
+| Full reproduction from a fresh clone, build included (`scripts/run_all.sh`) | **12 min 24 s** |
 | The same with `--quick` | **6 min 17 s** |
 
 The configure step is fast because Eigen, yaml-cpp and Catch2 are present as

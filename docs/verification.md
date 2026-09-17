@@ -260,6 +260,29 @@ not as optimistic numbers.
 
 ## 6. Reproducibility of the committed results
 
+### 6.0 Provenance of the committed tree
+
+Every report in `results/` identifies the binary that produced it on its first
+line, and every one of them reads:
+
+```
+Ignis 1.0.0 (v1.0.0)
+```
+
+That string is `git describe --always --dirty` captured at configure time, so
+it is a clean tag with no local modifications. The tree was produced by
+cloning the `v1.0.0` tag into an empty directory, configuring and building
+there, and only then clearing `results/` and running every stage — configuring
+first is what keeps the tree clean, and clearing `results/` first is what
+made an earlier attempt report `v1.0.0-dirty`.
+
+One thing cannot be made to hold: a file cannot contain the hash of the commit
+that contains it. The `v1.0.0` tag is therefore moved onto the commit that
+carries these results, and the tree that generated them differs from the
+tagged tree only in `results/` itself. Nothing that affects a number differs.
+
+### 6.1 Reproducing it
+
 The `results/` tree in this repository was produced by `scripts/run_all.sh`.
 To check that it can be reproduced, the branch was cloned into a fresh
 directory, built from scratch and run end to end:

@@ -1,51 +1,51 @@
-Ignis 1.0.0 (8db92d8-dirty)
+Ignis 1.0.0 (v1.0.0)
   build type : Release
   compiler   : GNU 13.3.0
-  data dir   : /home/user/Ignis/data
+  data dir   : /tmp/claude-0/-home-user-Ignis/a38ad4d7-ed64-5b14-92a4-ed770272dde9/scratchpad/rel/data
   hardware threads : 4
-  cpu              : Intel(R) Xeon(R) Processor @ 2.80GHz
+  cpu              : Intel(R) Xeon(R) Processor @ 2.10GHz
   eigen            : 3.4.0
 
 equilibrium
-  adiabatic (HP) solve, 26 species                    0.0577 ms  (min     0.0533, max     0.1654, n 500)  [mean Newton iterations 24.000]
+  adiabatic (HP) solve, 26 species                    0.0528 ms  (min     0.0476, max     0.2018, n 500)  [mean Newton iterations 24.000]
     worst residuals over 500 solves: element 2.21e-14, Gibbs 5.68e-14, enthalpy 4.12e-14
-  isentropic (SP) solve, 26 species                   0.1404 ms  (min     0.1238, max     0.4558, n 500)
+  isentropic (SP) solve, 26 species                   0.1274 ms  (min     0.1108, max     0.3573, n 500)
   scaling with species count
-    8 species                                         0.0132 ms  (min     0.0107, max     0.0497, n 250)  [species 8.000]
-    12 species                                        0.0241 ms  (min     0.0225, max     0.0560, n 250)  [species 12.000]
-    18 species                                        0.0308 ms  (min     0.0289, max     0.0624, n 250)  [species 18.000]
-    26 species                                        0.0586 ms  (min     0.0533, max     0.1481, n 250)  [species 26.000]
+    8 species                                         0.0102 ms  (min     0.0096, max     0.0288, n 250)  [species 8.000]
+    12 species                                        0.0237 ms  (min     0.0204, max     0.0516, n 250)  [species 12.000]
+    18 species                                        0.0285 ms  (min     0.0260, max     0.0759, n 250)  [species 18.000]
+    26 species                                        0.0510 ms  (min     0.0477, max     0.0876, n 250)  [species 26.000]
 
 nozzle
-  chamber + throat + exit (no profile, no cooling)      7.9923 ms  (min     7.5610, max    12.0187, n 50)
+  chamber + throat + exit (no profile, no cooling)      7.3445 ms  (min     6.9192, max     8.8468, n 50)
   scaling with station count
-    50 stations                                      33.0182 ms  (min    32.8598, max    33.1420, n 6)  [stations 50.000]
-    100 stations                                     49.8894 ms  (min    49.0797, max    50.9977, n 6)  [stations 100.000]
-    200 stations                                     88.1297 ms  (min    85.7373, max    94.2508, n 6)  [stations 200.000]
-    400 stations                                    163.5051 ms  (min   161.9083, max   165.4498, n 6)  [stations 400.000]
-    800 stations                                    319.4649 ms  (min   315.1714, max   323.4618, n 6)  [stations 800.000]
-    1600 stations                                   625.9905 ms  (min   619.2789, max   638.2804, n 6)  [stations 1600.000]
+    50 stations                                      30.6136 ms  (min    30.2838, max    31.1128, n 6)  [stations 50.000]
+    100 stations                                     46.5675 ms  (min    45.2725, max    47.8921, n 6)  [stations 100.000]
+    200 stations                                     80.5827 ms  (min    78.2819, max    82.1907, n 6)  [stations 200.000]
+    400 stations                                    155.5929 ms  (min   147.9437, max   171.7108, n 6)  [stations 400.000]
+    800 stations                                    290.8825 ms  (min   287.4974, max   293.3534, n 6)  [stations 800.000]
+    1600 stations                                   570.0432 ms  (min   565.8391, max   574.8316, n 6)  [stations 1600.000]
 
 complete steady analysis
-  chamber + nozzle + profile + cooling + feed       263.2447 ms  (min   258.5514, max   275.8832, n 12)
+  chamber + nozzle + profile + cooling + feed       241.4738 ms  (min   237.1120, max   253.0505, n 12)
     worst residuals: cooling energy balance 1.75e-10, local flux 4.36e-10, nozzle mass flow 1.68e-13
-  chamber + nozzle + profile (no cooling)           161.7144 ms  (min   160.6777, max   163.1388, n 12)
+  chamber + nozzle + profile (no cooling)           151.0895 ms  (min   147.3037, max   157.5358, n 12)
 
 transient
-  equilibrium table build                          1215.8091 ms  (min  1215.8091, max  1215.8091, n 1)  [equilibrium solves 51701.000]
+  equilibrium table build                          1142.4455 ms  (min  1142.4455, max  1142.4455, n 1)  [equilibrium solves 51701.000]
     interpolation error: max |dT|/T 1.30e-01, rms 1.69e-02 over 100 points
-  adaptive RK4(5), 0.8 s of physical time          1237.4666 ms  (min  1225.1851, max  1245.0728, n 3)  [accepted steps 4624.000]
+  adaptive RK4(5), 0.8 s of physical time          1080.8166 ms  (min  1074.4386, max  1085.1356, n 3)  [accepted steps 4624.000]
     conservation residuals: mass 5.71e-15, energy 2.60e-13
-  fixed-step RK4 at 2 us, 0.8 s of physical time  65626.0197 ms  (min 65626.0197, max 65626.0197, n 1)  [steps 400155.000]
+  fixed-step RK4 at 2 us, 0.8 s of physical time  58103.6672 ms  (min 58103.6672, max 58103.6672, n 1)  [steps 400155.000]
 
 Monte Carlo
-    1 thread(s)                                   46584.5068 ms  (min 46584.5068, max 46584.5068, n 1)  [samples/s 8.587]
+    1 thread(s)                                   43990.8610 ms  (min 43990.8610, max 43990.8610, n 1)  [samples/s 9.093]
       400 of 400 samples succeeded
-    2 thread(s)                                   24749.6688 ms  (min 24749.6688, max 24749.6688, n 1)  [samples/s 16.162]
+    2 thread(s)                                   23234.1997 ms  (min 23234.1997, max 23234.1997, n 1)  [samples/s 17.216]
       400 of 400 samples succeeded
-    4 thread(s)                                   13700.1917 ms  (min 13700.1917, max 13700.1917, n 1)  [samples/s 29.197]
+    4 thread(s)                                   12917.6899 ms  (min 12917.6899, max 12917.6899, n 1)  [samples/s 30.965]
       400 of 400 samples succeeded
-    parallel speed-up at 4.000 threads: 3.40x
+    parallel speed-up at 4.000 threads: 3.41x
 
-benchmark suite wall time: 169.03 s
+benchmark suite wall time: 155.01 s
 wrote results/benchmarks/benchmarks.csv and benchmarks.json

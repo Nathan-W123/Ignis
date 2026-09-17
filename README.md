@@ -358,6 +358,9 @@ Full detail in [`docs/verification.md`](docs/verification.md).
 * Monte Carlo at 1, 4 and 7 threads gives **byte-identical** sample matrices.
 * **78 test cases, 17,550 assertions, 0 failures** on GCC 13.3 and Clang 18.1,
   Release and Debug, with `-Wall -Wextra -Wpedantic -Werror`.
+* Every committed report identifies its binary as `Ignis 1.0.0 (v1.0.0)` — a
+  clean tag, no local modifications — because the whole tree was regenerated
+  from a fresh clone of that tag.
 * The committed `results/` tree was **reproduced bit-for-bit** from a fresh
   clone: 9 reports and 33 CSV tables compared, and the only differences were
   measured wall times ([`verification.md` §6](docs/verification.md)).

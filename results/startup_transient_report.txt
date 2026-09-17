@@ -1,11 +1,11 @@
-Ignis 1.0.0 (8db92d8-dirty)
+Ignis 1.0.0 (v1.0.0)
   build type : Release
   compiler   : GNU 13.3.0
-  data dir   : /home/user/Ignis/data
+  data dir   : /tmp/claude-0/-home-user-Ignis/a38ad4d7-ed64-5b14-92a4-ed770272dde9/scratchpad/rel/data
 
 case startup_transient
 building the equilibrium property table (41 x 97 x 13 = 51701 equilibrium solves) ...
-table built in 1.24 s
+table built in 1.09 s
 equilibrium table interpolation error over 200 random interior points
   temperature : max 1.296e-01, rms 1.222e-02
   pressure    : max 1.296e-01, rms 1.217e-02
@@ -22,7 +22,7 @@ transient (rk45)
   chamber T range        267.2 to 3352.0 K
   mass conservation err  5.708e-15
   energy conservation err 2.597e-13
-  wall time              1.296 s
+  wall time              1.080 s
 
       t_ms       p_MPa       T_K      O/F    mdot_out        F_kN
       0.00     0.10133     300.0    3.400       0.000       0.000

@@ -1,6 +1,6 @@
 {
   "ignis_version": "1.0.0",
-  "git": "8db92d8-dirty",
+  "git": "v1.0.0",
   "build_type": "Release",
   "compiler": "GNU 13.3.0",
   "config_file": "configs/monte_carlo.yaml",
@@ -11,8 +11,8 @@
     "samples_succeeded": 2000,
     "samples_failed": 0,
     "seed": 20260917,
-    "wall_seconds": 58.204407754000002,
-    "throughput_per_second": 34.361658801734876,
+    "wall_seconds": 54.889989163999999,
+    "throughput_per_second": 36.436516575443498,
     "inputs": [
       {
         "parameter": "chamber.pressure",

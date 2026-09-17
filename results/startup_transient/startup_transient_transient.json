@@ -1,6 +1,6 @@
 {
   "ignis_version": "1.0.0",
-  "git": "8db92d8-dirty",
+  "git": "v1.0.0",
   "build_type": "Release",
   "compiler": "GNU 13.3.0",
   "config_file": "configs/startup_transient.yaml",
@@ -13,7 +13,7 @@
     "mr_range": [0.25, 12],
     "t_range": [200, 4000],
     "p_range": [50000, 20000000],
-    "build_seconds": 1.2409419500000001,
+    "build_seconds": 1.0933656839999999,
     "interpolation_error": {
       "samples": 200,
       "max_rel_temperature": 0.12963012384486083,
@@ -29,7 +29,7 @@
     "steps": 4624,
     "rejected_steps": 132,
     "rhs_evaluations": 28536,
-    "wall_seconds": 1.2964404860000001,
+    "wall_seconds": 1.0800897229999999,
     "max_pressure": 5502118.6329854811,
     "time_to_90_percent": 0.035999999999999928,
     "mass_conservation_error": 5.7076247224810821e-15,

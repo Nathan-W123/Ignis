@@ -1,6 +1,6 @@
 {
   "ignis_version": "1.0.0",
-  "git": "8db92d8-dirty",
+  "git": "v1.0.0",
   "build_type": "Release",
   "compiler": "GNU 13.3.0",
   "config_file": "configs/altitude_sweep.yaml",
@@ -35,7 +35,7 @@
     "rows": 81,
     "points": 81,
     "failures": 0,
-    "wall_seconds": 0.047504267000000003,
+    "wall_seconds": 0.043696433999999999,
     "failure_messages": []
   }
 }
