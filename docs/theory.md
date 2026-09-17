@@ -398,8 +398,17 @@ the request; it does not extrapolate.
 A normal shock is treated as a discontinuity of zero thickness with frozen
 composition (the residence time inside a shock is orders of magnitude shorter
 than any chemical time). The jump is solved from the exact conservation
-equations with the real caloric equation of state, not from constant-γ
-relations. Parameterising by `v = u₂/u₁ = ρ₁/ρ₂`:
+equations using the mixture's own caloric equation of state h(T), not from
+constant-γ relations.
+
+> **Terminology.** This is a *variable-property equilibrium-gas* shock, not a
+> "real-gas" shock. The thermal equation of state stays ideal, p = ρRT, with
+> Z = 1 throughout; what varies is the caloric behaviour — c<sub>p</sub>(T),
+> γ(T) and the mean molar mass. Ignis implements no compressibility factor, no
+> fugacity and no non-ideal mixing rule, and at the densities involved (§1 of
+> [`limitations.md`](limitations.md)) it does not need to.
+
+Parameterising by `v = u₂/u₁ = ρ₁/ρ₂`:
 
 ```
 p₂ = p₁ + ρ₁ u₁² (1 − v)
@@ -457,6 +466,52 @@ in for the radial component of the exit momentum.
 
 Vacuum specific impulse is always reported from the shock-free solution, which
 is the conventional definition.
+
+### 9.1 The ambient-pressure family
+
+For a **full-flowing** nozzle every term above is fixed by the converged exit
+state except the pressure term, which is linear in the ambient pressure:
+
+```
+F(p_a) = F_vac − p_a A_e ,     F_vac = λ_div η_nozzle ṁ u_e + p_e A_e
+```
+
+So the sea-level thrust, the vacuum thrust and any weighted average over a
+trajectory all follow from one solve. Ignis reports
+
+```
+F_sl   = F(101 325 Pa) ,                     I_sp,sl = F_sl / (ṁ g₀)
+I_sp,ascent = Σ w_i F(p_a(z_i)) / (Σ w_i ṁ g₀)
+```
+
+over a **declared** list of altitudes `z_i` and time weights `w_i`
+(`performance.ascent_profile`). Because F is linear in p_a, this weighted mean
+is exact — it equals `F` evaluated at the weighted-mean ambient pressure — and
+is not a quadrature approximation. The linearity is verified against the
+explicit sum in the test suite.
+
+This is a **mission weighting supplied as an input**, not a trajectory
+simulation: Ignis has no vehicle model. It exists because optimising a
+single-altitude specific impulse drives the expansion ratio to whatever bound
+it is given, whereas a trajectory-weighted objective has an interior optimum.
+
+### 9.2 Separation margin
+
+The Summerfield and Schmucker criteria give a wall pressure `p_sep(M, p_a)`
+below which the flow is predicted to detach. Wall pressure falls and Mach
+number rises monotonically through the divergent, so `p_wall − p_sep` is
+monotone and its smallest value is at the exit plane. Ignis reports the
+normalised exit-plane margin
+
+```
+m_sep = (p_e − p_sep(M_e, p_a)) / p_a
+```
+
+which is positive when the flow is attached to the lip, negative when the
+criterion predicts separation inside the nozzle, and usable directly as an
+optimisation constraint. It is a **diagnostic on an empirical criterion**: the
+inviscid solution is not modified when it goes negative, so a separated
+nozzle's reported thrust is optimistic.
 
 ---
 

@@ -224,6 +224,7 @@ for the conceptual engine. Each is a statement the physics must satisfy:
 | I<sub>sp</sub> rises monotonically with altitude for a fixed nozzle | Checked over 0–80 km. |
 | Thrust splits into momentum and pressure terms that sum exactly | Checked at every altitude; the pressure term is negative when over-expanded. |
 | Peak flame temperature occurs slightly fuel-rich of stoichiometric | Checked over O/F 2–5: the maximum sits near O/F 3.5 (φ ≈ 1.14), not at φ = 1, because dissociation costs more than the extra oxidiser returns. |
+| Ascent-averaged impulse has an interior optimum in expansion ratio | Scanned at p<sub>c</sub> = 5.5 MPa, O/F 3.4: ascent I<sub>sp</sub> 316.5 / **319.3** / 318.2 / 315.1 / 310.8 / 300.3 / 274.9 / 232.5 s at ε = 10 / 15 / 20 / 25 / 30 / 40 / 60 / 90, peaking near ε = 15, while vacuum I<sub>sp</sub> climbs monotonically 332.9 → 379.8 s over the same range. The separation margin goes negative between ε = 15 and 20. This is why the shipped study optimises the ascent average and not the vacuum value. |
 | Peak c\* and peak I<sub>sp</sub> occur richer still than peak T | Checked — c\* peaks near O/F 3.0, because c\* ∝ √(T/M) and M keeps falling. |
 | Heat flux peaks just downstream of the throat | Checked: 49.67 MW/m² at x = 346.8 mm with the throat at 345.5 mm. |
 | Coolant temperature rises monotonically along its own flow path | Checked for both counter- and co-flow. |

@@ -157,7 +157,7 @@ Measured during the full reproduction (`scripts/run_all.sh`):
 | Constrained optimisation | 2500 evaluations (116 failed) | 245.06 s |
 | Monte Carlo campaign | 2000 samples | 58.20 s |
 | Benchmark suite | — | 169.03 s |
-| Test suite (CTest, 4 jobs) | 75 cases | 60.22 s |
+| Test suite (CTest, 4 jobs) | 78 cases | 60.22 s |
 
 The expansion-ratio sweep is fast because only the nozzle is re-solved; the
 chamber state is shared. The cooling sweep is slow per point because each
@@ -189,7 +189,7 @@ The test suite is now a significant share of what remains:
 
 | | |
 |---|---:|
-| Full suite, CTest at `-j4` | **60.22 s** (75 cases, 17 490 assertions) |
+| Full suite, CTest at `-j4` | **60.22 s** (78 cases, 17 550 assertions) |
 | Longest single case (`constrained optimisation respects its constraints`) | 49 s |
 
 That case used to take 257 s — 60 % of the whole suite — because its six

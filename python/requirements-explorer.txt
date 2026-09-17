@@ -1,0 +1,4 @@
+# Ignis Engine Explorer (desktop UI).  The command-line tools and the figure
+# scripts do not need any of this -- see requirements.txt for those.
+-r requirements.txt
+PySide6>=6.6

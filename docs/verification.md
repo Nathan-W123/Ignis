@@ -13,7 +13,7 @@ with:
                            # printing the measured errors
 ```
 
-**Result: 75 test cases, 17,490 assertions, 0 failures** in 60 s (CTest, `-j4`), on GCC 13.3.0 and
+**Result: 78 test cases, 17,550 assertions, 0 failures** in 60 s (CTest, `-j4`), on GCC 13.3.0 and
 Clang 18.1.3, Release and Debug, with `-Wall -Wextra -Wpedantic -Werror`.
 
 ---
@@ -90,7 +90,7 @@ agree.
 
 ### 1.4 Normal shock
 
-The real-gas shock solver is run on the same synthetic perfect gas and
+The variable-property shock solver is run on the same synthetic perfect gas and
 compared with the Rankine–Hugoniot relations for γ = 1.4 at upstream Mach 1.5,
 2, 3 and 4. Pressure, density and temperature ratios and the downstream Mach
 number match the closed-form relations to within 5e-6; mass, momentum and
@@ -299,13 +299,13 @@ the entire argument for running your own instructions against a fresh clone.
 |---|---:|---|
 | `tests/unit/test_thermo.cpp` | 10 | NASA polynomials, database, mixtures, range errors |
 | `tests/unit/test_equilibrium.cpp` | 8 | Conservation, stationarity, guess independence, trends, derivatives, error paths |
-| `tests/unit/test_nozzle.cpp` | 6 | Contour validity, analytic nozzle, thrust decomposition, regime classification |
+| `tests/unit/test_nozzle.cpp` | 7 | Contour validity, analytic nozzle, thrust decomposition, regime classification |
 | `tests/unit/test_transport_atmosphere.cpp` | 5 | Collision integrals, Chapman–Enskog, Wilke, USSA-1976 |
 | `tests/unit/test_thermal.cpp` | 8 | Conduction, recovery temperature, Bartz scaling, radiation, coolant tables |
-| `tests/unit/test_cooling.cpp` | 6 | Energy balance, monotonicity, grid convergence, design trends, failures |
+| `tests/unit/test_cooling.cpp` | 7 | Energy balance, monotonicity, grid convergence, design trends, failures |
 | `tests/unit/test_transient.cpp` | 7 | Table accuracy, steady-state agreement, analytic filling, order, adaptivity, shutdown |
-| `tests/unit/test_io.cpp` | 7 | Every shipped config, defaults, error messages, parameter registry, JSON/CSV |
+| `tests/unit/test_io.cpp` | 8 | Every shipped config, defaults, error messages, parameter registry, JSON/CSV |
 | `tests/unit/test_uncertainty.cpp` | 7 | Thread invariance, seeding, distributions, sensitivity, failure accounting |
 | `tests/validation/test_validation.cpp` | 5 | NASA CEA and Cantera comparisons — see [`validation.md`](validation.md) |
 | `tests/integration/test_engine.cpp` | 6 | Both engines end to end, altitude trends, sweep/single-point identity, optimisation feasibility, feed system |
-| **Total** | **75** | **17 490 assertions, 60 s at `-j4`** |
+| **Total** | **78** | **17 550 assertions, 60 s at `-j4`** |

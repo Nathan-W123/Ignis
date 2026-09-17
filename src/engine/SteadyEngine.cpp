@@ -69,6 +69,10 @@ SteadyEngineResult SteadyEngine::analyse(const EngineConfig& cfg, double p_ambie
   const auto geom = NozzleGeometry::build(cfg.nozzle);
   res.throat_area = geom.throatArea();
   res.exit_area = geom.exitArea();
+  res.exit_radius = geom.exitRadius();
+  res.exit_diameter = 2.0 * geom.exitRadius();
+  res.total_length = geom.exitPosition();
+  res.divergent_length = geom.divergentLength();
   res.chamber_volume = geom.chamberVolume();
   res.l_star = geom.characteristicLength();
 
@@ -276,6 +280,11 @@ Json SteadyEngineResult::toJson() const {
   p["isp_ideal"] = Json(performance.isp_ideal);
   p["isp"] = Json(performance.isp);
   p["isp_vacuum"] = Json(performance.isp_vacuum);
+  p["thrust_sea_level"] = Json(performance.thrust_sea_level);
+  p["isp_sea_level"] = Json(performance.isp_sea_level);
+  p["isp_ascent"] = Json(performance.isp_ascent);
+  p["ascent_mean_ambient"] = Json(performance.ascent_mean_ambient);
+  p["separation_margin"] = Json(performance.separation_margin);
   p["c_effective"] = Json(performance.c_effective);
   p["cf_ideal"] = Json(performance.cf_ideal);
   p["cf"] = Json(performance.cf);
@@ -302,6 +311,10 @@ Json SteadyEngineResult::toJson() const {
   Json g = Json::object();
   g["chamber_volume"] = Json(chamber_volume);
   g["l_star"] = Json(l_star);
+  g["exit_radius"] = Json(exit_radius);
+  g["exit_diameter"] = Json(exit_diameter);
+  g["total_length"] = Json(total_length);
+  g["divergent_length"] = Json(divergent_length);
   g["residence_time"] = Json(residence_time);
   j["geometry"] = g;
 
@@ -322,6 +335,8 @@ Json SteadyEngineResult::toJson() const {
     t["max_flux_residual"] = Json(cooling.max_flux_residual);
     t["boiling_detected"] = Json(cooling.boiling_detected);
     t["wall_limit_exceeded"] = Json(cooling.wall_limit_exceeded);
+    t["wall_limit_temperature"] = Json(cooling.wall_limit_temperature);
+    t["wall_material"] = Json(cooling.wall_material);
     t["warnings"] = Json::of(cooling.warnings);
     j["cooling"] = t;
   }

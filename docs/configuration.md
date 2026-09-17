@@ -109,7 +109,16 @@ performance:
   eta_nozzle: 1.0               # extra multiplicative nozzle efficiency
   separation: summerfield       # summerfield | schmucker | none
   resolve_internal_shocks: true # search for an internal normal shock when over-expanded
+  ascent_profile:               # optional; enables performance.isp_ascent
+    altitudes: [0, 5000, 10000, 20000, 40000]   # m, geometric
+    weights:   [0.30, 0.25, 0.20, 0.15, 0.10]   # time weights, normalised internally
 ```
+
+`ascent_profile` declares the trajectory over which `performance.isp_ascent` is
+averaged. It is an **input to a trade study, not a prediction**: Ignis has no
+vehicle model. Thrust is exactly linear in ambient pressure for a full-flowing
+nozzle, so the weighted mean is exact rather than a quadrature. Omitting the
+section leaves `performance.isp_ascent` at zero.
 
 `altitude` and `ambient_pressure` are mutually exclusive in effect — whichever
 appears last in the parameter registry wins when a study drives them.
@@ -318,8 +327,11 @@ performance.c_effective    performance.mdot           performance.exit_pressure
 performance.exit_temperature performance.exit_mach    performance.exit_velocity
 performance.pressure_ratio performance.expansion_ratio
 performance.mass_flow_residual performance.energy_residual
+performance.thrust_sea_level performance.isp_sea_level
+performance.isp_ascent     performance.separation_margin
 geometry.l_star            geometry.residence_time    geometry.throat_area
-geometry.exit_area
+geometry.exit_area         geometry.exit_radius       geometry.exit_diameter
+geometry.total_length      geometry.divergent_length
 cooling.max_wall_temperature cooling.max_heat_flux    cooling.total_heat_load
 cooling.pressure_drop      cooling.outlet_temperature cooling.temperature_rise
 cooling.energy_balance_residual cooling.flux_residual

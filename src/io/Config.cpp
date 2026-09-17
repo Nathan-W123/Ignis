@@ -210,7 +210,8 @@ EngineConfig EngineConfig::load(const std::string& path) {
   if (root.has("performance")) {
     const auto p = root["performance"];
     p.requireOnly({"ambient_pressure", "altitude", "auto_divergence", "lambda_divergence",
-                   "eta_nozzle", "separation", "resolve_internal_shocks", "ideal_tolerance"});
+                   "eta_nozzle", "separation", "resolve_internal_shocks", "ideal_tolerance",
+                   "ascent_profile"});
     if (p.has("altitude") && p.has("ambient_pressure"))
       throw ConfigError(path + ": performance: give either 'altitude' or 'ambient_pressure'");
     if (p.has("altitude")) {
@@ -227,6 +228,29 @@ EngineConfig EngineConfig::load(const std::string& path) {
     cfg.performance.resolve_internal_shocks =
         p.optional("resolve_internal_shocks").boolean(true);
     cfg.performance.ideal_tolerance = p.optional("ideal_tolerance").number(1e-6, 0.5, 0.01);
+    if (p.has("ascent_profile")) {
+      const auto a = p["ascent_profile"];
+      a.requireOnly({"altitudes", "weights"});
+      cfg.performance.ascent_altitudes = a["altitudes"].numbers();
+      cfg.performance.ascent_weights = a["weights"].numbers();
+      if (cfg.performance.ascent_altitudes.empty())
+        throw ConfigError(a.path() + ": the ascent profile needs at least one altitude");
+      if (cfg.performance.ascent_weights.size() != cfg.performance.ascent_altitudes.size())
+        throw ConfigError(a.path() + ": 'altitudes' and 'weights' must be the same length (" +
+                          std::to_string(cfg.performance.ascent_altitudes.size()) + " vs " +
+                          std::to_string(cfg.performance.ascent_weights.size()) + ")");
+      double w_sum = 0.0;
+      for (std::size_t i = 0; i < cfg.performance.ascent_weights.size(); ++i) {
+        if (cfg.performance.ascent_weights[i] < 0.0)
+          throw ConfigError(a.path() + ": weights must not be negative");
+        if (cfg.performance.ascent_altitudes[i] < -5000.0 ||
+            cfg.performance.ascent_altitudes[i] > 86000.0)
+          throw ConfigError(a.path() + ": altitudes must lie within the U.S. Standard "
+                                       "Atmosphere 1976 range [-5000, 86000] m");
+        w_sum += cfg.performance.ascent_weights[i];
+      }
+      if (w_sum <= 0.0) throw ConfigError(a.path() + ": the weights sum to zero");
+    }
   }
   cfg.performance.eta_c_star = cfg.eta_c_star;
 

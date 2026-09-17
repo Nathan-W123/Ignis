@@ -17,6 +17,7 @@
 
 #include "TestHelpers.hpp"
 #include "ignis/combustion/Chamber.hpp"
+#include "ignis/nozzle/Atmosphere.hpp"
 #include "ignis/nozzle/NozzleFlow.hpp"
 #include "ignis/nozzle/NozzleGeometry.hpp"
 
@@ -344,4 +345,91 @@ TEST_CASE("an expansion beyond the property range is reported, not extrapolated"
   REQUIRE_THROWS_AS(flow.atAreaRatio(2.0 * eps_max, true), InfeasibleError);
   REQUIRE_THROWS_WITH(flow.atAreaRatio(2.0 * eps_max, true),
                       Catch::Matchers::ContainsSubstring("exceeds the largest expansion"));
+}
+
+TEST_CASE("the ambient-pressure family follows the exit state exactly",
+          "[nozzle][compressible][verification]") {
+  // Thrust is linear in ambient pressure for a full-flowing nozzle:
+  //     F(p_a) = F_vac - p_a A_e
+  // so the sea-level and ascent-averaged quantities must be reproducible from
+  // the vacuum thrust and the exit area alone.  If they ever stop being, the
+  // shortcut in evaluateNozzle is wrong.
+  const double gamma = 1.2, mw = 22.0e-3;
+  const auto db = perfectGasDatabase(gamma, 22.0);
+  const EquilibriumSolver solver(db);
+  const GasMixture mix(db);
+  Eigen::VectorXd n(1);
+  n(0) = 1.0 / mw;
+  const auto chamber = mix.frozenState(n, 3000.0, 5.0e6);
+  ChamberReference ref;
+  ref.b = db.elementMatrix() * n;
+  ref.stagnation = chamber;
+  const NozzleFlow flow(solver, CompositionModel::kFrozen, ref);
+
+  NozzleGeometrySpec gs;
+  gs.throat_radius = 0.05;
+  gs.contraction_ratio = 3.0;
+  gs.chamber_length = 0.2;
+  gs.expansion_ratio = 20.0;
+  const auto geom = NozzleGeometry::build(gs);
+
+  NozzlePerformanceOptions opts;
+  opts.auto_divergence = false;
+  opts.separation = SeparationCriterion::kNone;
+  opts.ascent_altitudes = {0.0, 10000.0, 30000.0};
+  opts.ascent_weights = {2.0, 1.0, 1.0};   // deliberately not normalised
+
+  const auto perf = evaluateNozzle(flow, geom, constants::atm, opts);
+  const double f_vac = perf.isp_vacuum * perf.mdot * constants::g0;
+
+  SECTION("sea-level thrust is the vacuum thrust less the exit-plane term") {
+    REQUIRE(perf.thrust_sea_level ==
+            Approx(f_vac - constants::atm * perf.exit_area).epsilon(1e-12));
+    REQUIRE(perf.isp_sea_level ==
+            Approx(perf.thrust_sea_level / (perf.mdot * constants::g0)).epsilon(1e-12));
+  }
+  SECTION("the ascent average equals the average over the declared altitudes") {
+    double w = 0.0, wf = 0.0, wp = 0.0;
+    for (std::size_t i = 0; i < opts.ascent_altitudes.size(); ++i) {
+      const double p_a = Atmosphere::at(opts.ascent_altitudes[i]).pressure;
+      w += opts.ascent_weights[i];
+      wf += opts.ascent_weights[i] * (f_vac - p_a * perf.exit_area);
+      wp += opts.ascent_weights[i] * p_a;
+    }
+    REQUIRE(perf.ascent_mean_ambient == Approx(wp / w).epsilon(1e-12));
+    REQUIRE(perf.isp_ascent ==
+            Approx((wf / w) / (perf.mdot * constants::g0)).epsilon(1e-12));
+    // Linearity means the weighted mean is the value at the mean pressure.
+    REQUIRE(perf.isp_ascent ==
+            Approx((f_vac - (wp / w) * perf.exit_area) /
+                   (perf.mdot * constants::g0)).epsilon(1e-12));
+  }
+  SECTION("the ascent Isp is bracketed by the sea-level and vacuum values") {
+    REQUIRE(perf.isp_ascent > perf.isp_sea_level);
+    REQUIRE(perf.isp_ascent < perf.isp_vacuum);
+  }
+  SECTION("a malformed ascent profile is rejected") {
+    auto bad = opts;
+    bad.ascent_weights = {1.0, 1.0};   // one short
+    REQUIRE_THROWS_AS(evaluateNozzle(flow, geom, constants::atm, bad), ConfigError);
+    bad = opts;
+    bad.ascent_weights = {0.0, 0.0, 0.0};
+    REQUIRE_THROWS_AS(evaluateNozzle(flow, geom, constants::atm, bad), ConfigError);
+  }
+  SECTION("the separation margin is off when the criterion is off") {
+    REQUIRE(perf.separation_margin == Approx(NozzlePerformance::kNoSeparationRisk));
+  }
+  SECTION("the separation margin changes sign where the criterion does") {
+    auto on = opts;
+    on.separation = SeparationCriterion::kSummerfield;
+    // Summerfield separates when the wall pressure drops below 0.4 p_ambient,
+    // so raising the ambient pressure past p_e / 0.4 must flip the margin.
+    const auto attached = evaluateNozzle(flow, geom, 1.0e3, on);
+    REQUIRE(attached.separation_margin > 0.0);
+    const double p_flip = attached.p_exit / 0.4;
+    const auto separated = evaluateNozzle(flow, geom, 2.0 * p_flip, on);
+    REQUIRE(separated.separation_margin < 0.0);
+    const auto marginal = evaluateNozzle(flow, geom, p_flip, on);
+    REQUIRE(marginal.separation_margin == Approx(0.0).margin(1e-9));
+  }
 }

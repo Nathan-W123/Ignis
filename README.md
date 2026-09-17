@@ -59,9 +59,11 @@ reactants at 298.15 K.
 **Nozzle.** Rao-type bell contours from six analytic C¹ segments, or conical.
 Quasi-1D marching on static pressure with shifting-equilibrium or frozen
 chemistry; the throat located by M(p) = 1; area ratios by Illinois regula
-falsi. Real-gas normal shocks, expansion-regime classification, and the
-Summerfield and Schmucker separation criteria. U.S. Standard Atmosphere 1976
-with the standard's own constants.
+falsi. Variable-property equilibrium-gas normal shocks (ideal thermal EOS,
+state-dependent c<sub>p</sub>, γ and molar mass — not a non-ideal
+compressibility model), expansion-regime classification, and the Summerfield
+and Schmucker separation criteria. U.S. Standard Atmosphere 1976 with the
+standard's own constants.
 
 **Thermal.** Chapman–Enskog transport with Neufeld collision integrals, the
 Brokaw polar correction, modified Eucken and Wilke mixing. Bartz hot-gas
@@ -94,7 +96,7 @@ and fetched automatically if not.
 ```bash
 git clone https://github.com/Nathan-W123/Ignis.git && cd Ignis
 ./scripts/build.sh                 # configure + build, ~36 s on 4 cores
-./scripts/test.sh                  # 75 test cases, ~1 min on 4 cores
+./scripts/test.sh                  # 78 test cases, ~1 min on 4 cores
 ```
 
 Run the nominal LOX/methane engine:
@@ -113,6 +115,24 @@ pip install -r python/requirements.txt
 
 It prints its own end-to-end wall time at the end, and it fails loudly on the
 first error.
+
+### The desktop Explorer
+
+![Ignis Engine Explorer](results/figures/16_explorer.png)
+
+```bash
+pip install -r python/requirements-explorer.txt
+python3 explorer.py
+```
+
+**Ignis Engine Explorer** puts the solver behind an interactive dashboard:
+change a chamber pressure, mixture ratio, expansion ratio or altitude and see
+the performance, the flow field and the thermal consequence, with a second
+design slot for side-by-side comparison. It implements no physics of its own —
+it writes a configuration, runs the same binaries listed below, and shows what
+they returned, including the refusal when a design does not close. The model's
+limitations are pinned open next to the answer rather than hidden behind a
+menu. See [`docs/explorer.md`](docs/explorer.md).
 
 ### The six tools
 
@@ -189,29 +209,44 @@ LOX/CH<sub>4</sub> at p<sub>c</sub> = 5.5 MPa, O/F 3.4, ε = 45: shifting
 **7.82 %** of vacuum impulse. Both are computed; neither is presented as *the*
 answer.
 
-### Constrained optimisation
+### Constrained ascent trade study
 
-Maximise vacuum I<sub>sp</sub> over six variables, subject to a 800 K wall
-limit, a 4 MPa jacket budget and a 900 K coolant limit. 2500 evaluations
-(116 of them infeasible analyses), 245 s:
+Maximising vacuum I<sub>sp</sub> under thermal limits alone is not a trade:
+vacuum I<sub>sp</sub> rises monotonically with expansion ratio, so the
+optimiser walks ε to whatever bound it is given and the answer *is* the bound.
+A booster delivers its impulse across a trajectory, and a first stage spends
+most of its burn low, where an over-expanded nozzle loses thrust and eventually
+separates. The shipped study therefore maximises the **time-weighted ascent
+specific impulse** under the constraints that actually size a booster:
 
-| | Baseline | Optimised |
-|---|---:|---:|
-| **Vacuum I<sub>sp</sub>** | 350.91 s | **380.83 s** |
-| Chamber pressure | 5.50 MPa | 8.51 MPa |
-| Mixture ratio | 3.40 | 3.588 |
-| Expansion ratio | 20.0 | 89.8 |
-| Channel height | 5.00 mm | 3.51 mm |
-| Wall thickness | 0.600 mm | 0.651 mm |
-| Channel width fraction | 0.500 | 0.657 |
-| Peak wall temperature | 797.7 K | 779.4 K ✓ (≤ 800) |
-| Jacket pressure drop | 3.33 MPa | 3.94 MPa ✓ (≤ 4.0) |
-| Coolant outlet | 493.3 K | 345.2 K ✓ (≤ 900) |
+| | Baseline | Optimised | |
+|---|---:|---:|---|
+| **Ascent I<sub>sp</sub>** (objective) | 318.19 s | **336.29 s** | +5.7 % |
+| Chamber pressure | 5.50 MPa | 10.75 MPa | |
+| Mixture ratio | 3.40 | 3.412 | |
+| Expansion ratio | 20.0 | **25.67** | interior to [6, 40] |
+| Throat radius | 70.0 mm | 50.4 mm | |
+| Sea-level thrust | 134.1 kN | 149.2 kN | ✓ 130–150 kN class (**active**) |
+| Peak wall temperature | 690.7 K | 794.3 K | ✓ ≤ 800 K (**active**) |
+| Jacket pressure drop | 1.69 MPa | 3.84 MPa | ✓ ≤ 4.0 MPa (**active**) |
+| Separation margin at lift-off | −6.1 % | +7.2 % | ✓ ≥ +2 % |
+| Exit diameter | 626 mm | 511 mm | ✓ ≤ 700 mm |
+| Engine length | 1074 mm | 925 mm | ✓ ≤ 1300 mm |
 
-The optimiser pushes ε to the edge of its bound and buys the extra chamber
-pressure by taking the wall and the jacket right up to their limits — both
-active constraints end within 3 % of their bounds. It is a local method with
-multi-start, not a global proof; see [limitations](docs/limitations.md#6-optimisation-and-uncertainty).
+The story the numbers tell: held to a 130–150 kN sea-level thrust class, the
+optimiser raises chamber pressure until the **liner** and the **jacket** run
+out of margin, shrinks the throat to stay under the thrust ceiling, and settles
+the expansion ratio at 25.7 — where the flow still runs full at lift-off and
+the ascent-averaged impulse peaks. Three constraints from three different
+disciplines end active, and the expansion ratio lands well inside its bounds.
+
+An ε scan at fixed pressure shows why the objective matters: ascent
+I<sub>sp</sub> peaks near ε = 15 and the separation margin goes negative by
+ε = 20, while vacuum I<sub>sp</sub> is still climbing at ε = 90.
+
+It is a local method with Latin-hypercube multi-start, not a global proof, and
+12 starts are needed to find a feasible set this narrow — see
+[limitations](docs/limitations.md#6-optimisation-and-uncertainty).
 
 ### Monte Carlo — 2000 samples, 10 dispersed inputs
 
@@ -316,7 +351,7 @@ Full detail in [`docs/verification.md`](docs/verification.md).
   smooth problem; the adaptive and fixed-step integrators agree to 2.4e-7.
 * Equilibrium from 12 random initial guesses lands on the same answer to 1e-8.
 * Monte Carlo at 1, 4 and 7 threads gives **byte-identical** sample matrices.
-* **75 test cases, 17,490 assertions, 0 failures** on GCC 13.3 and Clang 18.1,
+* **78 test cases, 17,550 assertions, 0 failures** on GCC 13.3 and Clang 18.1,
   Release and Debug, with `-Wall -Wextra -Wpedantic -Werror`.
 * The committed `results/` tree was **reproduced bit-for-bit** from a fresh
   clone: 9 reports and 33 CSV tables compared, and the only differences were
@@ -364,8 +399,9 @@ include/ignis/ + src/          the library, 12 modules, no I/O in the physics
   uncertainty/  distributions, deterministic Monte Carlo, sensitivity
   io/           YAML config with path-qualified errors, JSON, CSV, CLI
 apps/           the six executables -- parse, call, print
-tests/          75 Catch2 cases: unit, verification, validation, integration
-python/         ignis_viz: the plotting package, and make_figures.py
+tests/          78 Catch2 cases: unit, verification, validation, integration
+python/         ignis_viz (figures) and ignis_explorer (the desktop UI)
+explorer.py     launcher for the Ignis Engine Explorer
 configs/        12 shipped scenarios
 data/           species, propellants, materials, coolant tables (all cited)
 tools/          the generators that build data/ and validation/reference/
@@ -395,6 +431,7 @@ data-flow diagram and the error policy.
 | [`docs/validation.md`](docs/validation.md) | NASA CEA, Cantera and reference-EOS comparisons with measured errors |
 | [`docs/benchmarks.md`](docs/benchmarks.md) | Measured timings, scaling and parallel efficiency |
 | [`docs/limitations.md`](docs/limitations.md) | What the model cannot do, and what would have to change |
+| [`docs/explorer.md`](docs/explorer.md) | The desktop Explorer: layout, charts, constraints, colour contract |
 | [`docs/extending.md`](docs/extending.md) | How to add species, propellants, correlations, figures |
 
 ---

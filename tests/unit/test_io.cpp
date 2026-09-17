@@ -263,3 +263,45 @@ TEST_CASE("tables export consistent CSV and JSON", "[io][table]") {
   REQUIRE(j.find("\"rows\": 3") != std::string::npos);
   REQUIRE(j.find("\"x\": [1, 2, 3]") != std::string::npos);
 }
+
+TEST_CASE("the ascent profile is parsed and validated", "[io][config]") {
+  SECTION("the shipped trade study declares one") {
+    const auto cfg = EngineConfig::load(sourceDir() + "/configs/optimization.yaml");
+    REQUIRE(cfg.performance.ascent_altitudes.size() ==
+            cfg.performance.ascent_weights.size());
+    REQUIRE(cfg.performance.ascent_altitudes.size() >= 2);
+    double sum = 0.0;
+    for (double w : cfg.performance.ascent_weights) {
+      REQUIRE(w >= 0.0);
+      sum += w;
+    }
+    REQUIRE(sum > 0.0);
+    // Front-loaded: a first stage spends most of its burn low.
+    REQUIRE(cfg.performance.ascent_weights.front() >
+            cfg.performance.ascent_weights.back());
+  }
+  SECTION("a mismatched profile is rejected with an actionable message") {
+    std::string yaml = kMinimal;
+    yaml += "performance:\n  ascent_profile:\n"
+            "    altitudes: [0, 5000, 10000]\n    weights: [0.5, 0.5]\n";
+    const TempConfig tc(yaml);
+    REQUIRE_THROWS_WITH(EngineConfig::load(tc.path()),
+                        Catch::Matchers::ContainsSubstring("same length"));
+  }
+  SECTION("an altitude outside the atmosphere model is rejected") {
+    std::string yaml = kMinimal;
+    yaml += "performance:\n  ascent_profile:\n"
+            "    altitudes: [0, 120000]\n    weights: [0.5, 0.5]\n";
+    const TempConfig tc(yaml);
+    REQUIRE_THROWS_WITH(EngineConfig::load(tc.path()),
+                        Catch::Matchers::ContainsSubstring("Standard"));
+  }
+  SECTION("weights that sum to zero are rejected") {
+    std::string yaml = kMinimal;
+    yaml += "performance:\n  ascent_profile:\n"
+            "    altitudes: [0, 10000]\n    weights: [0.0, 0.0]\n";
+    const TempConfig tc(yaml);
+    REQUIRE_THROWS_WITH(EngineConfig::load(tc.path()),
+                        Catch::Matchers::ContainsSubstring("sum to zero"));
+  }
+}

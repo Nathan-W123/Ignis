@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include "ignis/nozzle/NozzleFlow.hpp"
 
+#include "ignis/nozzle/Atmosphere.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -587,6 +589,34 @@ NozzlePerformance evaluateNozzle(const NozzleFlow& flow, const NozzleGeometry& g
   perf.isp_vacuum = (perf.lambda_divergence * perf.eta_nozzle * perf.mdot * exit_sup.u +
                      exit_sup.gas.p * perf.exit_area) / (perf.mdot * constants::g0);
 
+  // --- ambient-pressure family -------------------------------------------
+  // F(p_a) = F_vac - p_a A_e exactly, for a full-flowing nozzle, so every
+  // ambient pressure of interest is one subtraction away from the vacuum
+  // thrust.  Nothing below re-solves the flow.
+  const double thrust_vacuum = perf.isp_vacuum * perf.mdot * constants::g0;
+  const auto thrustAt = [&](double p_a) { return thrust_vacuum - p_a * perf.exit_area; };
+  perf.thrust_sea_level = thrustAt(constants::atm);
+  perf.isp_sea_level = perf.thrust_sea_level / (perf.mdot * constants::g0);
+
+  if (!opts.ascent_altitudes.empty()) {
+    if (opts.ascent_weights.size() != opts.ascent_altitudes.size())
+      throw ConfigError("ascent profile: " + std::to_string(opts.ascent_altitudes.size()) +
+                        " altitudes but " + std::to_string(opts.ascent_weights.size()) +
+                        " weights; they must match");
+    double w_sum = 0.0, wp_sum = 0.0, wf_sum = 0.0;
+    for (std::size_t i = 0; i < opts.ascent_altitudes.size(); ++i) {
+      const double w = opts.ascent_weights[i];
+      if (w < 0.0) throw ConfigError("ascent profile: weights must not be negative");
+      const double p_a = Atmosphere::at(opts.ascent_altitudes[i]).pressure;
+      w_sum += w;
+      wp_sum += w * p_a;
+      wf_sum += w * thrustAt(p_a);
+    }
+    if (w_sum <= 0.0) throw ConfigError("ascent profile: the weights sum to zero");
+    perf.ascent_mean_ambient = wp_sum / w_sum;
+    perf.isp_ascent = (wf_sum / w_sum) / (perf.mdot * constants::g0);
+  }
+
   // --- regime -----------------------------------------------------------
   if (perf.shock_in_nozzle) {
     perf.regime = ExpansionRegime::kSubsonicExit;
@@ -601,6 +631,19 @@ NozzlePerformance evaluateNozzle(const NozzleFlow& flow, const NozzleGeometry& g
   }
 
   // --- empirical separation diagnostic ----------------------------------
+  // The exit-plane margin is the optimisable form of the same criterion: the
+  // wall pressure falls and the Mach number rises monotonically through the
+  // divergent, so p_wall - p_sep(M) is monotone and the exit plane is where it
+  // is smallest.  Positive => attached to the lip; negative => separated
+  // somewhere inside.  Normalising by p_ambient makes it a percentage of
+  // ambient and so comparable across altitudes.
+  perf.separation_margin = NozzlePerformance::kNoSeparationRisk;
+  if (opts.separation != SeparationCriterion::kNone && p_ambient > 0.0 &&
+      !perf.shock_in_nozzle) {
+    perf.separation_margin =
+        (perf.p_exit - separationPressure(opts.separation, p_ambient, perf.mach_exit)) / p_ambient;
+  }
+
   if (opts.separation != SeparationCriterion::kNone && p_ambient > 0.0 &&
       !perf.shock_in_nozzle && perf.regime == ExpansionRegime::kOverExpanded) {
     // Wall pressure falls and Mach number rises monotonically along the

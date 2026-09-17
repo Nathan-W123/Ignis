@@ -44,6 +44,13 @@ struct SteadyEngineResult {
   double chamber_volume = 0.0;///< m^3
   double throat_area = 0.0;   ///< m^2
   double exit_area = 0.0;     ///< m^2
+  /// Installed-envelope geometry.  A nozzle that does not fit the vehicle is
+  /// not a design, however good its specific impulse, so these are exposed as
+  /// optimisable metrics rather than left inside NozzleGeometry.
+  double exit_radius = 0.0;       ///< m
+  double exit_diameter = 0.0;     ///< m
+  double total_length = 0.0;      ///< m, injector face to exit plane
+  double divergent_length = 0.0;  ///< m, throat to exit plane
   double ambient_pressure = 0.0;
   double altitude = 0.0;
   bool altitude_known = false;
