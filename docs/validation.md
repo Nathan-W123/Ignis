@@ -144,7 +144,7 @@ measured rather than suppressed:
 
 | Comparison | Worst |
 |---|---|
-| Major species (CH<sub>4</sub>, CO, CO<sub>2</sub>, H<sub>2</sub>, H<sub>2</sub>O, O<sub>2</sub>, OH, N<sub>2</sub>) | **0.43 %** at CH<sub>4</sub>, 1500 K |
+| Major species (H<sub>2</sub>O, CO<sub>2</sub>, CO, H<sub>2</sub>, O<sub>2</sub>, OH, O, H, N<sub>2</sub>, CH<sub>4</sub>, NO) | **0.43 %** at CH<sub>4</sub>, 1500 K |
 | All species | **10.1 %** at CH<sub>3</sub>O, 500 K |
 
 CH<sub>3</sub>O is a trace radical whose published fits genuinely disagree at

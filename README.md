@@ -94,7 +94,7 @@ and fetched automatically if not.
 ```bash
 git clone https://github.com/Nathan-W123/Ignis.git && cd Ignis
 ./scripts/build.sh                 # configure + build, ~36 s on 4 cores
-./scripts/test.sh                  # 75 test cases, ~4 min on 4 cores
+./scripts/test.sh                  # 75 test cases, ~1 min on 4 cores
 ```
 
 Run the nominal LOX/methane engine:
@@ -108,7 +108,7 @@ optimisation, Monte Carlo campaign, benchmark and figure:
 
 ```bash
 pip install -r python/requirements.txt
-./scripts/run_all.sh               # ~17 minutes; --quick for ~4
+./scripts/run_all.sh               # 14 min from a fresh clone; --quick for 6
 ```
 
 It prints its own end-to-end wall time at the end, and it fails loudly on the
@@ -122,7 +122,7 @@ first error.
 | `ignis_engine` | One complete steady analysis: chamber, nozzle, performance, cooling, feed system |
 | `ignis_nozzle` | Nozzle performance across altitude or ambient pressure, with regime classification |
 | `ignis_transient` | Start-up / shutdown integration with conservation residuals |
-| `ignis_sweep` | Full-factorial sweeps and constrained optimisation (`--optimize`) |
+| `ignis_sweep` | Full-factorial sweeps and constrained optimisation (`--mode optimize`) |
 | `ignis_mc` | Deterministic multithreaded Monte Carlo with sensitivity ranking |
 
 All six take `--config`, `-o/--output`, `--prefix`, `--set KEY=VALUE`,
@@ -316,8 +316,11 @@ Full detail in [`docs/verification.md`](docs/verification.md).
   smooth problem; the adaptive and fixed-step integrators agree to 2.4e-7.
 * Equilibrium from 12 random initial guesses lands on the same answer to 1e-8.
 * Monte Carlo at 1, 4 and 7 threads gives **byte-identical** sample matrices.
-* **75 test cases, 0 failures** on GCC 13.3 and Clang 18.1, Release and Debug,
-  with `-Wall -Wextra -Wpedantic -Werror`.
+* **75 test cases, 17,490 assertions, 0 failures** on GCC 13.3 and Clang 18.1,
+  Release and Debug, with `-Wall -Wextra -Wpedantic -Werror`.
+* The committed `results/` tree was **reproduced bit-for-bit** from a fresh
+  clone: 9 reports and 33 CSV tables compared, and the only differences were
+  measured wall times ([`verification.md` §6](docs/verification.md)).
 
 ---
 
@@ -336,10 +339,11 @@ in [`docs/benchmarks.md`](docs/benchmarks.md).
 | Adaptive transient, 0.8 s physical | 1.24 s (**53× faster** than fixed-step RK4) |
 | Monte Carlo, 4 threads | **29.2 samples/s** (3.40× speed-up) |
 | Clean build, 45 translation units, `-j4` | 36 s |
-| Full reproduction (`run_all.sh`) | 16 min 54 s |
+| Full reproduction (`run_all.sh`) from a fresh clone | 13 min 49 s |
 
 The Newton system size is independent of species count; going from 8 to 26
-species costs 4.4×, which is the O(N·E) assembly, not the linear solve.
+species costs 4.4× (a measured exponent of 1.27), which is the O(N·E) assembly
+of the system, not the linear solve.
 
 ---
 

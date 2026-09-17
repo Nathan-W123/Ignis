@@ -13,7 +13,7 @@ with:
                            # printing the measured errors
 ```
 
-**Result: 75 test cases, 17,516 assertions, 0 failures**, on GCC 13.3.0 and
+**Result: 75 test cases, 17,490 assertions, 0 failures** in 60 s (CTest, `-j4`), on GCC 13.3.0 and
 Clang 18.1.3, Release and Debug, with `-Wall -Wextra -Wpedantic -Werror`.
 
 ---
@@ -258,7 +258,42 @@ not as optimistic numbers.
 
 ---
 
-## 6. Test inventory
+## 6. Reproducibility of the committed results
+
+The `results/` tree in this repository was produced by `scripts/run_all.sh`.
+To check that it can be reproduced, the branch was cloned into a fresh
+directory, built from scratch and run end to end:
+
+```bash
+git clone --branch <branch> <url> /tmp/clean && cd /tmp/clean
+rm -rf results && ./scripts/run_all.sh
+```
+
+Result: **exit 0 in 13 min 49 s**, 75/75 tests passed, all 16 figures written.
+Comparing the fresh output against the committed one, with the two provenance
+lines (git hash, data path) excluded:
+
+| Compared | Files | Files with any difference | What the differences were |
+|---|---:|---:|---|
+| Human-readable reports | 9 | 4 | one `wall time …` line each |
+| CSV tables | 33 | 4 | the four benchmark timing tables |
+
+Every physics number — composition, temperature, c\*, thrust, I<sub>sp</sub>,
+heat flux, wall temperature, pressure drop, every sweep point, every Monte
+Carlo sample, every residual — is **bit-identical**. The only things that move
+between runs are measured times, which is what should move. This was checked
+twice, at two different commits.
+
+This check also found a real bug: `run_all.sh` let the applications create
+their own output subdirectories but wrote the reports through `tee`, which
+opens its target as the pipeline starts. On a machine where `results/` already
+existed it worked; from a clean checkout the first stage died with
+`tee: results/methane_nominal_report.txt: No such file or directory`. That is
+the entire argument for running your own instructions against a fresh clone.
+
+---
+
+## 7. Test inventory
 
 | File | Cases | Focus |
 |---|---:|---|
@@ -273,4 +308,4 @@ not as optimistic numbers.
 | `tests/unit/test_uncertainty.cpp` | 7 | Thread invariance, seeding, distributions, sensitivity, failure accounting |
 | `tests/validation/test_validation.cpp` | 5 | NASA CEA and Cantera comparisons — see [`validation.md`](validation.md) |
 | `tests/integration/test_engine.cpp` | 6 | Both engines end to end, altitude trends, sweep/single-point identity, optimisation feasibility, feed system |
-| **Total** | **75** | **17 516 assertions** |
+| **Total** | **75** | **17 490 assertions, 60 s at `-j4`** |

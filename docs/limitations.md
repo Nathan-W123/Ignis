@@ -18,10 +18,12 @@ compared with a test stand. Nothing in this repository is flight-ready, and
 nothing here should be used to justify a hardware decision.
 
 The tool is validated to reproduce **NASA CEA's idealisation** of rocket
-performance to a few parts in 10⁴ ([`validation.md`](validation.md)). Real
-engines depart from that idealisation by amounts that Ignis parameterises
-(η<sub>c\*</sub>, λ<sub>div</sub>, η<sub>nozzle</sub>, correlation multipliers)
-but does not predict.
+performance — worst case 0.18 % in flame temperature and 0.06 % in c\* over
+156 cases ([`validation.md`](validation.md)). Real engines depart from that
+idealisation by amounts that Ignis parameterises (η<sub>c\*</sub>,
+λ<sub>div</sub>, η<sub>nozzle</sub>, correlation multipliers) but does not
+predict. Reproducing an idealisation accurately is not the same thing as
+predicting an engine, and this document is the difference.
 
 ---
 
@@ -31,7 +33,7 @@ but does not predict.
 |---|---|
 | **Gas phase only.** No condensed species are carried. | Fuel-rich hydrocarbon cases that would form solid carbon are wrong. For LOX/CH<sub>4</sub> this matters below roughly O/F 1.5; the shipped sweeps stay at O/F ≥ 2. Metallised or chlorine-bearing propellants are out of scope entirely. |
 | **Equilibrium only — no finite-rate kinetics.** | Chamber composition assumes complete mixing and infinite residence time. The real recombination lag in a nozzle lies *between* the frozen and shifting limits; both bounds are computed and reported, but the true answer is not. |
-| **Ideal-gas equation of state for the products.** | At 20 MPa and 3600 K the compressibility factor of the product mixture departs from 1 by well under a percent, so this is a good approximation for the pressures here. It would not be for a very-high-pressure staged-combustion chamber. |
+| **Ideal-gas equation of state for the products.** | At the highest condition used here (20 MPa, 3600 K) the product mixture sits at ≈ 14.5 kg/m³, a molar volume of 1.5 L/mol and a reduced temperature above 15 — deep in the ideal-gas regime, so the approximation is sound at these pressures. It would need revisiting for a very-high-pressure staged-combustion chamber. |
 | **40 species, restricted by element set.** | Species not in `data/thermo/ignis_nasa7.yaml` simply do not exist for the solver. Adding one is a data edit, not a code change, but it is an edit. |
 | **NASA TM-4513 (1993) 7-coefficient data.** | A few parts in 10³ of flame-temperature difference against the CEA 2002 9-coefficient set; this is the dominant term in the CEA comparison and is measured, not assumed. |
 | **No ionisation.** | Irrelevant below ~5000 K, which covers every case here, but it is a hard ceiling. |

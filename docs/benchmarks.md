@@ -157,7 +157,7 @@ Measured during the full reproduction (`scripts/run_all.sh`):
 | Constrained optimisation | 2500 evaluations (116 failed) | 245.06 s |
 | Monte Carlo campaign | 2000 samples | 58.20 s |
 | Benchmark suite | — | 169.03 s |
-| Test suite (CTest, 4 jobs) | 75 cases | 257.16 s |
+| Test suite (CTest, 4 jobs) | 75 cases | 60.22 s |
 
 The expansion-ratio sweep is fast because only the nozzle is re-solved; the
 chamber state is shared. The cooling sweep is slow per point because each
@@ -169,7 +169,8 @@ point runs a full jacket march.
 |---|---:|
 | Configure from an empty build directory | **0.3 s** |
 | Clean build, 45 translation units, `-j4`, Release + `-Werror` | **36 s** |
-| Full reproduction from a warm build (`scripts/run_all.sh`) | **16 min 54 s** |
+| Full reproduction from a fresh clone, build included (`scripts/run_all.sh`) | **13 min 49 s** |
+| The same with `--quick` | **6 min 17 s** |
 
 The configure step is fast because Eigen, yaml-cpp and Catch2 are present as
 system packages on this machine. Where they are not, CMake fetches them with
@@ -178,5 +179,21 @@ cost on the network in question — typically a minute or two, once.
 
 `scripts/run_all.sh` prints its own end-to-end wall time on completion, so the
 figure above is re-measured on every run rather than being a claim in a
-document. `--quick` (300 Monte Carlo samples, 600 optimiser evaluations) cuts
-it to a few minutes and is what CI uses.
+document.
+
+`--quick` shortens the three stages that dominate a full run — 300 Monte Carlo
+samples instead of 2000, 600 optimiser evaluations instead of 2500, a reduced
+benchmark pass, and no fixed-step RK4 comparison. It is what CI uses.
+
+The test suite is now a significant share of what remains:
+
+| | |
+|---|---:|
+| Full suite, CTest at `-j4` | **60.22 s** (75 cases, 17 490 assertions) |
+| Longest single case (`constrained optimisation respects its constraints`) | 49 s |
+
+That case used to take 257 s — 60 % of the whole suite — because its six
+`SECTION`s made Catch2 re-run the test body, and therefore the whole
+400-evaluation optimisation, once per section. Two Monte Carlo cases had the
+same problem. The checks now share one campaign each, with the same
+assertions, and the suite went from 257 s to 60 s.
