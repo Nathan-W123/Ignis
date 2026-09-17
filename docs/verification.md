@@ -277,9 +277,20 @@ first is what keeps the tree clean, and clearing `results/` first is what
 made an earlier attempt report `v1.0.0-dirty`.
 
 One thing cannot be made to hold: a file cannot contain the hash of the commit
-that contains it. The `v1.0.0` tag is therefore moved onto the commit that
-carries these results, and the tree that generated them differs from the
-tagged tree only in `results/` itself. Nothing that affects a number differs.
+that contains it, so the generating checkout and the tagged commit cannot be
+the same object. What *can* be stated, and checked, is exactly how they differ.
+Against the `v1.0.0` tag, the tree that produced these numbers differs only in:
+
+* `results/` itself — the output being committed;
+* `.github/workflows/ci.yml` and four `[slow]` test tags — CI scheduling, read
+  by no solver;
+* `python/ignis_viz/figures.py` and the one figure it re-plots
+  (`10_optimization_convergence.png`) — axis limits and an annotation, drawn
+  from the same committed CSV.
+
+`git diff v1.0.0..HEAD --stat` shows that list in full. No file that any
+solver reads differs, and every report, table and residual in `results/` is
+byte-for-byte what the `v1.0.0` build wrote.
 
 ### 6.1 Reproducing it
 
