@@ -1,0 +1,85 @@
+Ignis 1.0.0 (8db92d8-dirty)
+  build type : Release
+  compiler   : GNU 13.3.0
+  data dir   : /home/user/Ignis/data
+
+case optimization
+
+optimization result
+  objective            maximise performance.isp_vacuum = 380.829845 s
+  evaluations          2500 (116 failed analyses)
+  feasible             yes
+  design variables
+    chamber.pressure                    8506273.463597  Pa
+    propellants.mixture_ratio                 3.587606  -
+    nozzle.expansion_ratio                   89.817094  -
+    cooling.channel_height                    0.003514  m
+    cooling.wall_thickness                    0.000651  m
+    cooling.width_fraction                    0.656993  -
+  constraints
+    cooling.max_wall_temperature            779.388671  <= 800.000000  (normalised violation -2.58e-02)
+    cooling.pressure_drop               3936959.748126  <= 4000000.000000  (normalised violation -1.58e-02)
+    cooling.outlet_temperature              345.166881  <= 900.000000  (normalised violation -6.16e-01)
+  wall time            245.06 s
+
+=== optimization ===
+
+chamber (equilibrium expansion basis)
+  mixture ratio O/F     3.5876   (stoichiometric 3.9890, phi 1.1119)
+  reactant enthalpy     -1533.2 kJ/kg
+  chamber pressure      8.5063 MPa
+  flame temperature     3594.39 K
+  molar mass            22.2300 g/mol
+  gas constant          374.02 J/(kg K)
+  density               6.3273 kg/m^3
+  cp (frozen / shift)   2294.1 / 7135.6 J/(kg K)
+  cv (frozen / shift)   1920.1 / 6066.8 J/(kg K)
+  gamma (frozen)        1.19479
+  gamma_s (isentropic)  1.12987
+  speed of sound        1232.46 m/s
+  entropy               11919.52 J/(kg K)
+  c* ideal              1828.46 m/s
+  eta_c*                0.9600
+  c* actual             1755.32 m/s
+  throat mass flux      4652.15 kg/(m^2 s)
+  throat temperature    3423.37 K
+  equilibrium residuals: element 9.09e-15, Gibbs 1.78e-14, enthalpy 6.53e-15, mass 6.22e-15
+
+nozzle performance (equilibrium expansion)
+  ambient pressure      0.0 Pa
+  expansion ratio       89.817
+  mass flow             74.5982 kg/s  (ox 58.3374, fuel 16.2608)
+  exit Mach             4.3338
+  exit pressure         8310.0 Pa
+  exit temperature      1703.18 K
+  exit velocity         3598.15 m/s
+  momentum thrust       268.4 kN
+  pressure thrust       11.5 kN
+  thrust (ideal)        279.9 kN
+  thrust (corrected)    278.6 kN
+  Isp (ideal)           382.62 s
+  Isp (corrected)       380.83 s
+  Isp (vacuum)          380.83 s
+  effective velocity    3734.7 m/s
+  Cf (ideal / corr.)    2.1376 / 2.1276
+  loss factors          eta_c* 0.9600, lambda_div 0.9951, eta_nozzle 1.0000
+  regime                under-expanded
+  chamber volume        12900.35 cm^3
+  characteristic L*     0.8380 m
+  residence time        1.094 ms
+  mass-flow residual    4.26e-14
+  energy residual       1.52e-16
+
+regenerative cooling
+  cooled wetted area     0.52483 m^2
+  total heat load        14884.95 kW
+  peak heat flux         71.59 MW/m^2 at x = 344.4 mm
+  peak hot-wall temp     779.4 K at x = 341.8 mm
+  coolant in / out       111.66 K -> 345.17 K  (rise 233.51 K)
+  coolant pressure drop  3.9370 MPa  (outlet 11.0630 MPa)
+  energy balance residual 1.21e-09
+  max local flux residual 3.42e-10
+  warnings:
+    - wall conductivity was extrapolated outside the fitted range [250, 900] K for CuCrZr: mean wall temperatures reached 99.0026 to 3742.3 K. This happens at the cold inlet end of a cryogenic jacket and makes the predicted wall temperature there slightly conservative; the peak-flux station is unaffected.
+
+  wrote results/optimization/optimization_optimization_history.csv

@@ -1,20 +1,23 @@
 # units: benchmark[-] unit_of_work[-] mean_time[ms] min_time[ms] max_time[ms] repeats[-] secondary_value[-] secondary_label[-]
 benchmark,unit_of_work,mean_time,min_time,max_time,repeats,secondary_value,secondary_label
-adiabatic (HP) solve, 26 species,solve,0.05946906,0.05416,0.173395,100,24,mean Newton iterations
-isentropic (SP) solve, 26 species,solve,0.13517666,0.127916,0.188535,100,0,
-  8 species,solve,0.01321386,0.011009,0.032047,50,8,species
-  12 species,solve,0.02580268,0.022965,0.059514,50,12,species
-  18 species,solve,0.03203354,0.029436,0.054326,50,18,species
-  26 species,solve,0.059085,0.054222,0.124709,50,26,species
-chamber + throat + exit (no profile, no cooling),analysis,7.9249498,7.743527,8.505864,10,0,
-  50 stations,profile,34.23669067,33.84332,34.448414,3,50,stations
-  100 stations,profile,50.86387667,50.551111,51.431164,3,100,stations
-  200 stations,profile,88.81048433,88.086883,89.788977,3,200,stations
-  400 stations,profile,167.0094077,166.474766,167.430538,3,400,stations
-  800 stations,profile,326.0123207,323.191524,328.399294,3,800,stations
-  1600 stations,profile,632.246631,630.255074,633.798938,3,1600,stations
-chamber + nozzle + profile + cooling + feed,analysis,265.2208674,263.618374,266.877233,5,0,
-chamber + nozzle + profile (no cooling),analysis,164.5066094,163.499529,165.660496,5,0,
-  1 thread(s),campaign,13825.6181,13825.6181,13825.6181,1,7.23294968,samples/s
-  2 thread(s),campaign,8271.856796,8271.856796,8271.856796,1,12.08918414,samples/s
-  4 thread(s),campaign,5437.228176,5437.228176,5437.228176,1,18.39172401,samples/s
+adiabatic (HP) solve, 26 species,solve,0.057743356,0.053252,0.16536,500,24,mean Newton iterations
+isentropic (SP) solve, 26 species,solve,0.140390802,0.123761,0.455818,500,0,
+  8 species,solve,0.0131902,0.010653,0.049747,250,8,species
+  12 species,solve,0.024083468,0.022491,0.055953,250,12,species
+  18 species,solve,0.030835588,0.028924,0.062423,250,18,species
+  26 species,solve,0.058633352,0.05334,0.1481,250,26,species
+chamber + throat + exit (no profile, no cooling),analysis,7.99230736,7.561045,12.018689,50,0,
+  50 stations,profile,33.0182165,32.859803,33.141957,6,50,stations
+  100 stations,profile,49.88935567,49.079674,50.997732,6,100,stations
+  200 stations,profile,88.12973017,85.737337,94.250793,6,200,stations
+  400 stations,profile,163.5050693,161.90832,165.449819,6,400,stations
+  800 stations,profile,319.4649427,315.17144,323.461835,6,800,stations
+  1600 stations,profile,625.9905488,619.278853,638.280419,6,1600,stations
+chamber + nozzle + profile + cooling + feed,analysis,263.2446716,258.551374,275.883241,12,0,
+chamber + nozzle + profile (no cooling),analysis,161.7143744,160.677736,163.138797,12,0,
+equilibrium table build,table,1215.809144,1215.809144,1215.809144,1,51701,equilibrium solves
+adaptive RK4(5), 0.8 s of physical time,run,1237.46659,1225.185078,1245.072776,3,4624,accepted steps
+fixed-step RK4 at 2 us, 0.8 s of physical time,run,65626.01973,65626.01973,65626.01973,1,400155,steps
+  1 thread(s),campaign,46584.50683,46584.50683,46584.50683,1,8.586545769,samples/s
+  2 thread(s),campaign,24749.66877,24749.66877,24749.66877,1,16.16183246,samples/s
+  4 thread(s),campaign,13700.19172,13700.19172,13700.19172,1,29.19667171,samples/s

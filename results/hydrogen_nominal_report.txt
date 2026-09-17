@@ -1,0 +1,108 @@
+Ignis 1.0.0 (8db92d8-dirty)
+  build type : Release
+  compiler   : GNU 13.3.0
+  data dir   : /home/user/Ignis/data
+
+nozzle contour (bell)
+  throat radius        60.00000 mm  (At = 113.09734 cm^2)
+  chamber radius       107.33126 mm  (contraction 3.200)
+  exit radius          464.75800 mm  (expansion 60.000)
+  throat at x          370.47524 mm
+  exit at x            1657.03091 mm
+  divergent length     1286.55567 mm (85.0 % of 15 deg conical)
+  chamber volume       11699.29858 cm^3
+  characteristic L*    1034.44511 mm
+  Bartz curvature      56.46000 mm (mean)
+  divergence angles    theta_n = 32.00 deg, theta_e = 6.50 deg
+  stations             404
+
+=== hydrogen_nominal ===
+
+chamber (equilibrium expansion basis)
+  mixture ratio O/F     5.5000   (stoichiometric 7.9360, phi 1.4429)
+  reactant enthalpy     -1031.0 kJ/kg
+  chamber pressure      5.5000 MPa
+  flame temperature     3382.77 K
+  molar mass            12.6428 g/mol
+  gas constant          657.64 J/(kg K)
+  density               2.4723 kg/m^3
+  cp (frozen / shift)   3957.8 / 8152.8 J/(kg K)
+  cv (frozen / shift)   3300.2 / 6981.6 J/(kg K)
+  gamma (frozen)        1.19928
+  gamma_s (isentropic)  1.14589
+  speed of sound        1596.63 m/s
+  entropy               18717.48 J/(kg K)
+  c* ideal              2337.60 m/s
+  eta_c*                0.9700
+  c* actual             2267.47 m/s
+  throat mass flux      2352.84 kg/(m^2 s)
+  throat temperature    3181.63 K
+  equilibrium residuals: element 3.17e-15, Gibbs 7.11e-15, enthalpy 7.45e-15, mass -4.00e-15
+
+nozzle performance (equilibrium expansion)
+  ambient pressure      0.0 Pa
+  expansion ratio       60.000
+  mass flow             27.4330 kg/s  (ox 23.2125, fuel 4.2205)
+  exit Mach             4.5437
+  exit pressure         6525.6 Pa
+  exit temperature      1142.00 K
+  exit velocity         4354.30 m/s
+  momentum thrust       119.5 kN
+  pressure thrust       4.4 kN
+  thrust (ideal)        123.9 kN
+  thrust (corrected)    123.5 kN
+  Isp (ideal)           460.48 s
+  Isp (corrected)       459.05 s
+  Isp (vacuum)          459.05 s
+  effective velocity    4501.7 m/s
+  Cf (ideal / corr.)    1.9915 / 1.9853
+  loss factors          eta_c* 0.9700, lambda_div 0.9968, eta_nozzle 1.0000
+  regime                under-expanded
+  chamber volume        11699.30 cm^3
+  characteristic L*     1.0344 m
+  residence time        1.054 ms
+  mass-flow residual    4.37e-14
+  energy residual       4.52e-16
+
+regenerative cooling
+  cooled wetted area     0.51182 m^2
+  total heat load        13093.88 kW
+  peak heat flux         71.86 MW/m^2 at x = 370.2 mm
+  peak hot-wall temp     666.9 K at x = 364.7 mm
+  coolant in / out       25.00 K -> 248.63 K  (rise 223.63 K)
+  coolant pressure drop  1.8388 MPa  (outlet 10.1612 MPa)
+  energy balance residual 4.83e-09
+  max local flux residual 3.02e-10
+  warnings:
+    - wall conductivity was extrapolated outside the fitted range [250, 900] K for CuCrZr: mean wall temperatures reached 10.6262 to 3574.23 K. This happens at the cold inlet end of a cryogenic jacket and makes the predicted wall temperature there slightly conservative; the peak-flux station is unaffected.
+
+feed system (pressure-fed)
+  chamber pressure     5.5000 MPa
+  mixture ratio        5.5000
+  total mass flow      27.4330 kg/s
+  oxidizer
+    mass flow          23.2125 kg/s
+    line velocity      3.20 m/s (Re 1.728e+06, f 0.01208)
+    injector velocity  43.91 m/s
+    dp lines           0.0158 MPa
+    dp dynamic         0.0058 MPa
+    dp injector        1.1000 MPa
+    injector area      593.927 mm^2
+    tank pressure      6.6216 MPa
+    stiffness          0.2000
+    pump power (equiv) 186.60 kW
+  fuel
+    mass flow          4.22 kg/s
+    line velocity      7.57 m/s (Re 4.134e+06, f 0.01124)
+    injector velocity  176.08 m/s
+    dp lines           0.0066 MPa
+    dp dynamic         0.0020 MPa
+    dp injector        1.1000 MPa
+    injector area      450.378 mm^2
+    tank pressure      6.6086 MPa
+    stiffness          0.2000
+    pump power (equiv) 544.51 kW
+  total pump power     731.10 kW
+
+wrote results/hydrogen_nominal/h1_engine.json
+      results/hydrogen_nominal/h1_profile.csv

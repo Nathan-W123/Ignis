@@ -132,6 +132,19 @@ def apply() -> None:
     })
 
 
+def suptitle(fig, text: str) -> None:
+    """A figure-level title with enough room above the panels' own titles.
+
+    Panel titles are left-aligned and bold by default, so a centred figure
+    title lands almost on top of the first one unless the layout engine is
+    given extra vertical padding.
+    """
+    fig.suptitle(text)
+    engine = fig.get_layout_engine()
+    if engine is not None:
+        engine.set(h_pad=0.09)
+
+
 def caption(fig, text: str) -> None:
     """A single muted source/assumption line under a figure."""
     fig.supxlabel(text, color=INK_MUTED, fontsize=8, ha="left", x=0.005)

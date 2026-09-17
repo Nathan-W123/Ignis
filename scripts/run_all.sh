@@ -35,6 +35,7 @@ MC_SAMPLES=2000
 OPT_EVALS=2500
 if [[ $QUICK -eq 1 ]]; then MC_SAMPLES=300; OPT_EVALS=600; fi
 
+START_SECONDS=$SECONDS
 banner() { printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
 has()    { [[ " $STAGES " == *" $1 "* ]]; }
 
@@ -121,6 +122,9 @@ if has mc; then
   if cmp -s "$RESULTS/monte_carlo/mc_t1_mc_samples.csv" \
             "$RESULTS/monte_carlo/mc_tN_mc_samples.csv"; then
     echo "  single-thread and ${JOBS}-thread sample tables are byte-identical"
+    # The two tables were the check; keeping identical copies of them is not
+    # evidence of anything, so they go once the comparison has passed.
+    rm -f "$RESULTS"/monte_carlo/mc_t1_* "$RESULTS"/monte_carlo/mc_tN_*
   else
     echo "  ERROR: Monte Carlo results depend on the thread count" >&2
     exit 1
@@ -138,4 +142,8 @@ if has figures; then
 fi
 
 banner "done"
-echo "results in $RESULTS/"
+ELAPSED=$((SECONDS - START_SECONDS))
+printf 'results in %s/\n' "$RESULTS"
+printf 'end-to-end wall time: %d min %02d s (%d s) on %d job(s)\n' \
+       $((ELAPSED / 60)) $((ELAPSED % 60)) "$ELAPSED" "$JOBS"
+printf 'stages run: %s\n' "$STAGES"

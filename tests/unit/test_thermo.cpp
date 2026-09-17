@@ -120,7 +120,9 @@ TEST_CASE("properties match an independent implementation of the same coefficien
     worst_s = std::max(worst_s, relativeError(s.s0(T), ref.num("s_nasa", r)));
     ++checked;
   }
-  INFO("checked " << checked << " species/temperature pairs against " << ref.path());
+  INFO("checked " << checked << " species/temperature pairs against " << ref.path()
+       << "\n  worst relative error: cp " << worst_cp << ", h " << worst_h
+       << ", s " << worst_s);
   // Same coefficients, different code: this must agree to round-off.
   // The reference file carries twelve significant digits.
   REQUIRE(checked > 300);

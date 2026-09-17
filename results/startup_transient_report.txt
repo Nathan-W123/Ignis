@@ -1,0 +1,50 @@
+Ignis 1.0.0 (8db92d8-dirty)
+  build type : Release
+  compiler   : GNU 13.3.0
+  data dir   : /home/user/Ignis/data
+
+case startup_transient
+building the equilibrium property table (41 x 97 x 13 = 51701 equilibrium solves) ...
+table built in 1.24 s
+equilibrium table interpolation error over 200 random interior points
+  temperature : max 1.296e-01, rms 1.222e-02
+  pressure    : max 1.296e-01, rms 1.217e-02
+  molar mass  : max 7.120e-03
+  c*          : max 1.191e-02
+
+transient (rk45)
+  samples                802
+  accepted / rejected    4624 / 132
+  right-hand sides       28536
+  peak chamber pressure  5.5021 MPa
+  time to 90 % of peak   36.0000 ms
+  chamber O/F range      0.484 to 3.400
+  chamber T range        267.2 to 3352.0 K
+  mass conservation err  5.708e-15
+  energy conservation err 2.597e-13
+  wall time              1.296 s
+
+      t_ms       p_MPa       T_K      O/F    mdot_out        F_kN
+      0.00     0.10133     300.0    3.400       0.000       0.000
+     40.00     5.43285    3348.4    3.359      47.322     126.290
+     80.00     5.50212    3351.8    3.399      48.040     128.370
+    120.00     5.50212    3351.8    3.399      48.040     128.370
+    160.00     5.50212    3351.8    3.399      48.040     128.370
+    200.00     5.50212    3351.8    3.399      48.040     128.370
+    240.00     5.50212    3351.8    3.399      48.040     128.370
+    280.00     5.50212    3351.8    3.399      48.040     128.370
+    320.00     5.50212    3351.8    3.399      48.040     128.370
+    360.00     5.50212    3351.8    3.399      48.040     128.370
+    400.00     5.50212    3351.8    3.399      48.040     128.370
+    440.00     5.50212    3351.8    3.399      48.040     128.370
+    480.00     5.50212    3351.8    3.399      48.040     128.370
+    520.00     5.50212    3351.8    3.399      48.040     128.370
+    560.00     5.50212    3351.8    3.399      48.040     128.370
+    600.00     5.50212    3351.8    3.399      48.040     128.370
+    640.00     0.10132     782.5    0.484       0.000       0.000
+    680.00     0.10132     782.5    0.484       0.000       0.000
+    720.00     0.10132     782.5    0.484       0.000       0.000
+    760.00     0.10132     782.5    0.484       0.000       0.000
+    800.00     0.10132     782.5    0.484       0.000       0.000
+
+wrote results/startup_transient/startup_transient_transient.csv

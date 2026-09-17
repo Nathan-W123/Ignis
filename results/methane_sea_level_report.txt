@@ -1,0 +1,110 @@
+Ignis 1.0.0 (8db92d8-dirty)
+  build type : Release
+  compiler   : GNU 13.3.0
+  data dir   : /home/user/Ignis/data
+
+nozzle contour (bell)
+  throat radius        70.00000 mm  (At = 153.93804 cm^2)
+  chamber radius       117.13240 mm  (contraction 2.800)
+  exit radius          469.57428 mm  (expansion 45.000)
+  throat at x          345.46315 mm
+  exit at x            1541.26466 mm
+  divergent length     1195.80151 mm (80.0 % of 15 deg conical)
+  chamber volume       12900.40379 cm^3
+  characteristic L*    838.02573 mm
+  Bartz curvature      65.87000 mm (mean)
+  divergence angles    theta_n = 33.00 deg, theta_e = 8.00 deg
+  stations             404
+
+=== methane_sea_level ===
+
+chamber (equilibrium expansion basis)
+  mixture ratio O/F     3.4000   (stoichiometric 3.9890, phi 1.1732)
+  reactant enthalpy     -1581.3 kJ/kg
+  chamber pressure      5.5000 MPa
+  flame temperature     3523.92 K
+  molar mass            21.6169 g/mol
+  gas constant          384.63 J/(kg K)
+  density               4.0579 kg/m^3
+  cp (frozen / shift)   2329.6 / 7313.8 J/(kg K)
+  cv (frozen / shift)   1945.0 / 6226.7 J/(kg K)
+  gamma (frozen)        1.19776
+  gamma_s (isentropic)  1.12968
+  speed of sound        1237.40 m/s
+  entropy               12266.21 J/(kg K)
+  c* ideal              1835.93 m/s
+  eta_c*                0.9600
+  c* actual             1762.49 m/s
+  throat mass flux      2995.76 kg/(m^2 s)
+  throat temperature    3356.22 K
+  equilibrium residuals: element 1.14e-14, Gibbs 1.42e-14, enthalpy 7.36e-15, mass 1.11e-15
+
+nozzle performance (equilibrium expansion)
+  ambient pressure      101325.0 Pa  (0 m)
+  expansion ratio       45.000
+  mass flow             48.0377 kg/s  (ox 37.1200, fuel 10.9177)
+  exit Mach             3.9739
+  exit pressure         12161.5 Pa
+  exit temperature      1783.17 K
+  exit velocity         3449.82 m/s
+  momentum thrust       165.7 kN
+  pressure thrust       -61.8 kN
+  thrust (ideal)        104.0 kN
+  thrust (corrected)    103.1 kN
+  Isp (ideal)           220.67 s
+  Isp (corrected)       218.96 s
+  Isp (vacuum)          367.95 s
+  effective velocity    2147.3 m/s
+  Cf (ideal / corr.)    1.2278 / 1.2183
+  loss factors          eta_c* 0.9600, lambda_div 0.9951, eta_nozzle 1.0000
+  regime                over-expanded
+  note                  over-expanded: the internal flow stays supersonic and the compression to ambient occurs outside the nozzle through oblique shocks (not modelled in quasi-1D)
+  separation (summerfield)  predicted at A/At = 17.599 (x = 806.4 mm)
+  chamber volume        12900.40 cm^3
+  characteristic L*     0.8380 m
+  residence time        1.090 ms
+  mass-flow residual    7.29e-15
+  energy residual       2.94e-16
+
+regenerative cooling
+  cooled wetted area     0.54450 m^2
+  total heat load        10975.78 kW
+  peak heat flux         52.67 MW/m^2 at x = 344.3 mm
+  peak hot-wall temp     697.0 K at x = 1.3 mm
+  coolant in / out       111.66 K -> 380.77 K  (rise 269.11 K)
+  coolant pressure drop  1.7817 MPa  (outlet 13.2183 MPa)
+  energy balance residual 4.54e-10
+  max local flux residual 1.71e-10
+  warnings:
+    - wall conductivity was extrapolated outside the fitted range [250, 900] K for CuCrZr: mean wall temperatures reached 103.349 to 3777.85 K. This happens at the cold inlet end of a cryogenic jacket and makes the predicted wall temperature there slightly conservative; the peak-flux station is unaffected.
+
+feed system (pressure-fed)
+  chamber pressure     5.5000 MPa
+  mixture ratio        3.4000
+  total mass flow      48.0377 kg/s
+  oxidizer
+    mass flow          37.1200 kg/s
+    line velocity      4.14 m/s (Re 2.488e+06, f 0.01161)
+    injector velocity  43.91 m/s
+    dp lines           0.0262 MPa
+    dp dynamic         0.0098 MPa
+    dp injector        1.1000 MPa
+    injector area      949.773 mm^2
+    tank pressure      6.6360 MPa
+    stiffness          0.2000
+    pump power (equiv) 317.06 kW
+  fuel
+    mass flow          10.92 kg/s
+    line velocity      6.72 m/s (Re 1.655e+06, f 0.01244)
+    injector velocity  72.17 m/s
+    dp lines           0.0316 MPa
+    dp dynamic         0.0095 MPa
+    dp injector        1.1000 MPa
+    injector area      477.543 mm^2
+    tank pressure      6.6412 MPa
+    stiffness          0.2000
+    pump power (equiv) 252.17 kW
+  total pump power     569.23 kW
+
+wrote results/methane_sea_level/m1sl_engine.json
+      results/methane_sea_level/m1sl_profile.csv

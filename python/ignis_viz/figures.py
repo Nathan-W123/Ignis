@@ -51,11 +51,9 @@ def mixture_ratio_composition(sweep_csv: str, equilibrium_csv: str, out: str,
     mr = comp["mixture_ratio"]
     for i, col in enumerate(keep):
         name = col[2:]
+        # Eight series is past the direct-label budget: on a log axis their peaks
+        # sit on top of each other, so identity is carried by the legend alone.
         ax.plot(mr, comp[col], color=style.CATEGORICAL[i], label=name)
-        j = int(np.argmax(comp[col].to_numpy()))
-        if comp[col].iloc[j] > 0.04:
-            style.annotate(ax, mr.iloc[j], comp[col].iloc[j], name,
-                           color=style.CATEGORICAL[i])
     if tail:
         ax.plot(mr, comp[tail].sum(axis=1), color=style.INK_MUTED, linewidth=1.4,
                 label=f"other ({len(tail)} species)")
@@ -64,7 +62,7 @@ def mixture_ratio_composition(sweep_csv: str, equilibrium_csv: str, out: str,
     ax.set_xlabel("mixture ratio O/F [-]")
     ax.set_ylabel("mole fraction [-]")
     ax.set_title("Equilibrium chamber composition against mixture ratio")
-    ax.legend(ncols=3, loc="lower center", bbox_to_anchor=(0.5, -0.32))
+    ax.legend(ncols=3, loc="lower center", bbox_to_anchor=(0.5, -0.40))
     style.caption(fig, "LOX/CH4, shifting equilibrium at the design chamber pressure. "
                        "Species ranked by peak mole fraction; the remainder summed.")
     return _save(fig, out)
@@ -82,7 +80,8 @@ def mixture_ratio_performance(sweep_csv: str, out: str) -> str:
     ax.plot([mr.iloc[k]], [t["chamber.temperature"].iloc[k]], "o",
             color=style.CATEGORICAL[0], zorder=5)
     style.annotate(ax, mr.iloc[k], t["chamber.temperature"].iloc[k],
-                   f"peak {t['chamber.temperature'].iloc[k]:.0f} K at O/F {mr.iloc[k]:.2f}")
+                   f"peak {t['chamber.temperature'].iloc[k]:.0f} K at O/F {mr.iloc[k]:.2f}",
+                   dx=0, dy=-12, ha="center", va="top")
     ax.set_ylabel(t.label("chamber.temperature", "flame temperature"))
     ax.set_title("Adiabatic flame temperature")
 
@@ -90,8 +89,11 @@ def mixture_ratio_performance(sweep_csv: str, out: str) -> str:
     ax.plot(mr, t["chamber.c_star_ideal"], color=style.CATEGORICAL[0], label="ideal")
     ax.plot(mr, t["chamber.c_star"], color=style.CATEGORICAL[1], label="after combustion efficiency")
     k = int(np.argmax(t["chamber.c_star_ideal"].to_numpy()))
+    ax.plot([mr.iloc[k]], [t["chamber.c_star_ideal"].iloc[k]], "o",
+            color=style.CATEGORICAL[0], zorder=5)
     style.annotate(ax, mr.iloc[k], t["chamber.c_star_ideal"].iloc[k],
-                   f"peak {t['chamber.c_star_ideal'].iloc[k]:.0f} m/s at O/F {mr.iloc[k]:.2f}")
+                   f"peak {t['chamber.c_star_ideal'].iloc[k]:.0f} m/s at O/F {mr.iloc[k]:.2f}",
+                   dx=14, dy=-14, va="top")
     ax.set_ylabel(t.label("chamber.c_star_ideal", "characteristic velocity"))
     ax.set_title("Characteristic velocity")
     ax.legend(loc="lower center", ncols=2)
@@ -103,6 +105,9 @@ def mixture_ratio_performance(sweep_csv: str, out: str) -> str:
                         ("performance.isp", style.CATEGORICAL[1])):
         k = int(np.argmax(t[col].to_numpy()))
         ax.plot([mr.iloc[k]], [t[col].iloc[k]], "o", color=colour, zorder=5)
+        style.annotate(ax, mr.iloc[k], t[col].iloc[k],
+                       f"{t[col].iloc[k]:.1f} s at O/F {mr.iloc[k]:.2f}",
+                       dx=8, dy=3, color=colour)
     ax.set_ylabel(t.label("performance.isp", "specific impulse"))
     ax.set_xlabel("mixture ratio O/F [-]")
     ax.set_title("Specific impulse")
@@ -187,7 +192,7 @@ def axial_profiles(profile_csv: str, out: str) -> str:
                         color=style.INK_MUTED)
     for ax in axes[-1]:
         ax.set_xlabel("axial position [mm]")
-    fig.suptitle("Flow properties along the nozzle axis")
+    style.suptitle(fig, "Flow properties along the nozzle axis")
     style.caption(fig, "The vertical rule marks the sonic throat. Every panel comes from the "
                        "same converged station march.")
     return _save(fig, out)
@@ -316,20 +321,22 @@ def thermal_profiles(thermal_csv: str, out: str) -> str:
                    f"peak {t['t_wall_hot'].iloc[k]:.0f} K")
     ax.set_ylabel("temperature [K]")
     ax.set_title("Temperatures through the wall")
-    ax.legend(ncols=2, loc="upper right")
+    # The adiabatic-wall line runs across the top of this panel, so the legend
+    # goes into the empty band between the wall temperatures and it.
+    ax.legend(ncols=2, loc="center left", bbox_to_anchor=(0.02, 0.55))
 
     ax = axes[3]
     ax.plot(x, t["coolant_p"] * MPA, color=style.CATEGORICAL[0])
     ax.set_ylabel("coolant pressure [MPa]")
     ax.set_xlabel("axial position [mm]")
     ax.set_title("Coolant pressure")
-    style.annotate(ax, x.iloc[0], t["coolant_p"].iloc[0] * MPA,
-                   f"{(t['coolant_p'].iloc[-1] - t['coolant_p'].iloc[0]) * MPA:+.2f} MPa "
-                   f"across the jacket", dy=-14, va="top")
+    ax.text(0.03, 0.92, f"{(t['coolant_p'].iloc[-1] - t['coolant_p'].iloc[0]) * MPA:+.2f} MPa "
+            f"across the jacket\n(counter-flow: inlet at the nozzle end)",
+            transform=ax.transAxes, va="top", fontsize=8.5, color=style.INK_SECONDARY)
 
     for ax in axes:
         ax.axvline(xq, color=style.INK_MUTED, linewidth=0.9)
-    fig.suptitle("Regenerative cooling along the chamber and nozzle")
+    style.suptitle(fig, "Regenerative cooling along the chamber and nozzle")
     style.caption(fig, "Bartz hot-gas correlation with a coupled wall and coolant balance. "
                        "Engineering estimate, not a conjugate CFD solution.")
     return _save(fig, out)
@@ -363,7 +370,17 @@ def cooling_map(sweep_csv: str, out: str) -> str:
         ax.grid(False)
         cb = fig.colorbar(im, ax=ax, pad=0.015, fraction=0.045)
         cb.outline.set_visible(False)
-    fig.suptitle("Cooling-channel design space")
+        # Points the jacket cannot pass are left blank rather than filled with a
+        # clamped value, so the blank band is the answer and is named as such.
+        blank = np.isnan(g)
+        if blank.any():
+            x_blank = h[np.where(blank.any(axis=0))[0]].max() * MM
+            ax.text(0.03, 0.5, "infeasible:\nthe jacket cannot\npass the flow",
+                    transform=ax.transAxes, va="center", fontsize=8,
+                    color=style.INK_MUTED)
+            ax.axvline(0.5 * (x_blank + h[np.where(~blank.any(axis=0))[0]].min() * MM),
+                       color=style.GRID, linewidth=1.0)
+    style.suptitle(fig, "Cooling-channel design space")
     style.caption(fig, "Deeper channels drop less pressure but cool less well; a thinner wall "
                        "runs cooler but has less structural margin. The trade is visible here.")
     return _save(fig, out)
@@ -384,9 +401,17 @@ def transient_history(transient_csv: str, out: str) -> str:
     ax.plot(ms, t["pressure"] * MPA, color=style.CATEGORICAL[0])
     k = int(t["pressure"].idxmax())
     style.annotate(ax, ms.iloc[k], t["pressure"].iloc[k] * MPA,
-                   f"peak {t['pressure'].iloc[k] * MPA:.2f} MPa")
+                   f"peak {t['pressure'].iloc[k] * MPA:.2f} MPa", dx=14, dy=-4, va="top")
     ax.set_ylabel("chamber pressure [MPa]")
     ax.set_title("Chamber pressure")
+    # Everything interesting happens in the first 60 ms; the rest is a plateau.
+    zoom = ax.inset_axes([0.40, 0.14, 0.34, 0.62])
+    early = ms <= 60.0
+    zoom.plot(ms[early], t["pressure"][early] * MPA, color=style.CATEGORICAL[0])
+    zoom.set_xlim(0.0, 60.0)
+    zoom.tick_params(labelsize=7.5)
+    zoom.set_title("first 60 ms", fontsize=8.5, color=style.INK_SECONDARY,
+                   fontweight="normal", pad=3)
 
     ax = axes[1]
     ax.plot(ms, t["temperature"], color=style.CATEGORICAL[0])
@@ -397,8 +422,12 @@ def transient_history(transient_csv: str, out: str) -> str:
     ax.plot(ms, t["mixture_ratio"], color=style.CATEGORICAL[0])
     ax.set_ylabel("chamber O/F [-]")
     ax.set_title("Chamber mixture ratio")
-    style.annotate(ax, ms.iloc[int(np.argmin(t["mixture_ratio"].to_numpy()))],
-                   t["mixture_ratio"].min(), "fuel-lead excursion", dy=-14, va="top")
+    # The fuel-lead dip is a start-up feature: the run-wide minimum belongs to
+    # the shutdown blow-down, which is a different thing entirely.
+    start = t["time"] <= 0.10
+    j = int(np.argmin(t["mixture_ratio"][start].to_numpy()))
+    style.annotate(ax, ms[start].iloc[j], t["mixture_ratio"][start].iloc[j],
+                   "fuel-lead dip at ignition", dx=12, dy=-2, va="center")
 
     ax = axes[3]
     ax.plot(ms, t["mdot_ox_in"], color=style.CATEGORICAL[0], label="oxidiser in")
@@ -409,7 +438,7 @@ def transient_history(transient_csv: str, out: str) -> str:
     ax.set_title("Mass flows")
     ax.legend(ncols=3, loc="center right")
 
-    fig.suptitle("Startup and shutdown transient")
+    style.suptitle(fig, "Startup and shutdown transient")
     style.caption(fig, "Zero-dimensional chamber mass and energy balance with a tabulated "
                        "equilibrium equation of state; valid from ignition onwards.")
     return _save(fig, out)
@@ -435,10 +464,10 @@ def optimization_convergence(history_csv: str, json_path: str, out: str) -> str:
                color=style.CATEGORICAL[0], label="feasible", linewidths=0)
     best = t.frame[feasible][objective].cummax()
     ax.plot(t["evaluation"][feasible], best, color=style.CATEGORICAL[1],
-            label="best so far", linewidth=1.8)
+            label="best so far", linewidth=1.8, zorder=6)
     ax.axhline(meta["objective"], color=style.INK_MUTED, linewidth=0.9)
-    style.annotate(ax, t["evaluation"].max(), meta["objective"],
-                   f"{meta['objective']:.2f} s", dx=-4, ha="right")
+    style.annotate(ax, t["evaluation"].min(), meta["objective"],
+                   f"best feasible {meta['objective']:.2f} s", dx=2, dy=4)
     ax.set_ylabel(t.label(objective, objective.split(".")[-1].replace("_", " ")))
     ax.set_title("Objective")
     ax.legend(ncols=3, loc="lower right")
@@ -446,12 +475,20 @@ def optimization_convergence(history_csv: str, json_path: str, out: str) -> str:
     ax.set_ylim(bottom=lo)
 
     ax = axes[1]
-    ax.plot(t["evaluation"], np.maximum(t["max_violation"], 1e-12),
-            color=style.CATEGORICAL[0], linewidth=1.0)
+    # The violation jumps between feasible and infeasible on consecutive
+    # evaluations: joining them with a line paints solid blocks and hides the
+    # trend, so the samples are drawn as marks and the running best as a line.
+    v = np.maximum(t["max_violation"].to_numpy(), 1e-12)
+    ax.scatter(t["evaluation"], v, s=5, linewidths=0, alpha=0.40,
+               color=style.CATEGORICAL[0])
     ax.set_yscale("log")
+    ax.set_ylim(5e-13, max(2.0, v.max() * 2.0))
     ax.set_ylabel("worst normalised violation [-]")
     ax.set_xlabel("objective evaluation [-]")
     ax.set_title("Constraint violation")
+    ax.text(0.01, 0.06, "marks on the floor are feasible designs; the augmented Lagrangian "
+                        "walks outside the feasible set and is pulled back",
+            transform=ax.transAxes, fontsize=8, color=style.INK_MUTED)
 
     style.caption(fig, "Augmented Lagrangian around a Nelder-Mead simplex with "
                        f"Latin-hypercube multi-start. {meta['evaluations']} evaluations, "
@@ -463,8 +500,19 @@ def monte_carlo_histograms(samples_csv: str, json_path: str, out: str) -> str:
     """Output distributions with their 5th, 50th and 95th percentiles."""
     t = read_table(require(samples_csv))
     meta = read_json(require(json_path))["monte_carlo"]
-    outputs = [c for c in t.columns if c.startswith(("performance.", "chamber.", "cooling."))
-               and t.frame[c].notna().sum() > 10]
+    # The sample matrix carries the dispersed INPUTS first and the requested
+    # outputs after them, and both families share the same name prefixes.
+    # Selecting on the prefix alone would histogram the inputs, so the outputs
+    # are taken from the statistics table and the input names removed.
+    dispersed = {d["parameter"] for d in meta["inputs"]}
+    metrics = [m for m in meta["statistics"]["columns"]["metric"]
+               if m not in dispersed and "residual" not in m and m in t.columns
+               and t.frame[m].notna().sum() > 10]
+    preferred = ["performance.thrust", "performance.isp", "performance.isp_vacuum",
+                 "cooling.max_wall_temperature", "cooling.max_heat_flux",
+                 "cooling.pressure_drop"]
+    outputs = [m for m in preferred if m in metrics]
+    outputs += [m for m in metrics if m not in outputs]
     outputs = outputs[:6]
 
     fig, axes = plt.subplots(2, 3, figsize=(10.6, 5.8))
@@ -473,14 +521,14 @@ def monte_carlo_histograms(samples_csv: str, json_path: str, out: str) -> str:
         ax.hist(v, bins=45, color=style.CATEGORICAL[0], alpha=0.9, linewidth=0)
         for q, lw in ((5, 1.0), (50, 1.6), (95, 1.0)):
             ax.axvline(np.percentile(v, q), color=style.INK_SECONDARY, linewidth=lw)
-        style.annotate(ax, np.percentile(v, 50), ax.get_ylim()[1] * 0.95,
-                       f"p50 {np.percentile(v, 50):.4g}", va="top", dy=0)
+        ax.text(0.97, 0.94, f"p50 {np.percentile(v, 50):.4g}", transform=ax.transAxes,
+                ha="right", va="top", fontsize=8.5, color=style.INK_SECONDARY)
         ax.set_xlabel(t.label(col, col.split(".")[-1].replace("_", " ")))
         ax.set_ylabel("samples [-]")
         ax.set_title(col, fontsize=10)
     for ax in axes.ravel()[len(outputs):]:
         ax.set_visible(False)
-    fig.suptitle("Monte Carlo output distributions")
+    style.suptitle(fig, "Monte Carlo output distributions")
     style.caption(fig, f"{meta['samples_succeeded']} of {meta['samples_requested']} samples "
                        "succeeded. Vertical rules mark the 5th, 50th and 95th percentiles.")
     return _save(fig, out)
@@ -512,7 +560,7 @@ def sensitivity_tornado(sensitivity_csv: str, out: str, outputs: list[str] | Non
         ax.grid(axis="y", visible=False)
         lim = max(0.15, 1.15 * sub["mag"].max())
         ax.set_xlim(-lim, lim)
-    fig.suptitle("Which uncertain inputs drive which outputs")
+    style.suptitle(fig, "Which uncertain inputs drive which outputs")
     style.caption(fig, "Sign is polarity, not identity: blue raises the output, red lowers it. "
                        "Magnitudes are comparable within a panel, not across panels.")
     return _save(fig, out)

@@ -1,6 +1,6 @@
 {
   "ignis_version": "1.0.0",
-  "git": "51a8c77-dirty",
+  "git": "8db92d8-dirty",
   "build_type": "Release",
   "compiler": "GNU 13.3.0",
   "config_file": "configs/methane_nominal.yaml",

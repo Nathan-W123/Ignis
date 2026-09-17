@@ -1,23 +1,23 @@
 {
   "ignis_version": "1.0.0",
-  "git": "51a8c77-dirty",
+  "git": "8db92d8-dirty",
   "build_type": "Release",
   "compiler": "GNU 13.3.0",
   "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz",
   "hardware_threads": 4,
   "eigen": "3.4.0",
-  "suite_wall_seconds": 33.757535193000002,
+  "suite_wall_seconds": 169.02596221499999,
   "benchmarks": {
     "name": "benchmarks",
     "columns": {
-      "benchmark": ["adiabatic (HP) solve, 26 species", "isentropic (SP) solve, 26 species", "  8 species", "  12 species", "  18 species", "  26 species", "chamber + throat + exit (no profile, no cooling)", "  50 stations", "  100 stations", "  200 stations", "  400 stations", "  800 stations", "  1600 stations", "chamber + nozzle + profile + cooling + feed", "chamber + nozzle + profile (no cooling)", "  1 thread(s)", "  2 thread(s)", "  4 thread(s)"],
-      "unit_of_work": ["solve", "solve", "solve", "solve", "solve", "solve", "analysis", "profile", "profile", "profile", "profile", "profile", "profile", "analysis", "analysis", "campaign", "campaign", "campaign"],
-      "mean_time": [0.05946905999999999, 0.13517666, 0.013213860000000001, 0.025802680000000001, 0.032033540000000006, 0.059084999999999971, 7.9249498000000003, 34.236690666666668, 50.86387666666667, 88.810484333333349, 167.00940766666668, 326.01232066666671, 632.24663099999998, 265.22086740000003, 164.50660939999997, 13825.618098999999, 8271.856796, 5437.2281759999996],
-      "min_time": [0.05416, 0.127916, 0.011009000000000001, 0.022965000000000003, 0.029436, 0.054221999999999999, 7.7435270000000003, 33.843320000000006, 50.551111000000006, 88.086883, 166.47476599999999, 323.19152400000002, 630.25507400000004, 263.61837400000002, 163.499529, 13825.618098999999, 8271.856796, 5437.2281759999996],
-      "max_time": [0.17339499999999999, 0.18853500000000001, 0.032046999999999999, 0.059513999999999997, 0.054325999999999999, 0.124709, 8.5058640000000008, 34.448414, 51.431164000000003, 89.788977000000003, 167.43053799999998, 328.399294, 633.79893800000002, 266.87723299999999, 165.66049599999999, 13825.618098999999, 8271.856796, 5437.2281759999996],
-      "repeats": [100, 100, 50, 50, 50, 50, 10, 3, 3, 3, 3, 3, 3, 5, 5, 1, 1, 1],
-      "secondary_value": [24, 0, 8, 12, 18, 26, 0, 50, 100, 200, 400, 800, 1600, 0, 0, 7.2329496796409378, 12.089184141625461, 18.391724011400033],
-      "secondary_label": ["mean Newton iterations", "", "species", "species", "species", "species", "", "stations", "stations", "stations", "stations", "stations", "stations", "", "", "samples/s", "samples/s", "samples/s"]
+      "benchmark": ["adiabatic (HP) solve, 26 species", "isentropic (SP) solve, 26 species", "  8 species", "  12 species", "  18 species", "  26 species", "chamber + throat + exit (no profile, no cooling)", "  50 stations", "  100 stations", "  200 stations", "  400 stations", "  800 stations", "  1600 stations", "chamber + nozzle + profile + cooling + feed", "chamber + nozzle + profile (no cooling)", "equilibrium table build", "adaptive RK4(5), 0.8 s of physical time", "fixed-step RK4 at 2 us, 0.8 s of physical time", "  1 thread(s)", "  2 thread(s)", "  4 thread(s)"],
+      "unit_of_work": ["solve", "solve", "solve", "solve", "solve", "solve", "analysis", "profile", "profile", "profile", "profile", "profile", "profile", "analysis", "analysis", "table", "run", "run", "campaign", "campaign", "campaign"],
+      "mean_time": [0.057743355999999968, 0.14039080200000015, 0.013190199999999997, 0.024083468000000011, 0.030835588000000018, 0.058633352, 7.9923073599999999, 33.018216500000001, 49.889355666666667, 88.129730166666661, 163.50506933333335, 319.46494266666667, 625.99054883333338, 263.24467158333329, 161.71437441666669, 1215.8091440000001, 1237.4665903333334, 65626.01973, 46584.506826999997, 24749.668769, 13700.191720999999],
+      "min_time": [0.053252000000000001, 0.12376100000000001, 0.010652999999999999, 0.022490999999999997, 0.028923999999999998, 0.053339999999999999, 7.561045, 32.859802999999999, 49.079673999999997, 85.737336999999997, 161.90832, 315.17144000000002, 619.27885299999991, 258.55137400000001, 160.67773599999998, 1215.8091440000001, 1225.185078, 65626.01973, 46584.506826999997, 24749.668769, 13700.191720999999],
+      "max_time": [0.16536000000000001, 0.455818, 0.049747000000000006, 0.055952999999999996, 0.062422999999999992, 0.14809999999999998, 12.018689, 33.141956999999998, 50.997731999999999, 94.250793000000002, 165.44981899999999, 323.46183499999995, 638.28041899999994, 275.883241, 163.13879700000001, 1215.8091440000001, 1245.072776, 65626.01973, 46584.506826999997, 24749.668769, 13700.191720999999],
+      "repeats": [500, 500, 250, 250, 250, 250, 50, 6, 6, 6, 6, 6, 6, 12, 12, 1, 3, 1, 1, 1, 1],
+      "secondary_value": [24, 0, 8, 12, 18, 26, 0, 50, 100, 200, 400, 800, 1600, 0, 0, 51701, 4624, 400155, 8.5865457690788158, 16.161832456562685, 29.196671706927276],
+      "secondary_label": ["mean Newton iterations", "", "species", "species", "species", "species", "", "stations", "stations", "stations", "stations", "stations", "stations", "", "", "equilibrium solves", "accepted steps", "steps", "samples/s", "samples/s", "samples/s"]
     },
     "units": {
       "benchmark": "",
@@ -29,6 +29,6 @@
       "secondary_value": "-",
       "secondary_label": ""
     },
-    "rows": 18
+    "rows": 21
   }
 }

@@ -1,0 +1,23 @@
+Ignis 1.0.0 (8db92d8-dirty)
+  build type : Release
+  compiler   : GNU 13.3.0
+  data dir   : /home/user/Ignis/data
+
+case methane_vacuum: equilibrium expansion, Ae/At = 45.00, mdot = 48.038 kg/s
+
+    alt_km   p_amb_kPa        F_kN     Isp_s        Cf       pe/pa  regime
+      0.00    101.3250     103.150    218.96    1.2183      0.1200  over-expanded  [separation predicted]
+      6.50     44.0755     142.808    303.14    1.6867      0.2759  over-expanded  [separation predicted]
+     13.00     16.5796     161.854    343.58    1.9117      0.7335  over-expanded
+     19.50      5.9800     169.197    359.16    1.9984      2.0337  under-expanded
+     26.00      2.1884     171.824    364.74    2.0294      5.5573  under-expanded
+     32.50      0.8258     172.768    366.74    2.0406     14.7276  under-expanded
+     39.00      0.3288     173.112    367.47    2.0446     36.9852  under-expanded
+     45.50      0.1399     173.243    367.75    2.0462     86.9205  under-expanded
+     52.00      0.0622     173.296    367.86    2.0468    195.4769  under-expanded
+     58.50      0.0269     173.321    367.92    2.0471    452.5580  under-expanded
+     65.00      0.0109     173.332    367.94    2.0472   1112.7049  under-expanded
+     71.50      0.0041     173.337    367.95    2.0473   2933.0248  under-expanded
+     78.00      0.0015     173.339    367.95    2.0473   8288.0048  under-expanded
+
+wrote results/methane_vacuum/m1vac_altitude.csv
