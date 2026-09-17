@@ -1,0 +1,13 @@
+# Dependencies of the generators in tools/, which rebuild the contents of
+# data/ and validation/reference/.  Neither the library, the command-line
+# tools, the test suite nor the figures need any of this -- the generated data
+# is committed.  See requirements.txt for the figure dependencies and
+# requirements-explorer.txt for the desktop UI.
+
+# tools/build_thermo_db.py  -- reads Cantera's YAML species files
+PyYAML>=6.0
+
+# The remaining generators need heavier, optional packages:
+#   cantera>=3.0        tools/make_reference_data.py (equilibrium, transport)
+#   rocketcea>=1.2      tools/make_reference_data.py (NASA CEA); needs gfortran
+#   CoolProp>=6.5       tools/build_coolant_tables.py (reference EOS)
