@@ -1,0 +1,15 @@
+build/
+build-*/
+*.o
+*.a
+*.so
+__pycache__/
+*.pyc
+.venv/
+venv/
+.vscode/
+.idea/
+compile_commands.json
+*.egg-info/
+.pytest_cache/
+.DS_Store

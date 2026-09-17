@@ -1,0 +1,118 @@
+# Ignis propellant (reactant) database.
+#
+# Each entry supplies the *absolute* molar enthalpy of the propellant in its
+# storage state, on the same absolute scale as the NASA-7 species polynomials
+# (i.e. it includes the enthalpy of formation).  Mixing a fuel and an oxidiser
+# entry therefore yields the reactant enthalpy that closes the adiabatic
+# (constant-H, constant-p) equilibrium problem with no separate heat-of-
+# reaction bookkeeping.
+#
+# SOURCES
+#   reference-enthalpy, reference-temperature
+#       NASA CEA propellant library, as emitted verbatim in the CEA input deck
+#       (e.g. "fuel CH4(L) C 1 H 4  h,cal=-21390.  t(k)=111.66").
+#       CEA: B. J. McBride and S. Gordon, "Computer Program for Calculation of
+#       Complex Chemical Equilibrium Compositions and Applications",
+#       NASA RP-1311 Parts I (1994) and II (1996).
+#       Values are converted with the thermochemical calorie, 1 cal = 4.184 J.
+#   density, liquid heat capacity
+#       Saturated-liquid values at the reference temperature from the reference
+#       equations of state (Setzmann & Wagner 1991 for CH4, Leachman et al.
+#       2009 for H2, Schmidt & Wagner 1985 for O2), evaluated with CoolProp.
+#   Gaseous entries take their enthalpy directly from the NASA-7 polynomial of
+#   the corresponding species, so no tabulated value is stored.
+#
+# The liquid heat capacity is used only for the small sensible correction when
+# the commanded inlet temperature differs from the reference temperature:
+#     h(T_in) = h_ref + cp_liquid * (T_in - T_ref)
+# This linearisation is documented in docs/theory.md and is accurate to better
+# than 1 % for |T_in - T_ref| of a few kelvin; larger offsets are rejected.
+
+units: {reference-enthalpy: J/mol, reference-temperature: K, density: kg/m^3,
+        cp-liquid: "J/(mol K)", molar-mass: kg/kmol}
+
+propellants:
+- name: "LOX"
+  description: "Liquid oxygen at its normal boiling point"
+  role: oxidizer
+  phase: liquid
+  composition: {O: 2}
+  molar-mass: 31.998
+  reference-temperature: 90.18
+  reference-enthalpy: -12978.768      # -3102 cal/mol (NASA CEA propellant library)
+  cp-liquid: 54.377
+  density: 1141.211
+  coolant-table: oxygen
+  max-temperature-offset: 15.0
+  source: "NASA CEA propellant library O2(L); rho, cp from Schmidt & Wagner (1985) via CoolProp"
+
+- name: "LCH4"
+  description: "Liquid methane at its normal boiling point"
+  role: fuel
+  phase: liquid
+  composition: {C: 1, H: 4}
+  molar-mass: 16.043
+  reference-temperature: 111.66
+  reference-enthalpy: -89495.760      # -21390 cal/mol (NASA CEA propellant library)
+  cp-liquid: 55.845
+  density: 422.366
+  coolant-table: methane
+  max-temperature-offset: 25.0
+  source: "NASA CEA propellant library CH4(L); rho, cp from Setzmann & Wagner (1991) via CoolProp"
+
+- name: "LH2"
+  description: "Liquid normal hydrogen at its normal boiling point"
+  role: fuel
+  phase: liquid
+  composition: {H: 2}
+  molar-mass: 2.016
+  reference-temperature: 20.27
+  reference-enthalpy: -9012.336       # -2154 cal/mol (NASA CEA propellant library)
+  cp-liquid: 19.589
+  density: 70.961
+  coolant-table: hydrogen
+  max-temperature-offset: 8.0
+  source: "NASA CEA propellant library H2(L); rho, cp from Leachman et al. (2009) via CoolProp"
+
+- name: "GOX"
+  description: "Gaseous oxygen; enthalpy taken from the NASA-7 polynomial for O2"
+  role: oxidizer
+  phase: gas
+  species: "O2"
+  composition: {O: 2}
+  molar-mass: 31.998
+  reference-temperature: 298.15
+  coolant-table: oxygen
+  source: "NASA TM-4513 polynomial for O2"
+
+- name: "GCH4"
+  description: "Gaseous methane; enthalpy taken from the NASA-7 polynomial for CH4"
+  role: fuel
+  phase: gas
+  species: "CH4"
+  composition: {C: 1, H: 4}
+  molar-mass: 16.043
+  reference-temperature: 298.15
+  coolant-table: methane
+  source: "NASA TM-4513 polynomial for CH4"
+
+- name: "GH2"
+  description: "Gaseous hydrogen; enthalpy taken from the NASA-7 polynomial for H2"
+  role: fuel
+  phase: gas
+  species: "H2"
+  composition: {H: 2}
+  molar-mass: 2.016
+  reference-temperature: 298.15
+  coolant-table: hydrogen
+  source: "NASA TM-4513 polynomial for H2"
+
+- name: "GN2"
+  description: "Gaseous nitrogen, available as a diluent or purge gas"
+  role: diluent
+  phase: gas
+  species: "N2"
+  composition: {N: 2}
+  molar-mass: 28.014
+  reference-temperature: 298.15
+  source: "NASA TM-4513 polynomial for N2"

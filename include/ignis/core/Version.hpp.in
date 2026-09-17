@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: MIT
+#pragma once
+#include <string>
+namespace ignis {
+inline constexpr const char* kVersion = "@PROJECT_VERSION@";
+inline constexpr const char* kGitDescribe = "@IGNIS_GIT_DESCRIBE@";
+inline constexpr const char* kBuildType = "@CMAKE_BUILD_TYPE@";
+inline constexpr const char* kCompilerId = "@CMAKE_CXX_COMPILER_ID@";
+inline constexpr const char* kCompilerVersion = "@CMAKE_CXX_COMPILER_VERSION@";
+/// Directory holding the shipped data files (species database, etc.).
+inline constexpr const char* kDefaultDataDir = "@IGNIS_DATA_DIR@";
+/// Multi-line banner used by every command-line application.
+std::string versionBanner();
+}  // namespace ignis
