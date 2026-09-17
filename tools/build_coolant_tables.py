@@ -53,10 +53,18 @@ import sys
 
 import numpy as np
 
-try:
-    import CoolProp.CoolProp as CP
-except ImportError:  # pragma: no cover
-    sys.exit("CoolProp is required to regenerate the tables: pip install CoolProp")
+# CoolProp is a heavy optional dependency: it is needed to REGENERATE the
+# committed tables, not to read them, and not to ask this script what it does.
+# Failing at import time would make `--help` unusable on any machine that only
+# consumes the generated data, so the check happens where the dependency is
+# actually used.
+def _coolprop():
+    """Import CoolProp where it is used, with an actionable message if absent."""
+    try:
+        import CoolProp.CoolProp as CP
+    except ImportError:  # pragma: no cover - exercised only without CoolProp
+        sys.exit("CoolProp is required to regenerate the tables: pip install CoolProp")
+    return CP
 
 # fluid -> (CoolProp name, lowest T, highest T, pressure grid)
 #
@@ -92,6 +100,7 @@ def main(argv=None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-o", "--output-dir", default="data/coolants")
     args = ap.parse_args(argv)
+    CP = _coolprop()          # only now is the heavy dependency actually needed
     os.makedirs(args.output_dir, exist_ok=True)
     stamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 

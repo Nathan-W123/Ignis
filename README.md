@@ -1,5 +1,10 @@
 # Ignis
 
+[![CI](https://github.com/Nathan-W123/Ignis/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nathan-W123/Ignis/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C.svg)
+![Tests](https://img.shields.io/badge/tests-78%20cases%2C%2017%2C550%20assertions-brightgreen.svg)
+
 **A thermochemical liquid-rocket propulsion simulator in C++17.**
 
 Ignis computes what a liquid rocket engine does, from the propellants up:
