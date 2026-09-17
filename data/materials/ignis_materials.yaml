@@ -1,0 +1,71 @@
+# Ignis wall-material database.
+#
+# Thermal conductivity is represented as a straight line through two published
+# handbook points:
+#     k(T) = k_ref + slope * (T - T_ref)
+# The two source points and their citation are listed for each entry, so the
+# fit can be checked and replaced.  These are *nominal handbook* values for
+# generic alloys, not lot-specific certified data: real hardware varies with
+# heat treatment, cold work and, for copper alloys, with hydrogen exposure.
+# Thermal conductivity is therefore one of the quantities dispersed in the
+# Monte Carlo campaign (see configs/mc_*.yaml).
+#
+# max-temperature is a conservative continuous-service limit, not a melting
+# point.  Ignis reports when a design exceeds it; it never silently accepts it.
+
+units: {conductivity: "W/(m K)", slope: "W/(m K^2)", temperature: K, density: "kg/m^3"}
+
+materials:
+- name: "CuCrZr"
+  description: "Precipitation-hardened copper-chromium-zirconium, a generic regen liner alloy"
+  conductivity-reference: 320.0
+  reference-temperature: 300.0
+  conductivity-slope: 0.02
+  valid-range: [250.0, 900.0]
+  max-temperature: 800.0
+  emissivity: 0.30
+  density: 8900.0
+  source: >-
+    Nominal CuCrZr (CuCr1Zr, UNS C18150) values: k ~ 320 W/(m K) at 300 K rising
+    slightly to ~330 W/(m K) at 800 K, as tabulated in the ITER Material
+    Properties Handbook and in EFDA/EUROfusion structural material assessments.
+
+- name: "Copper"
+  description: "Oxygen-free high-conductivity copper"
+  conductivity-reference: 398.0
+  reference-temperature: 300.0
+  conductivity-slope: -0.064
+  valid-range: [200.0, 900.0]
+  max-temperature: 700.0
+  emissivity: 0.15
+  density: 8960.0
+  source: >-
+    OFHC copper, k = 398 W/(m K) at 300 K and 366 W/(m K) at 800 K
+    (CRC Handbook of Chemistry and Physics, thermal conductivity of the
+    elements; NIST cryogenic material properties database).
+
+- name: "Inconel718"
+  description: "Nickel-chromium superalloy, typical for high-temperature structure"
+  conductivity-reference: 11.4
+  reference-temperature: 300.0
+  conductivity-slope: 0.021
+  valid-range: [250.0, 1100.0]
+  max-temperature: 980.0
+  emissivity: 0.70
+  density: 8190.0
+  source: >-
+    Special Metals Corporation, "INCONEL alloy 718" datasheet (publication
+    SMC-045): k = 11.4 W/(m K) at 300 K and 21.9 W/(m K) at 800 K.
+
+- name: "SS316"
+  description: "Austenitic stainless steel 316, used for lines and low-flux structure"
+  conductivity-reference: 14.6
+  reference-temperature: 300.0
+  conductivity-slope: 0.0138
+  valid-range: [250.0, 1100.0]
+  max-temperature: 1100.0
+  emissivity: 0.55
+  density: 8000.0
+  source: >-
+    AISI 316 stainless steel: k = 14.6 W/(m K) at 300 K and 21.5 W/(m K) at
+    800 K (ASM Metals Handbook, properties of wrought stainless steels).

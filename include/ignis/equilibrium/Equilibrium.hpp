@@ -80,9 +80,10 @@ struct EquilibriumOptions {
   /// Convergence test on |Delta ln T|.
   double temperature_tolerance = 1.0e-9;
   int max_iterations = 300;
-  /// Absolute floor on mole numbers, mol/kg.  Species below this are retained
-  /// but excluded from the iteration matrix (their weight is negligible).
-  double trace_floor = 1.0e-45;
+  /// Mole fraction below which a species is treated as a trace: it is placed
+  /// directly on its stationarity condition instead of taking a damped Newton
+  /// step, which keeps trace species from destabilising the step limiter.
+  double trace_fraction = 1.0e-14;
   /// Mole fraction above which a species must satisfy the Gibbs optimality
   /// condition for the solve to be accepted.
   double optimality_check_fraction = 1.0e-12;

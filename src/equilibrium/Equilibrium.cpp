@@ -133,17 +133,44 @@ EquilibriumResult EquilibriumSolver::attempt(const Reduced& red, EquilibriumProb
   const double R = constants::R_universal;
   const double T_lo = red.db->tMinCommon();
   const double T_hi = red.db->tMaxCommon();
+  const double lnp = std::log(p / constants::p_reference);
 
-  Eigen::VectorXd n = n_start;
+  // Species whose mole fraction falls below kTraceFraction contribute nothing
+  // to any sum at double precision.  Rather than taking a damped Newton step
+  // for them -- which is what makes a CEA-style solver oscillate, because a
+  // trace species can be flung up to a finite mole fraction and then dominate
+  // the step limiter -- they are placed directly on the stationarity condition
+  //     ln(n_j/n) = sum_i a_ij pi_i - g0_j/(R T) - ln(p/p0)
+  // implied by the current multipliers.  That is exactly where the converged
+  // solution puts them, it is bounded, and it lets a species grow back into
+  // the major set naturally when the solution moves.
+  const double kTraceFraction = opts_.trace_fraction;
+  constexpr double kLnFloor = -700.0;
+
+  Eigen::VectorXd ln_n(N);
+  for (Eigen::Index j = 0; j < N; ++j)
+    ln_n(j) = std::log(std::max(n_start(j), 1.0e-300));
+  Eigen::VectorXd n(N);
   double T = T_start;
-  double n_tot = n.sum();
 
-  Eigen::VectorXd h_RT(N), s_R(N), cp_R(N), mu_RT(N);
+  Eigen::VectorXd h_RT(N), s_R(N), cp_R(N), mu_RT(N), g0_RT(N), dln_n(N);
   Eigen::MatrixXd A(dim, dim);
-  Eigen::VectorXd rhs(dim), sol(dim), dln_n(N);
+  Eigen::VectorXd rhs(dim), sol(dim);
 
   EquilibriumDiagnostics diag;
-  const double lnp = std::log(p / constants::p_reference);
+  Eigen::VectorXd pi = Eigen::VectorXd::Zero(E);
+
+  auto materialise = [&](double& n_tot) {
+    n_tot = 0.0;
+    for (Eigen::Index j = 0; j < N; ++j) {
+      n(j) = (ln_n(j) < kLnFloor) ? 0.0 : std::exp(ln_n(j));
+      n_tot += n(j);
+    }
+  };
+
+  double n_tot = 0.0;
+  materialise(n_tot);
+  if (!(n_tot > 0.0)) throw ConvergenceError("initial composition has no moles");
 
   for (int iter = 0; iter < opts_.max_iterations; ++iter) {
     if (T < T_lo || T > T_hi) {
@@ -152,125 +179,130 @@ EquilibriumResult EquilibriumSolver::attempt(const Reduced& red, EquilibriumProb
          << T_hi << "] K";
       throw ConvergenceError(os.str());
     }
-    n_tot = n.sum();
+    materialise(n_tot);
     if (!(n_tot > 0.0)) throw ConvergenceError("total moles collapsed to zero");
+    const double ln_ntot = std::log(n_tot);
 
-    // --- species properties at the current temperature -----------------
+    // --- species properties at the current temperature -------------------
     for (Eigen::Index j = 0; j < N; ++j) {
       double c, hh, ss;
       red.species(j).reduced(T, c, hh, ss);
       cp_R(j) = c;
       h_RT(j) = hh;
-      // Entropy including the ideal-gas mixing and pressure terms.
-      s_R(j) = ss - std::log(std::max(n(j), opts_.trace_floor) / n_tot) - lnp;
+      g0_RT(j) = hh - ss;
+      // Entropy including the ideal-gas mixing and pressure terms; using ln_n
+      // directly avoids taking the logarithm of an underflowed mole number.
+      s_R(j) = ss - (ln_n(j) - ln_ntot) - lnp;
       mu_RT(j) = h_RT(j) - s_R(j);
     }
 
-    // Weights: species far below the floor cannot influence the matrix.
-    Eigen::VectorXd w = n;
-    for (Eigen::Index j = 0; j < N; ++j) if (w(j) < opts_.trace_floor) w(j) = 0.0;
+    // Weights: only the major set carries any numerical weight.
+    Eigen::VectorXd w = Eigen::VectorXd::Zero(N);
+    std::vector<char> major(static_cast<std::size_t>(N), 0);
+    for (Eigen::Index j = 0; j < N; ++j) {
+      if (n(j) > kTraceFraction * n_tot) {
+        w(j) = n(j);
+        major[static_cast<std::size_t>(j)] = 1;
+      }
+    }
+    const double w_sum = w.sum();
+    if (!(w_sum > 0.0)) throw ConvergenceError("every species fell below the trace threshold");
 
-    // --- assemble the iteration matrix (RP-1311 Eqs. 2.24-2.26) --------
+    // --- iteration matrix (Gordon & McBride, RP-1311 Eqs. 2.24-2.26) -----
     A.setZero();
     rhs.setZero();
-    const Eigen::VectorXd bw = red.a * w;                 // sum_j a_ij n_j
+    const Eigen::VectorXd bw = red.a * w;
     A.topLeftCorner(E, E) = red.a * w.asDiagonal() * red.a.transpose();
     A.block(0, E, E, 1) = bw;
     A.block(E, 0, 1, E) = bw.transpose();
-    A(E, E) = w.sum() - n_tot;
+    A(E, E) = w_sum - n_tot;
     rhs.head(E) = red.b - bw + red.a * (w.cwiseProduct(mu_RT));
-    rhs(E) = n_tot - w.sum() + w.dot(mu_RT);
+    rhs(E) = n_tot - w_sum + w.dot(mu_RT);
 
     if (solve_T) {
       Eigen::VectorXd key(N);
-      if (problem == EquilibriumProblem::kHP) key = h_RT;
-      else                                    key = s_R;      // kSP
+      if (problem == EquilibriumProblem::kHP) key = h_RT; else key = s_R;
       const Eigen::VectorXd wk = w.cwiseProduct(key);
-      // Temperature column: derivative of Delta ln n_j wrt Delta ln T is h_RT.
       const Eigen::VectorXd wh = w.cwiseProduct(h_RT);
       A.block(0, E + 1, E, 1) = red.a * wh;
       A(E, E + 1) = wh.sum();
-      // Energy / entropy row.
       A.block(E + 1, 0, 1, E) = (red.a * wk).transpose();
       A(E + 1, E) = wk.sum();
       A(E + 1, E + 1) = w.dot(cp_R) + wk.dot(h_RT);
-
       double closure;
       if (problem == EquilibriumProblem::kHP) {
-        const double h = R * T * n.dot(h_RT);                // J/kg
-        closure = (target - h) / (R * T);
+        closure = (target - R * T * n.dot(h_RT)) / (R * T);
       } else {
-        const double s = R * n.dot(s_R);                     // J/(kg K)
-        closure = (target - s) / R;
+        closure = (target - R * n.dot(s_R)) / R;
       }
       rhs(E + 1) = closure + wk.dot(mu_RT);
     }
 
-    // --- solve ---------------------------------------------------------
     Eigen::FullPivLU<Eigen::MatrixXd> lu(A);
     if (!lu.isInvertible()) {
       std::ostringstream os;
       os << "iteration matrix is singular at iteration " << iter << " (T = " << T
-         << " K, p = " << p << " Pa)";
+         << " K, p = " << p << " Pa, " << w.count() << " active species)";
       throw ConvergenceError(os.str());
     }
     sol = lu.solve(rhs);
-    const Eigen::VectorXd pi = sol.head(E);
+    if (!sol.allFinite()) throw ConvergenceError("non-finite Newton correction");
+    pi = sol.head(E);
     const double dln_ntot = sol(E);
     const double dln_T = solve_T ? sol(E + 1) : 0.0;
-    if (!sol.allFinite()) throw ConvergenceError("non-finite Newton correction");
 
     for (Eigen::Index j = 0; j < N; ++j)
       dln_n(j) = red.a.col(j).dot(pi) + dln_ntot + h_RT(j) * dln_T - mu_RT(j);
 
-    // --- step-size control (RP-1311 Eqs. 3.1-3.3) ----------------------
+    // --- step-size control (RP-1311 Eq. 3.1) -----------------------------
     double worst = std::max(5.0 * std::abs(dln_ntot), 5.0 * std::abs(dln_T));
     for (Eigen::Index j = 0; j < N; ++j)
-      if (n(j) / n_tot > 1.0e-8) worst = std::max(worst, std::abs(dln_n(j)));
-    double lambda = (worst > 0.0) ? std::min(1.0, 2.0 / worst) : 1.0;
-    for (Eigen::Index j = 0; j < N; ++j) {
-      const double frac = n(j) / n_tot;
-      if (frac <= 1.0e-8 && dln_n(j) > 0.0) {
-        const double denom = std::abs(dln_n(j) - dln_ntot);
-        if (denom > 0.0) {
-          const double l2 = std::abs(std::log(1.0e-4 * n_tot / std::max(n(j), opts_.trace_floor))) / denom;
-          lambda = std::min(lambda, l2);
-        }
-      }
-    }
-    lambda = std::max(lambda, 1.0e-6);
+      if (major[static_cast<std::size_t>(j)]) worst = std::max(worst, std::abs(dln_n(j)));
+    const double lambda = (worst > 2.0) ? 2.0 / worst : 1.0;
 
-    // --- convergence test (on the *unlimited* Newton correction) -------
+    // --- convergence test on the undamped correction ---------------------
     double species_corr = 0.0;
     for (Eigen::Index j = 0; j < N; ++j)
-      species_corr = std::max(species_corr, n(j) * std::abs(dln_n(j)) / n_tot);
+      if (major[static_cast<std::size_t>(j)])
+        species_corr = std::max(species_corr, n(j) * std::abs(dln_n(j)) / n_tot);
     if (opts_.record_history) diag.history.push_back(species_corr);
-
     const bool done = species_corr < opts_.species_tolerance &&
                       std::abs(dln_ntot) < opts_.moles_tolerance &&
                       std::abs(dln_T) < opts_.temperature_tolerance;
 
-    // --- apply the step ------------------------------------------------
-    for (Eigen::Index j = 0; j < N; ++j) {
-      const double ln_new = std::log(std::max(n(j), std::numeric_limits<double>::min())) +
-                            lambda * dln_n(j);
-      n(j) = (ln_new < -700.0) ? 0.0 : std::exp(ln_new);
-      if (n(j) < opts_.trace_floor) n(j) = opts_.trace_floor;
-    }
-    if (solve_T) T *= std::exp(lambda * dln_T);
-
-    if (done) {
-      diag.converged = true;
-      diag.iterations = iter + 1;
-      diag.final_species_correction = species_corr;
-      diag.final_moles_correction = std::abs(dln_ntot);
-      diag.final_temperature_correction = std::abs(dln_T);
-      break;
-    }
     diag.iterations = iter + 1;
     diag.final_species_correction = species_corr;
     diag.final_moles_correction = std::abs(dln_ntot);
     diag.final_temperature_correction = std::abs(dln_T);
+
+    // --- apply the step ---------------------------------------------------
+    const double T_new = solve_T ? T * std::exp(lambda * dln_T) : T;
+    const double ln_ntot_new = ln_ntot + lambda * dln_ntot;
+    for (Eigen::Index j = 0; j < N; ++j)
+      if (major[static_cast<std::size_t>(j)])
+        // A mole fraction can never exceed one; capping the *iterate* keeps an
+        // early, poorly-conditioned step from overflowing.  At convergence the
+        // cap is never active.
+        ln_n(j) = std::min(ln_ntot_new, ln_n(j) + lambda * dln_n(j));
+    T = std::min(std::max(T_new, T_lo), T_hi);
+
+    // Trace species: place them on the stationarity condition implied by the
+    // current multipliers, capped at a mole fraction of one.
+    if (T >= T_lo && T <= T_hi) {
+      for (Eigen::Index j = 0; j < N; ++j) {
+        if (major[static_cast<std::size_t>(j)]) continue;
+        double c, hh, ss;
+        red.species(j).reduced(T, c, hh, ss);
+        const double ln_ratio = red.a.col(j).dot(pi) - (hh - ss) - lnp;
+        ln_n(j) = std::min(ln_ntot_new, ln_ntot_new + ln_ratio);
+        if (!std::isfinite(ln_n(j))) ln_n(j) = kLnFloor - 1.0;
+      }
+    }
+
+    if (done) {
+      diag.converged = true;
+      break;
+    }
   }
 
   if (!diag.converged) {
@@ -284,29 +316,20 @@ EquilibriumResult EquilibriumSolver::attempt(const Reduced& red, EquilibriumProb
   }
 
   // --- residual audit ---------------------------------------------------
-  n_tot = n.sum();
+  materialise(n_tot);
+  const double ln_ntot = std::log(n_tot);
   const Eigen::VectorXd b_achieved = red.a * n;
   diag.element_residual_abs = (b_achieved - red.b).cwiseAbs().maxCoeff();
   diag.element_residual_rel = diag.element_residual_abs / red.b.maxCoeff();
   diag.mass_residual = n.dot(red.mw) - 1.0;
 
-  // Recompute mu and pi at the converged point for the optimality residual.
   for (Eigen::Index j = 0; j < N; ++j) {
     double c, hh, ss;
     red.species(j).reduced(T, c, hh, ss);
-    cp_R(j) = c;
     h_RT(j) = hh;
-    s_R(j) = ss - std::log(std::max(n(j), opts_.trace_floor) / n_tot) - lnp;
+    s_R(j) = ss - (ln_n(j) - ln_ntot) - lnp;
     mu_RT(j) = h_RT(j) - s_R(j);
   }
-  Eigen::VectorXd w = n;
-  for (Eigen::Index j = 0; j < N; ++j) if (w(j) < opts_.trace_floor) w(j) = 0.0;
-  // Least-squares recovery of pi from the stationarity conditions, weighted by
-  // mole number so that trace species do not dominate.
-  Eigen::MatrixXd M = red.a * w.asDiagonal() * red.a.transpose();
-  Eigen::VectorXd rhs_pi = red.a * (w.cwiseProduct(mu_RT));
-  Eigen::VectorXd pi = M.ldlt().solve(rhs_pi);
-
   diag.gibbs_residual = 0.0;
   for (Eigen::Index j = 0; j < N; ++j) {
     if (n(j) / n_tot < opts_.optimality_check_fraction) continue;
@@ -338,14 +361,14 @@ EquilibriumResult EquilibriumSolver::attempt(const Reduced& red, EquilibriumProb
 
   if (diag.element_residual_rel > opts_.element_tolerance) {
     std::ostringstream os;
-    os << toString(problem) << " equilibrium converged but element balance is off by "
+    os << toString(problem) << " equilibrium converged but the element balance is off by "
        << std::scientific << diag.element_residual_rel << " (tolerance "
        << opts_.element_tolerance << ")";
     throw ConvergenceError(os.str());
   }
   if (diag.gibbs_residual > opts_.optimality_tolerance) {
     std::ostringstream os;
-    os << toString(problem) << " equilibrium converged but Gibbs optimality residual is "
+    os << toString(problem) << " equilibrium converged but the Gibbs optimality residual is "
        << std::scientific << diag.gibbs_residual << " (tolerance "
        << opts_.optimality_tolerance << ")";
     throw ConvergenceError(os.str());
@@ -370,14 +393,14 @@ void EquilibriumSolver::computeDerivatives(const Reduced& red, const Eigen::Vect
   const double R = constants::R_universal;
 
   Eigen::VectorXd h_RT(N), cp_R(N), w = n_red;
+  const double n_tot = n_red.sum();
   for (Eigen::Index j = 0; j < N; ++j) {
     double c, hh, ss;
     red.species(j).reduced(T, c, hh, ss);
     cp_R(j) = c;
     h_RT(j) = hh;
-    if (w(j) < opts_.trace_floor) w(j) = 0.0;
+    if (w(j) < opts_.trace_fraction * n_tot) w(j) = 0.0;
   }
-  const double n_tot = n_red.sum();
 
   Eigen::MatrixXd A(E + 1, E + 1);
   A.setZero();
@@ -471,7 +494,7 @@ EquilibriumResult EquilibriumSolver::solveConstantPressure(const Eigen::VectorXd
     Eigen::VectorXd ng(N);
     for (Eigen::Index j = 0; j < N; ++j)
       ng(j) = std::max((*n_guess)(red.species_map[static_cast<std::size_t>(j)]),
-                       opts_.trace_floor);
+                       1.0e-300);
     starts.push_back(ng);
   }
   starts.push_back(Eigen::VectorXd::Constant(N, 0.5 * b_sum / static_cast<double>(N)));
