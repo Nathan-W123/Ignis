@@ -332,3 +332,12 @@ the entire argument for running your own instructions against a fresh clone.
 | `tests/validation/test_validation.cpp` | 5 | NASA CEA and Cantera comparisons — see [`validation.md`](validation.md) |
 | `tests/integration/test_engine.cpp` | 6 | Both engines end to end, altitude trends, sweep/single-point identity, optimisation feasibility, feed system |
 | **Total** | **78** | **17 550 assertions, 60 s at `-j4`** |
+
+Four cases carry a `[slow]` tag — the constrained trade study, the adaptive
+integrator comparison, the distribution check and the sensitivity ranking.
+Between them they are most of the suite's serial time. Both Release CI jobs
+run everything; the Debug job runs `~[slow]`, because a Debug build is there
+to catch assertions and undefined behaviour that Release optimises away, and
+re-running a 2500-evaluation optimisation at `-O0` costs most of an hour to
+learn nothing new. `./build/bin/ignis_tests "~[slow]"` is also the right
+command for a quick local check: 74 cases in 15 s.

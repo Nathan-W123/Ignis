@@ -101,7 +101,7 @@ TEST_CASE("a different seed gives a different sample, the same seed the same one
           b.statistics.at("performance.thrust").mean);
 }
 
-TEST_CASE("drawn inputs follow the requested distributions", "[uncertainty]") {
+TEST_CASE("drawn inputs follow the requested distributions", "[uncertainty][slow]") {
   const auto engine = cheapEngine();
   auto spec = cheapSpec(4000);
   spec.threads = 0;
@@ -150,7 +150,7 @@ TEST_CASE("drawn inputs follow the requested distributions", "[uncertainty]") {
   }
 }
 
-TEST_CASE("sensitivity rankings recover known dependencies", "[uncertainty][sensitivity]") {
+TEST_CASE("sensitivity rankings recover known dependencies", "[uncertainty][sensitivity][slow]") {
   const auto engine = cheapEngine();
   auto spec = cheapSpec(1500);
   // One campaign feeds every ranking check below; SECTIONs would re-run it.

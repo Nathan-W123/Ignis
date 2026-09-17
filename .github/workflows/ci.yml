@@ -55,9 +55,19 @@ jobs:
       - name: Show version
         run: ./build/bin/ignis_engine --version
 
-      - name: Test
+      # The Debug build exists to catch assertions and undefined behaviour that
+      # Release optimises away, not to re-run the four heaviest cases: at -O0
+      # the 2500-evaluation optimisation and the 100k-step integrator together
+      # take most of an hour.  Those four carry a [slow] tag and run in full on
+      # both Release jobs; Debug runs everything else.
+      - name: Test (Release - everything)
+        if: matrix.build_type != 'Debug'
         working-directory: build
         run: ctest --output-on-failure -j "$(nproc)"
+
+      - name: Test (Debug - all but the [slow] cases)
+        if: matrix.build_type == 'Debug'
+        run: ./build/bin/ignis_tests "~[slow]" --order rand
 
       # A Debug build is far too slow for the end-to-end scenarios.
       - name: Run the shipped scenarios

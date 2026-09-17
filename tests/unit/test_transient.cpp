@@ -226,7 +226,7 @@ TEST_CASE("the fixed-step integrator converges at high order on a smooth problem
 }
 
 TEST_CASE("the adaptive integrator agrees with the fixed-step one",
-          "[transient][verification]") {
+          "[transient][verification][slow]") {
   auto fixed = baseSpec();
   fixed.integrator = "rk4";
   fixed.dt = 1.0e-6;
