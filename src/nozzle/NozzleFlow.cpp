@@ -500,8 +500,11 @@ NozzlePerformance evaluateNozzle(const NozzleFlow& flow, const NozzleGeometry& g
         if (u_out) *u_out = u;
         return pe;
       };
+      // Moving the shock upstream raises the exit pressure, so the interior
+      // position that matches the ambient pressure is bracketed by a shock at
+      // the throat and a shock at the exit.
       double lo = 1.0 + 1e-6, hi = perf.area_ratio;
-      double p_lo = 0.0, p_hi = sh_exit.downstream.p;
+      double p_lo = 0.0;
       bool ok = true;
       try {
         p_lo = exitPressureForShockAt(lo, nullptr);
@@ -518,7 +521,7 @@ NozzlePerformance evaluateNozzle(const NozzleFlow& flow, const NozzleGeometry& g
             lo = mid;
             continue;
           }
-          if (pm > p_ambient) { lo = mid; p_lo = pm; } else { hi = mid; p_hi = pm; }
+          if (pm > p_ambient) { lo = mid; p_lo = pm; } else { hi = mid; }
           if (hi - lo < 1e-10 * perf.area_ratio) break;
         }
         const double eps_s = 0.5 * (lo + hi);

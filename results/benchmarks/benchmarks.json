@@ -1,0 +1,34 @@
+{
+  "ignis_version": "1.0.0",
+  "git": "51a8c77-dirty",
+  "build_type": "Release",
+  "compiler": "GNU 13.3.0",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz",
+  "hardware_threads": 4,
+  "eigen": "3.4.0",
+  "suite_wall_seconds": 33.757535193000002,
+  "benchmarks": {
+    "name": "benchmarks",
+    "columns": {
+      "benchmark": ["adiabatic (HP) solve, 26 species", "isentropic (SP) solve, 26 species", "  8 species", "  12 species", "  18 species", "  26 species", "chamber + throat + exit (no profile, no cooling)", "  50 stations", "  100 stations", "  200 stations", "  400 stations", "  800 stations", "  1600 stations", "chamber + nozzle + profile + cooling + feed", "chamber + nozzle + profile (no cooling)", "  1 thread(s)", "  2 thread(s)", "  4 thread(s)"],
+      "unit_of_work": ["solve", "solve", "solve", "solve", "solve", "solve", "analysis", "profile", "profile", "profile", "profile", "profile", "profile", "analysis", "analysis", "campaign", "campaign", "campaign"],
+      "mean_time": [0.05946905999999999, 0.13517666, 0.013213860000000001, 0.025802680000000001, 0.032033540000000006, 0.059084999999999971, 7.9249498000000003, 34.236690666666668, 50.86387666666667, 88.810484333333349, 167.00940766666668, 326.01232066666671, 632.24663099999998, 265.22086740000003, 164.50660939999997, 13825.618098999999, 8271.856796, 5437.2281759999996],
+      "min_time": [0.05416, 0.127916, 0.011009000000000001, 0.022965000000000003, 0.029436, 0.054221999999999999, 7.7435270000000003, 33.843320000000006, 50.551111000000006, 88.086883, 166.47476599999999, 323.19152400000002, 630.25507400000004, 263.61837400000002, 163.499529, 13825.618098999999, 8271.856796, 5437.2281759999996],
+      "max_time": [0.17339499999999999, 0.18853500000000001, 0.032046999999999999, 0.059513999999999997, 0.054325999999999999, 0.124709, 8.5058640000000008, 34.448414, 51.431164000000003, 89.788977000000003, 167.43053799999998, 328.399294, 633.79893800000002, 266.87723299999999, 165.66049599999999, 13825.618098999999, 8271.856796, 5437.2281759999996],
+      "repeats": [100, 100, 50, 50, 50, 50, 10, 3, 3, 3, 3, 3, 3, 5, 5, 1, 1, 1],
+      "secondary_value": [24, 0, 8, 12, 18, 26, 0, 50, 100, 200, 400, 800, 1600, 0, 0, 7.2329496796409378, 12.089184141625461, 18.391724011400033],
+      "secondary_label": ["mean Newton iterations", "", "species", "species", "species", "species", "", "stations", "stations", "stations", "stations", "stations", "stations", "", "", "samples/s", "samples/s", "samples/s"]
+    },
+    "units": {
+      "benchmark": "",
+      "unit_of_work": "",
+      "mean_time": "ms",
+      "min_time": "ms",
+      "max_time": "ms",
+      "repeats": "-",
+      "secondary_value": "-",
+      "secondary_label": ""
+    },
+    "rows": 18
+  }
+}

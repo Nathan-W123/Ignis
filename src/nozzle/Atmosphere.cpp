@@ -37,8 +37,10 @@ constexpr std::array<Layer, 7> kLayers{{
 }};
 constexpr double kHTop = 84852.0;  // m', top of the 7th layer
 
+/// Geopotential altitude from geometric altitude, m' from m.  The standard's
+/// layer table is indexed by geopotential altitude while every caller works in
+/// geometric altitude, so the conversion happens once, here.
 double geopotential(double z) { return kR0 * z / (kR0 + z); }
-double geometric(double H) { return kR0 * H / (kR0 - H); }
 
 /// Base pressures, integrated upward from 101325 Pa at sea level.
 const std::array<double, 8>& basePressures() {

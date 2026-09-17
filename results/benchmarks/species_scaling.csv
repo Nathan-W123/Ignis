@@ -1,0 +1,6 @@
+# units: species[-] mean_time[ms]
+species,mean_time
+8,0.01321386
+12,0.02580268
+18,0.03203354
+26,0.059085

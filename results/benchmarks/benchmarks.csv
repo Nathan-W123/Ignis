@@ -1,0 +1,20 @@
+# units: benchmark[-] unit_of_work[-] mean_time[ms] min_time[ms] max_time[ms] repeats[-] secondary_value[-] secondary_label[-]
+benchmark,unit_of_work,mean_time,min_time,max_time,repeats,secondary_value,secondary_label
+adiabatic (HP) solve, 26 species,solve,0.05946906,0.05416,0.173395,100,24,mean Newton iterations
+isentropic (SP) solve, 26 species,solve,0.13517666,0.127916,0.188535,100,0,
+  8 species,solve,0.01321386,0.011009,0.032047,50,8,species
+  12 species,solve,0.02580268,0.022965,0.059514,50,12,species
+  18 species,solve,0.03203354,0.029436,0.054326,50,18,species
+  26 species,solve,0.059085,0.054222,0.124709,50,26,species
+chamber + throat + exit (no profile, no cooling),analysis,7.9249498,7.743527,8.505864,10,0,
+  50 stations,profile,34.23669067,33.84332,34.448414,3,50,stations
+  100 stations,profile,50.86387667,50.551111,51.431164,3,100,stations
+  200 stations,profile,88.81048433,88.086883,89.788977,3,200,stations
+  400 stations,profile,167.0094077,166.474766,167.430538,3,400,stations
+  800 stations,profile,326.0123207,323.191524,328.399294,3,800,stations
+  1600 stations,profile,632.246631,630.255074,633.798938,3,1600,stations
+chamber + nozzle + profile + cooling + feed,analysis,265.2208674,263.618374,266.877233,5,0,
+chamber + nozzle + profile (no cooling),analysis,164.5066094,163.499529,165.660496,5,0,
+  1 thread(s),campaign,13825.6181,13825.6181,13825.6181,1,7.23294968,samples/s
+  2 thread(s),campaign,8271.856796,8271.856796,8271.856796,1,12.08918414,samples/s
+  4 thread(s),campaign,5437.228176,5437.228176,5437.228176,1,18.39172401,samples/s

@@ -182,11 +182,11 @@ Table SteadyEngineResult::profileTable() const {
 Table SteadyEngineResult::coolingTable() const {
   Table t("thermal_stations");
   if (!has_cooling) return t;
-  auto col = [&](const char* name, double ThermalStation::*m, const char* units) {
+  auto col = [&](const char* col_name, double ThermalStation::*m, const char* units) {
     std::vector<double> v;
     v.reserve(cooling.stations.size());
     for (const auto& s : cooling.stations) v.push_back(s.*m);
-    t.addColumn(name, v, units);
+    t.addColumn(col_name, v, units);
   };
   col("x", &ThermalStation::x, "m");
   col("radius", &ThermalStation::radius, "m");

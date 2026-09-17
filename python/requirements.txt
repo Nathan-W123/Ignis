@@ -1,0 +1,11 @@
+# Required to generate the figures and the animation.
+numpy>=1.24
+pandas>=2.0
+matplotlib>=3.7
+
+# Optional, and only needed to REGENERATE the committed reference data in
+# validation/reference/ with tools/make_reference_data.py.  The test suite and
+# the figures do not need them.
+#   cantera>=3.0        independent equilibrium solver (verification)
+#   rocketcea>=1.2      NASA CEA wrapper (validation); needs gfortran
+#   CoolProp>=6.5       reference equations of state for the coolant tables

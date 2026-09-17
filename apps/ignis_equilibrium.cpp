@@ -4,11 +4,13 @@
 
 #include <algorithm>
 #include <iomanip>
+#include <cstdio>
 #include <iostream>
 
 #include "AppCommon.hpp"
 #include "ignis/combustion/Chamber.hpp"
 #include "ignis/io/Table.hpp"
+#include "ignis/nozzle/NozzleFlow.hpp"
 #include "ignis/thermo/Transport.hpp"
 
 using namespace ignis;
@@ -21,6 +23,7 @@ int main(int argc, char** argv) {
         {"temperature", "K", "temperature for the tp problem", "from the chamber solution"},
         {"min-fraction", "X", "smallest mole fraction printed", "1e-8"},
         {"no-transport", "", "skip the transport-property evaluation", ""},
+        {"mr-sweep", "MIN:MAX:N", "also write the composition over a mixture-ratio sweep", ""},
     };
     if (!parseCommandLine(argc, argv, "ignis_equilibrium",
                           "Solve chemical equilibrium for the propellant mixture defined by a\n"
@@ -196,6 +199,48 @@ int main(int argc, char** argv) {
                   << "  Prandtl        " << props.prandtl << "\n"
                   << "  covered X      " << props.covered_mole_fraction << "\n";
     }
+    // Optional mixture-ratio sweep of the whole composition.  The scalar
+    // metric machinery in ignis_sweep cannot carry a composition vector, so the
+    // per-species table is produced here.
+    if (flagPresent(cli, "mr-sweep")) {
+      const std::string arg = flagString(cli, "mr-sweep", "");
+      double mr_lo = 0.0, mr_hi = 0.0;
+      int mr_n = 0;
+      if (std::sscanf(arg.c_str(), "%lf:%lf:%d", &mr_lo, &mr_hi, &mr_n) != 3 || mr_n < 2 ||
+          !(mr_hi > mr_lo) || !(mr_lo > 0.0))
+        throw ConfigError("--mr-sweep expects MIN:MAX:N with 0 < MIN < MAX and N >= 2, got '" +
+                          arg + "'");
+      Table sweep("composition_vs_mixture_ratio");
+      std::vector<double> mrs, temps, molar, cstar_col;
+      std::vector<std::vector<double>> frac(db.size());
+      for (int i = 0; i < mr_n; ++i) {
+        const double mr = mr_lo + (mr_hi - mr_lo) * i / (mr_n - 1);
+        const PropellantMixture m2(ox, fu, mr, mix.oxidizerTemperature(), mix.fuelTemperature());
+        const auto b2 = m2.elementMoles(db);
+        const auto r2 = solver.hp(b2, m2.enthalpy(db), cfg.chamber_pressure);
+        const NozzleFlow flow2(solver, CompositionModel::kEquilibrium,
+                               ChamberReference{b2, r2.state});
+        const auto X2 = r2.state.moleFractions();
+        mrs.push_back(mr);
+        temps.push_back(r2.state.T);
+        molar.push_back(r2.state.M);
+        cstar_col.push_back(flow2.cStarIdeal());
+        for (std::size_t k = 0; k < db.size(); ++k)
+          frac[k].push_back(X2(static_cast<Eigen::Index>(k)));
+      }
+      sweep.addColumn("mixture_ratio", mrs, "-");
+      sweep.addColumn("temperature", temps, "K");
+      sweep.addColumn("molar_mass", molar, "kg/mol");
+      sweep.addColumn("c_star_ideal", cstar_col, "m/s");
+      for (std::size_t k = 0; k < db.size(); ++k)
+        sweep.addColumn("X_" + db[k].name(), frac[k], "-");
+      sweep.writeCsv(app::outputPath(cfg, "composition_vs_mr.csv"));
+      j["composition_vs_mixture_ratio"] = sweep.toJson();
+      if (!cli.quiet)
+        std::cout << "\nwrote " << app::outputPath(cfg, "composition_vs_mr.csv") << " ("
+                  << mr_n << " mixture ratios)\n";
+    }
+
     j.writeFile(app::outputPath(cfg, "equilibrium.json"));
     if (!cli.quiet)
       std::cout << "\nwrote " << app::outputPath(cfg, "equilibrium.csv") << "\n      "
