@@ -44,12 +44,13 @@ would show up as γ<sub>s</sub> ≠ c<sub>p</sub>/c<sub>v</sub>.
 
 ### 1.2 Cylindrical wall conduction
 
-The cylindrical wall resistance is checked against
-ln(r<sub>c</sub>/r<sub>g</sub>)/(2πk) — agreement to 1e-14 relative — and the
-resulting ΔT against q″ r<sub>g</sub> ln(r<sub>c</sub>/r<sub>g</sub>)/k to
-1e-12 relative. The plane-wall limit is checked separately: the cylindrical
-and plane forms differ by less than t/r<sub>g</sub>, as the series expansion
-requires, for t/r<sub>g</sub> from 1e-4 down.
+The per-unit-gas-side-area wall resistance is checked against
+r<sub>g</sub> ln((r<sub>g</sub>+t)/r<sub>g</sub>)/k — agreement to 1e-14
+relative — and the resulting ΔT against q″ times that resistance to 1e-12.
+The plane-wall limit is checked separately: at t/r<sub>g</sub> = 1e-3, 1e-4
+and 1e-5 the cylindrical and plane forms differ by **less than
+t/r<sub>g</sub>** in each case, which is what the series expansion requires
+and is a stronger statement than a fixed tolerance.
 
 ### 1.3 Chamber filling with constant inflow
 
@@ -59,12 +60,33 @@ must settle on the state the steady relations give: ṁ<sub>out</sub> =
 the adiabatic flame temperature at the resulting state. All three hold to
 1e-6, 1e-6 and 5e-3 relative respectively — the last is the interpolation
 error of the tabulated EOS, measured in §2.4, not an integration error.
+A separate case repeats the check at mid-burn on the shipped start-up
+schedule (1e-4 on flow and pressure, 1e-3 on mixture ratio) and additionally
+requires the chamber to be choked there.
 
-The same idea is used the other way round in `transient reaches the steady
-state the steady model predicts`, which runs the shipped start-up case to its
-plateau and compares against `SteadyEngine` on `methane_nominal.yaml`:
-ṁ = 48.04 kg/s, p<sub>c</sub> = 5 500 506.78 Pa and O/F = 3.39927 agree to
-better than 1e-8 between the two entirely separate code paths.
+### 1.3a The transient and the steady model as a cross-check
+
+Those checks are internal to the transient. The stronger statement is against
+the *other* solver. The steady model takes chamber pressure as an input and
+returns mass flow; the transient takes mass flow as an input and returns
+chamber pressure, through a completely separate path (tabulated equilibrium
+EOS, ODE integration, orifice outflow). Running each on the other's answer:
+
+| | |
+|---|---:|
+| `SteadyEngine` at p<sub>c</sub> = 5.500 MPa, O/F = 3.399267 | ṁ = 48.03612 kg/s |
+| Transient commanded flows (37.12 + 10.92) | ṁ = 48.0400 kg/s |
+| ⇒ steady model's implied plateau pressure | 5.50044 MPa |
+| Transient's actual plateau pressure | **5.50212 MPa** |
+| Disagreement | **0.031 %** |
+
+This is *not* zero, and it should not be: the transient's ignition schedule
+withholds a calibrated fraction of the heat of combustion
+(`ignition.values` → 0.874), which is a different thing from the steady
+model's η<sub>c\*</sub> = 0.96, and the tabulated EOS carries its own 0.13 %
+interpolation error. 0.031 % is the residual after those two, and it is the
+honest measure of how well two independent formulations of the same engine
+agree.
 
 ### 1.4 Normal shock
 

@@ -166,7 +166,7 @@ def nozzle_contour_mach(profile_csv: str, out: str) -> str:
     return _save(fig, out)
 
 
-def axial_profiles(profile_csv: str, out: str) -> str:
+def axial_profiles(profile_csv: str, out: str, case: str = "Ignis-M1") -> str:
     """Pressure, temperature, density, velocity and Mach number along the axis."""
     t = read_table(require(profile_csv))
     x = t["x"] * MM
@@ -192,7 +192,7 @@ def axial_profiles(profile_csv: str, out: str) -> str:
                         color=style.INK_MUTED)
     for ax in axes[-1]:
         ax.set_xlabel("axial position [mm]")
-    style.suptitle(fig, "Flow properties along the nozzle axis")
+    style.suptitle(fig, f"{case}: flow properties along the nozzle axis")
     style.caption(fig, "The vertical rule marks the sonic throat. Every panel comes from the "
                        "same converged station march.")
     return _save(fig, out)
@@ -280,7 +280,7 @@ def expansion_trade(sweep_csv: str, out: str) -> str:
 # Thermal
 # ---------------------------------------------------------------------------
 
-def thermal_profiles(thermal_csv: str, out: str) -> str:
+def thermal_profiles(thermal_csv: str, out: str, case: str = "Ignis-M1") -> str:
     """Film coefficient, heat flux, wall and coolant conditions along the jacket."""
     t = read_table(require(thermal_csv))
     x = t["x"] * MM
@@ -336,7 +336,7 @@ def thermal_profiles(thermal_csv: str, out: str) -> str:
 
     for ax in axes:
         ax.axvline(xq, color=style.INK_MUTED, linewidth=0.9)
-    style.suptitle(fig, "Regenerative cooling along the chamber and nozzle")
+    style.suptitle(fig, f"{case}: regenerative cooling along the chamber and nozzle")
     style.caption(fig, "Bartz hot-gas correlation with a coupled wall and coolant balance. "
                        "Engineering estimate, not a conjugate CFD solution.")
     return _save(fig, out)
@@ -581,11 +581,11 @@ def monte_carlo_scatter(samples_csv: str, out: str) -> str:
         ax.scatter(t.frame.loc[hot, "cooling.bartz_multiplier"],
                    t.frame.loc[hot, "cooling.max_wall_temperature"],
                    s=9, linewidths=0, color=style.STATUS["critical"],
-                   label="above the material limit")
+                   label=f"above the material limit ({int(hot.sum())} of {int(ok.sum())})")
         ax.legend(loc="upper left")
     ax.set_xlabel("Bartz correlation multiplier [-]")
     ax.set_ylabel("peak hot-wall temperature [K]")
-    ax.set_title("The heat-transfer correlation dominates wall temperature")
+    ax.set_title("The correlation drives the wall temperature")
 
     ax = axes[1]
     ax.scatter(t.frame.loc[ok, "performance.isp"], t.frame.loc[ok, "performance.thrust"] * KN,
@@ -593,6 +593,7 @@ def monte_carlo_scatter(samples_csv: str, out: str) -> str:
     ax.set_xlabel("specific impulse [s]")
     ax.set_ylabel("thrust [kN]")
     ax.set_title("Thrust against specific impulse")
-    style.caption(fig, "At most three categorical hues are used in scatter form, where every "
-                       "pair of colours is on screen at once.")
+    style.caption(fig, "Left: red marks the samples whose peak wall temperature exceeds the "
+                       "CuCrZr limit. At most three categorical hues are used in scatter form, "
+                       "where every pair of colours is on screen at once.")
     return _save(fig, out)

@@ -75,9 +75,11 @@ def main(argv=None) -> int:
             f"{R}/monte_carlo/monte_carlo_mc_samples.csv",
             f"{F}/13_monte_carlo_scatter.png"),
         "hydrogen_axial_profiles": lambda: figures.axial_profiles(
-            f"{R}/hydrogen_nominal/h1_profile.csv", f"{F}/14_hydrogen_axial_profiles.png"),
+            f"{R}/hydrogen_nominal/h1_profile.csv", f"{F}/14_hydrogen_axial_profiles.png",
+            case="Ignis-H1 (LOX/LH2)"),
         "hydrogen_thermal": lambda: figures.thermal_profiles(
-            f"{R}/hydrogen_nominal/h1_thermal.csv", f"{F}/15_hydrogen_thermal.png"),
+            f"{R}/hydrogen_nominal/h1_thermal.csv", f"{F}/15_hydrogen_thermal.png",
+            case="Ignis-H1 (LOX/LH2)"),
     }
     if not args.no_animation:
         jobs["startup_animation"] = lambda: animation.startup_animation(

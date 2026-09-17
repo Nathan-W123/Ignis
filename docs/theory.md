@@ -625,17 +625,20 @@ Correlations, all labelled:
 | Nusselt, option | Gnielinski | Gnielinski, *Int. Chem. Eng.* 16, 359 (1976) |
 | Nusselt, laminar | `Nu = 4.36` | fully developed, constant heat flux |
 
-The two turbulent correlations differ by about 10 % in peak wall temperature
-for the shipped design; that spread is the real coolant-side uncertainty and is
-why `nusselt_multiplier` is a dispersed Monte Carlo input.
+The two turbulent correlations differ by **10.8 %** in peak wall temperature
+for the shipped design (Dittus-Boelter 797.4 K against Gnielinski 711.3 K,
+measured by the test suite); that spread is the real coolant-side uncertainty
+and is why `nusselt_multiplier` is a dispersed Monte Carlo input.
 
 **Coolant properties** come from tabulated reference equations of state
 (Setzmann & Wagner 1991 for methane, Leachman et al. 2009 for hydrogen,
-Schmidt & Wagner 1985 for oxygen) rather than a cubic equation of state, which
-would be 10–50 % wrong in the dense supercritical region the jacket operates
-in. A Peng-Robinson implementation is included and the test suite measures how
-far it differs, so the choice is justified by a number rather than an
-assertion.
+Schmidt & Wagner 1985 for oxygen) rather than a cubic equation of state. A
+Peng-Robinson implementation is included so that the choice is justified by a
+measurement rather than an assertion: against the same reference tables its
+density is **2.2 %** out above 250 K and **12.5 %** out below, in exactly the
+cold dense region a regenerative jacket inlet sits in. The test requires the
+dense-region error to exceed the dilute-region one, so the comparison would
+fail if the cubic were ever silently swapped in.
 
 **Failure modes are reported, never absorbed:** coolant boiling (a sub-critical
 liquid crossing its saturation line), a state outside the tabulated range
@@ -709,7 +712,9 @@ a well-defined and bounded no-heat-release limit.
 
 For LOX/methane `q_comb/(cp T_ad) ≈ 0.36`, so `η_c* = 0.96` corresponds to
 `η_heat ≈ 0.874`, not 0.92. The shipped startup case uses the calibrated value
-and reproduces the steady-state chamber pressure to 0.02 %.
+and reproduces the chamber pressure the steady model implies for the same
+commanded flows to **0.031 %** — see [verification.md](verification.md) 1.3a
+for the comparison and what the residual is made of.
 
 **Closure.** Given `(m_ox, m_f, U)`, the temperature and pressure follow from
 `u = U/m`, `ρ = m/V` and the instantaneous `O/F` by inverting a tabulated
