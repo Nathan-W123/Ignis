@@ -75,8 +75,23 @@ class EquilibriumTable {
   double gammaS(double mr, double T, double p) const;
   /// Equilibrium specific heat at constant volume, J/(kg K).
   double cv(double mr, double T, double p) const;
-  /// Ideal characteristic velocity, m/s (adiabatic flame conditions).
+  /// Ideal characteristic velocity at the adiabatic flame condition, m/s.
+  /// This is the full variable-property sonic solution, not a constant-gamma
+  /// estimate.
   double cStar(double mr, double p) const;
+
+  /// Characteristic velocity of a chamber that is *not* at its adiabatic flame
+  /// temperature, m/s.
+  ///
+  /// The constant-gamma choked-flow result
+  ///     c*_cg = sqrt(R T / gamma) ((gamma+1)/2)^((gamma+1)/(2(gamma-1)))
+  /// is corrected by the factor kappa(O/F, p) = c*_exact / c*_cg measured at
+  /// the adiabatic flame condition, so the value is exact there and degrades
+  /// gracefully as the chamber cools during a start or a shutdown.
+  double cStarAt(double mr, double T, double p) const;
+
+  /// The ratio c*_exact / c*_constant-gamma at the adiabatic flame condition.
+  double cStarCorrection(double mr, double p) const;
   /// Adiabatic flame temperature, K.
   double flameTemperature(double mr, double p) const;
   /// Reactant specific enthalpy at the stored inlet temperatures, J/kg.
@@ -111,7 +126,7 @@ class EquilibriumTable {
   TableGrid grid_;
   std::vector<double> mr_, t_, p_, lnp_;
   std::vector<double> u_, molar_, gamma_, cv_;         // (mr, T, p)
-  std::vector<double> cstar_, tflame_;                 // (mr, p)
+  std::vector<double> cstar_, tflame_, kappa_;         // (mr, p)
   std::vector<double> h_react_, q_comb_;               // (mr)
 };
 

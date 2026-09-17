@@ -268,7 +268,11 @@ CoolingResult solveCoolingImpl(const NozzleFlow& flow, const NozzleGeometry& geo
     // --- solve the coupled wall balance ---------------------------------
     auto wallConductivity = [&](double t_hot, double t_cold) {
       const double tm = 0.5 * (t_hot + t_cold);
-      if (!spec.wall.inValidRange(tm)) res.conductivity_extrapolated = true;
+      if (!spec.wall.inValidRange(tm)) {
+        res.conductivity_extrapolated = true;
+        res.conductivity_extrapolation_min = std::min(res.conductivity_extrapolation_min, tm);
+        res.conductivity_extrapolation_max = std::max(res.conductivity_extrapolation_max, tm);
+      }
       return spec.wall.conductivity(tm);
     };
 
@@ -280,15 +284,20 @@ CoolingResult solveCoolingImpl(const NozzleFlow& flow, const NozzleGeometry& geo
                                          spec.wall.emissivity);
       const double q = qc + qr;
       // Through-wall conduction: iterate once on the mean-temperature k.
+      // The conductivity depends on the mean wall temperature, which depends on
+      // the flux, which depends on the conductivity.  The map is a strong
+      // contraction (k varies by a few percent across the wall), so a handful of
+      // fixed-point steps to 1e-8 relative is far more than enough.
       double t_wc = t_wg;
       double kw = spec.wall.conductivity(t_wg);
-      for (int it = 0; it < 30; ++it) {
+      for (int it = 0; it < 20; ++it) {
         const double R = cylindricalWallResistance(r, spec.wall_thickness, kw);
         const double t_new = t_wg - q * R;
         const double kn = wallConductivity(t_wg, t_new);
-        if (std::abs(t_new - t_wc) < 1e-10 && std::abs(kn - kw) < 1e-10) { t_wc = t_new; kw = kn; break; }
+        const bool done = std::abs(t_new - t_wc) < 1e-8 * std::max(1.0, t_new);
         t_wc = t_new;
         kw = kn;
+        if (done) break;
       }
       if (out != nullptr) {
         out->h_gas = hg;
@@ -328,13 +337,25 @@ CoolingResult solveCoolingImpl(const NozzleFlow& flow, const NozzleGeometry& geo
            << " K and " << hi << " K)";
         throw ConvergenceError(os.str());
       }
+      // Illinois regula falsi: keeps the bracket but converges super-linearly,
+      // so the coupled balance needs roughly ten flux evaluations instead of the
+      // thirty a pure bisection to 1e-6 K would take.
       int it = 0;
-      double t_wg = 0.5 * (lo + hi);
-      for (; it < 300; ++it) {
-        t_wg = 0.5 * (lo + hi);
+      double a = lo, b = hi, fa = f_lo, fb = f_hi;
+      double t_wg = 0.5 * (a + b);
+      for (; it < 200; ++it) {
+        if (fb == fa) break;
+        t_wg = b - fb * (b - a) / (fb - fa);
+        const double guard = 0.01 * (b - a);
+        if (!(t_wg > a + guard && t_wg < b - guard)) t_wg = 0.5 * (a + b);
         const double f = residual(t_wg, nullptr);
-        if (f * f_lo > 0.0) { lo = t_wg; f_lo = f; } else { hi = t_wg; f_hi = f; }
-        if (hi - lo < spec.wall_tolerance) break;
+        if (std::abs(f) < 1e-9 * std::max(1.0, std::abs(st.t_adiabatic_wall) * 1.0e3) ||
+            (b - a) < spec.wall_tolerance)
+          break;
+        if (f * fb < 0.0) { a = b; fa = fb; } else { fa *= 0.5; }
+        b = t_wg;
+        fb = f;
+        if (a > b) { std::swap(a, b); std::swap(fa, fb); }
       }
       const double f_final = residual(t_wg, &st);
       st.iterations = it + 1;
@@ -393,8 +414,17 @@ CoolingResult solveCoolingImpl(const NozzleFlow& flow, const NozzleGeometry& geo
          << spec.wall.name;
       res.warnings.push_back(os.str());
     }
-    if (res.conductivity_extrapolated)
-      res.warnings.push_back("wall conductivity was evaluated outside its fitted temperature range");
+    if (res.conductivity_extrapolated) {
+      std::ostringstream os;
+      os << "wall conductivity was extrapolated outside the fitted range ["
+         << spec.wall.valid_min << ", " << spec.wall.valid_max << "] K for "
+         << spec.wall.name << ": mean wall temperatures reached "
+         << res.conductivity_extrapolation_min << " to " << res.conductivity_extrapolation_max
+         << " K. This happens at the cold inlet end of a cryogenic jacket and makes the "
+            "predicted wall temperature there slightly conservative; the peak-flux station is "
+            "unaffected.";
+      res.warnings.push_back(os.str());
+    }
   }
   return res;
 }

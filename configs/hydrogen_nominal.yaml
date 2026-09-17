@@ -1,0 +1,94 @@
+# Ignis-H1: a generic 100 kN-class LOX/hydrogen upper-stage engine.
+#
+# Conceptual hardware invented for this project; not a model of any real
+# engine.  Included as the second propellant combination so that the
+# thermochemistry, the nozzle solver and the cooling model are exercised on a
+# very different mixture (molar mass near 13 g/mol instead of 22, and a coolant
+# whose density changes by two orders of magnitude along the jacket).
+name: hydrogen_nominal
+description: >-
+  Generic LOX/hydrogen upper-stage engine.  Chamber pressure 5.5 MPa, mixture
+  ratio 5.5, 60 mm throat radius, expansion ratio 60, regeneratively cooled
+  with the full hydrogen flow, evaluated in vacuum.
+
+species:
+  elements: [H, O]
+
+propellants:
+  oxidizer: LOX
+  fuel: LH2
+  oxidizer_temperature: 90.18
+  fuel_temperature: 20.27
+  mixture_ratio: 5.5
+
+chamber:
+  pressure: 5.5e6
+  eta_c_star: 0.97
+  composition: equilibrium
+
+nozzle:
+  throat_radius: 0.060
+  contraction_ratio: 3.2
+  chamber_length: 0.25
+  converging_half_angle: 30.0
+  chamber_fillet_ratio: 0.5
+  throat_upstream_ratio: 1.5
+  throat_downstream_ratio: 0.382
+  expansion_ratio: 60.0
+  type: bell
+  bell_length_fraction: 0.85
+  bell_initial_angle: 32.0
+  bell_exit_angle: 6.5
+  stations: 400
+  bartz_curvature: mean
+
+performance:
+  ambient_pressure: 0.0
+  auto_divergence: true
+  eta_nozzle: 1.0
+  separation: summerfield
+  resolve_internal_shocks: true
+
+cooling:
+  enabled: true
+  coolant: hydrogen
+  material: CuCrZr
+  num_channels: 280
+  width_mode: fraction_of_pitch
+  width_fraction: 0.50
+  channel_height: 4.0e-3
+  wall_thickness: 0.7e-3
+  roughness: 5.0e-6
+  coolant_fuel_fraction: 1.0
+  inlet_temperature: 25.0         # K, slightly above the LH2 boiling point
+  inlet_pressure: 12.0e6          # Pa, well above the 1.3 MPa critical pressure
+  counterflow: true
+  nusselt_correlation: dittus-boelter
+  nusselt_multiplier: 1.0
+  bartz_multiplier: 1.0
+  gas_emissivity: 0.0
+  segments: 240
+
+feed:
+  enabled: true
+  mode: sizing
+  injector_stiffness: 0.20
+  minimum_stiffness: 0.15
+  pump_efficiency: 0.70
+  pump_inlet_pressure: 2.0e5
+  oxidizer:
+    line_length: 1.5
+    line_diameter: 0.09
+    fitting_k: 2.5
+    viscosity: 1.9e-4
+    injector_cd: 0.78
+  fuel:
+    line_length: 2.0
+    line_diameter: 0.10
+    fitting_k: 3.0
+    viscosity: 1.3e-5             # Pa s, liquid hydrogen near 25 K
+    injector_cd: 0.75
+
+output:
+  directory: results/hydrogen_nominal
+  prefix: h1

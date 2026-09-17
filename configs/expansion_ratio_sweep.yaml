@@ -1,0 +1,93 @@
+# Ignis-M1: a generic 130 kN-class LOX/methane booster engine.
+#
+# This is a CONCEPTUAL engine invented for this project.  It is not a model of
+# any real hardware, and nothing here should be read as a flight design.  The
+# operating point was chosen so that the regenerative jacket closes with a
+# realistic margin, using the design scan in docs/verification.md.
+name: expansion_ratio_sweep
+description: >-
+  Expansion-ratio sweep of the Ignis-M1 nozzle at sea level and in vacuum,
+  showing where the sea-level optimum sits and how far vacuum performance keeps
+  improving.
+
+species:
+  # Carbon / hydrogen / oxygen species only: nitrogen is absent from both
+  # propellants, so including it would only add dead columns to the solve.
+  elements: [C, H, O]
+
+propellants:
+  oxidizer: LOX
+  fuel: LCH4
+  oxidizer_temperature: 90.18     # K, normal boiling point
+  fuel_temperature: 111.66        # K, normal boiling point
+  mixture_ratio: 3.4              # O/F by mass
+
+chamber:
+  pressure: 5.5e6                 # Pa
+  eta_c_star: 0.96                # empirical combustion efficiency
+  composition: equilibrium        # shifting equilibrium through the nozzle
+
+nozzle:
+  throat_radius: 0.070            # m
+  contraction_ratio: 2.8          # Ac/At
+  chamber_length: 0.22            # m, cylindrical section
+  converging_half_angle: 30.0     # deg
+  chamber_fillet_ratio: 0.5       # R1/Rc
+  throat_upstream_ratio: 1.5      # Ru/Rt
+  throat_downstream_ratio: 0.382  # Rd/Rt (Rao)
+  expansion_ratio: 20.0           # Ae/At
+  type: bell
+  bell_length_fraction: 0.8       # of the equivalent 15 deg cone
+  bell_initial_angle: 33.0        # deg
+  bell_exit_angle: 8.0            # deg
+  stations: 400
+  bartz_curvature: mean
+
+performance:
+  altitude: 0.0                   # m, U.S. Standard Atmosphere 1976
+  auto_divergence: true           # lambda = (1 + cos theta_e)/2
+  eta_nozzle: 1.0
+  separation: summerfield
+  resolve_internal_shocks: true
+
+cooling:
+  enabled: false
+  coolant: methane
+  material: CuCrZr
+  num_channels: 300
+  width_mode: fraction_of_pitch
+  width_fraction: 0.50
+  channel_height: 5.0e-3          # m
+  wall_thickness: 0.6e-3          # m
+  roughness: 5.0e-6               # m
+  coolant_fuel_fraction: 1.0      # all of the fuel passes through the jacket
+  inlet_temperature: 111.66       # K
+  inlet_pressure: 15.0e6          # Pa
+  counterflow: true               # coolant enters at the nozzle exit
+  nusselt_correlation: dittus-boelter
+  nusselt_multiplier: 1.0
+  bartz_multiplier: 1.0
+  gas_emissivity: 0.0             # radiation term disabled by default
+  segments: 240
+
+sweep:
+  axes:
+    - parameter: nozzle.expansion_ratio
+      min: 3.0
+      max: 120.0
+      points: 40
+      spacing: log
+    - parameter: performance.altitude
+      values: [0.0, 10000.0, 30000.0, 80000.0]
+  metrics:
+    - performance.isp
+    - performance.isp_vacuum
+    - performance.thrust
+    - performance.cf
+    - performance.exit_pressure
+    - performance.exit_mach
+    - performance.pressure_ratio
+
+output:
+  directory: results/expansion_ratio_sweep
+  prefix: expansion_ratio_sweep

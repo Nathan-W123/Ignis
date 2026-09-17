@@ -98,7 +98,12 @@ struct ChamberReference {
 /// Quasi-1D expansion from a fixed chamber stagnation state.
 ///
 /// Construction locates the throat, so the object is relatively expensive to
-/// build and cheap to query.  Instances are immutable after construction.
+/// build and cheap to query.
+///
+/// THREAD SAFETY: a NozzleFlow caches its last converged composition to warm
+/// start the next equilibrium solve, which roughly halves the cost of a station
+/// march.  That cache makes an instance NOT safe to share between threads;
+/// build one per thread (which is what SteadyEngine does).
 class NozzleFlow {
  public:
   NozzleFlow(const EquilibriumSolver& solver, CompositionModel model, ChamberReference ref);
@@ -138,6 +143,10 @@ class NozzleFlow {
   ChamberReference ref_;
   double h0_ = 0.0, s0_ = 0.0, p0_ = 0.0;
   double p_floor_ = 0.0;
+  /// Warm-start cache: the last converged composition and its temperature.
+  mutable Eigen::VectorXd last_n_;
+  mutable double last_T_ = 0.0;
+  mutable bool has_last_ = false;
   double max_area_ratio_ = 0.0;
   ExpansionState throat_;
 };

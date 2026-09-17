@@ -77,6 +77,12 @@ class CoolantFluid {
 
   /// Properties at (T, p).  Throws RangeError outside the tabulated box.
   CoolantState at(double T, double p) const;
+
+  /// Lowest and highest temperature with valid data at this pressure, K.
+  /// These are narrower than [tMin, tMax] wherever the reference equation of
+  /// state has no single-phase fluid solution -- for methane above about
+  /// 15 MPa the melting line cuts into the bottom of the grid.
+  void validTemperatureRange(double p, double& t_lo, double& t_hi) const;
   /// Saturation temperature, K.  Throws RangeError for p >= p_crit.
   double saturationTemperature(double p) const;
   /// Invert h(T, p) for T.  Used by the channel energy march.
@@ -89,6 +95,7 @@ class CoolantFluid {
   std::vector<double> t_, p_, lnp_;
   std::vector<double> rho_, cp_, h_, mu_, k_;
   std::vector<double> sat_t_;   ///< saturation temperature per pressure node
+  std::vector<int> first_valid_, last_valid_;  ///< per pressure node, T index range
   double t_crit_ = 0.0, p_crit_ = 0.0, molar_mass_ = 0.0, rho_crit_ = 0.0, acentric_ = 0.0;
 };
 

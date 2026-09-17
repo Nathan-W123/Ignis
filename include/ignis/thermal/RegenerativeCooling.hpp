@@ -156,6 +156,8 @@ struct CoolingResult {
   bool boiling_detected = false;
   bool wall_limit_exceeded = false;
   bool conductivity_extrapolated = false;
+  double conductivity_extrapolation_min = 1.0e30;
+  double conductivity_extrapolation_max = -1.0e30;
   std::vector<std::string> warnings;
   std::string summary() const;
 };

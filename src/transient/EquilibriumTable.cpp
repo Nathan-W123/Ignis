@@ -62,7 +62,7 @@ EquilibriumTable EquilibriumTable::build(const EquilibriumSolver& solver,
   const std::size_t n3 = tab.mr_.size() * tab.t_.size() * tab.p_.size();
   tab.u_.resize(n3); tab.molar_.resize(n3); tab.gamma_.resize(n3); tab.cv_.resize(n3);
   const std::size_t n2 = tab.mr_.size() * tab.p_.size();
-  tab.cstar_.resize(n2); tab.tflame_.resize(n2);
+  tab.cstar_.resize(n2); tab.tflame_.resize(n2); tab.kappa_.resize(n2);
   tab.h_react_.resize(tab.mr_.size());
   tab.q_comb_.resize(tab.mr_.size());
 
@@ -96,6 +96,14 @@ EquilibriumTable EquilibriumTable::build(const EquilibriumSolver& solver,
                              static_cast<std::size_t>(k);
       tab.cstar_[i2] = flow.cStarIdeal();
       tab.tflame_[i2] = hp.state.T;
+      // Constant-gamma reference at the same flame condition, so that the
+      // stored correction factor is exactly one where the two agree.
+      {
+        const double g = hp.state.gamma_s;
+        const double cg = std::sqrt(hp.state.R * hp.state.T / g) *
+                          std::pow(0.5 * (g + 1.0), 0.5 * (g + 1.0) / (g - 1.0));
+        tab.kappa_[i2] = tab.cstar_[i2] / cg;
+      }
 
       for (int j = 0; j < grid.t_points; ++j) {
         const double T = tab.t_[static_cast<std::size_t>(j)];
@@ -274,6 +282,18 @@ double EquilibriumTable::cStar(double mr, double p) const {
   requireInside(mr, grid_.mr_min, grid_.mr_max, "mixture ratio");
   requireInside(p, grid_.p_min, grid_.p_max, "pressure");
   return interp2(cstar_, mr, p);
+}
+double EquilibriumTable::cStarCorrection(double mr, double p) const {
+  requireInside(mr, grid_.mr_min, grid_.mr_max, "mixture ratio");
+  requireInside(p, grid_.p_min, grid_.p_max, "pressure");
+  return interp2(kappa_, mr, p);
+}
+double EquilibriumTable::cStarAt(double mr, double T, double p) const {
+  const double g = gammaS(mr, T, p);
+  const double R = constants::R_universal / molarMass(mr, T, p);
+  if (!(g > 1.0)) throw RangeError("equilibrium table: non-physical isentropic exponent");
+  const double cg = std::sqrt(R * T / g) * std::pow(0.5 * (g + 1.0), 0.5 * (g + 1.0) / (g - 1.0));
+  return cStarCorrection(mr, p) * cg;
 }
 double EquilibriumTable::flameTemperature(double mr, double p) const {
   requireInside(mr, grid_.mr_min, grid_.mr_max, "mixture ratio");

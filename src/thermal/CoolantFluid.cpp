@@ -118,6 +118,21 @@ CoolantFluid CoolantFluid::loadCsv(const std::string& path) {
 
   f.lnp_.resize(f.p_.size());
   for (std::size_t j = 0; j < f.p_.size(); ++j) f.lnp_[j] = std::log(f.p_[j]);
+  // Per-pressure-column valid temperature window.  A hole at the bottom of a
+  // column is the melting line; one at the top would be the end of the fit.
+  f.first_valid_.assign(f.p_.size(), -1);
+  f.last_valid_.assign(f.p_.size(), -1);
+  for (std::size_t j = 0; j < f.p_.size(); ++j) {
+    for (std::size_t i = 0; i < f.t_.size(); ++i) {
+      if (std::isfinite(f.rho_[i * f.p_.size() + j])) {
+        if (f.first_valid_[j] < 0) f.first_valid_[j] = static_cast<int>(i);
+        f.last_valid_[j] = static_cast<int>(i);
+      }
+    }
+    if (f.first_valid_[j] < 0)
+      throw ConfigError("coolant table '" + path + "': pressure column " + std::to_string(j) +
+                        " has no valid data at all");
+  }
   f.sat_t_.assign(f.p_.size(), -1.0);
   for (std::size_t j = 0; j < sat_p.size() && j < f.sat_t_.size(); ++j)
     f.sat_t_[j] = std::isfinite(sat_t[j]) ? sat_t[j] : -1.0;
@@ -196,17 +211,37 @@ double CoolantFluid::saturationTemperature(double p) const {
   return (1 - f) * sat_t_[j] + f * sat_t_[j + 1];
 }
 
-CoolantState CoolantFluid::at(double T, double p) const {
-  if (T < t_.front() || T > t_.back()) {
-    std::ostringstream os;
-    os << "coolant " << name_ << ": temperature " << T << " K outside the tabulated range ["
-       << t_.front() << ", " << t_.back() << "] K";
-    throw RangeError(os.str());
+void CoolantFluid::validTemperatureRange(double p, double& t_lo, double& t_hi) const {
+  std::size_t j = 0;
+  if (p > p_.front()) {
+    auto it = std::upper_bound(p_.begin(), p_.end(), p);
+    j = static_cast<std::size_t>(std::distance(p_.begin(), it));
+    j = (j == 0) ? 0 : j - 1;
+    if (j + 1 >= p_.size()) j = p_.size() - 2;
   }
+  // Interpolation touches both bracketing columns, so take the intersection.
+  const int lo = std::max(first_valid_[j], first_valid_[j + 1]);
+  const int hi = std::min(last_valid_[j], last_valid_[j + 1]);
+  t_lo = t_[static_cast<std::size_t>(lo)];
+  t_hi = t_[static_cast<std::size_t>(hi)];
+}
+
+CoolantState CoolantFluid::at(double T, double p) const {
   if (p < p_.front() || p > p_.back()) {
     std::ostringstream os;
     os << "coolant " << name_ << ": pressure " << p << " Pa outside the tabulated range ["
        << p_.front() << ", " << p_.back() << "] Pa";
+    throw RangeError(os.str());
+  }
+  double t_lo = 0.0, t_hi = 0.0;
+  validTemperatureRange(p, t_lo, t_hi);
+  if (T < t_lo || T > t_hi) {
+    std::ostringstream os;
+    os << "coolant " << name_ << ": temperature " << T << " K is outside the valid range ["
+       << t_lo << ", " << t_hi << "] K at " << p * 1e-6 << " MPa";
+    if (T < t_lo && t_lo > t_.front())
+      os << ". The lower limit rises with pressure because the reference equation of state "
+            "has no fluid solution below the melting line -- the coolant would freeze.";
     throw RangeError(os.str());
   }
   CoolantState st;
@@ -238,7 +273,8 @@ CoolantState CoolantFluid::at(double T, double p) const {
 }
 
 double CoolantFluid::temperatureFromEnthalpy(double h, double p, double T_guess) const {
-  double lo = t_.front(), hi = t_.back();
+  double lo = 0.0, hi = 0.0;
+  validTemperatureRange(p, lo, hi);
   const double h_lo = interp(h_, lo, p), h_hi = interp(h_, hi, p);
   if (h < h_lo || h > h_hi) {
     std::ostringstream os;

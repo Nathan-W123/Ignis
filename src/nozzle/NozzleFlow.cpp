@@ -8,6 +8,39 @@
 #include <sstream>
 
 namespace ignis {
+namespace {
+
+/// Bracketed root find using the Illinois variant of regula falsi: it keeps the
+/// bracket (so it cannot diverge) but converges super-linearly, which matters
+/// because every function evaluation here is a Gibbs minimisation.
+template <typename F>
+double illinois(F&& f, double lo, double hi, double f_lo, double f_hi, double x_tol,
+                double f_tol, int max_iter = 100) {
+  double a = lo, b = hi, fa = f_lo, fb = f_hi;
+  double x = 0.5 * (a + b);
+  for (int i = 0; i < max_iter; ++i) {
+    if (fb == fa) break;
+    x = b - fb * (b - a) / (fb - fa);
+    // Keep the secant step inside the bracket with a small safety margin.
+    const double lo_guard = a + 0.01 * (b - a);
+    const double hi_guard = b - 0.01 * (b - a);
+    if (!(x > lo_guard && x < hi_guard)) x = 0.5 * (a + b);
+    const double fx = f(x);
+    if (std::abs(fx) <= f_tol || (b - a) <= x_tol) return x;
+    if (fx * fb < 0.0) {
+      a = b;
+      fa = fb;
+    } else {
+      fa *= 0.5;  // Illinois down-weighting of the stagnant endpoint
+    }
+    b = x;
+    fb = fx;
+    if (a > b) { std::swap(a, b); std::swap(fa, fb); }
+  }
+  return x;
+}
+
+}  // namespace
 
 std::string toString(ExpansionRegime r) {
   switch (r) {
@@ -71,12 +104,9 @@ NozzleFlow::NozzleFlow(const EquilibriumSolver& solver, CompositionModel model,
   if (!(m_lo >= 1.0 && m_hi <= 1.0))
     throw ConvergenceError("nozzle flow: could not bracket the sonic point");
 
-  for (int i = 0; i < 200; ++i) {
-    const double pm = 0.5 * (p_lo + p_hi);
-    if (mach(pm) > 1.0) p_lo = pm; else p_hi = pm;
-    if (p_hi - p_lo < 1.0e-13 * p0_) break;
-  }
-  throat_ = atPressure(0.5 * (p_lo + p_hi));
+  const double p_sonic = illinois([&](double p) { return mach(p) - 1.0; }, p_lo, p_hi,
+                                  m_lo - 1.0, m_hi - 1.0, 1.0e-13 * p0_, 1.0e-12);
+  throat_ = atPressure(p_sonic);
   throat_.area_ratio = 1.0;
   if (std::abs(throat_.mach - 1.0) > 1.0e-7) {
     std::ostringstream os;
@@ -151,7 +181,15 @@ ExpansionState NozzleFlow::atPressure(double p) const {
     const double T = mix.temperatureFromEntropy(ref_.stagnation.n, s0_, p, ref_.stagnation.T);
     return buildState(mix.frozenState(ref_.stagnation.n, T, p));
   }
-  const auto r = solver_->sp(ref_.b, s0_, p, ref_.stagnation.T, &ref_.stagnation.n);
+  // Warm start from the previous solve: successive pressures in a station march
+  // or a root find are close, and the Gibbs solver converges in a handful of
+  // Newton steps instead of twenty from the chamber composition.
+  const Eigen::VectorXd* guess = has_last_ ? &last_n_ : &ref_.stagnation.n;
+  const double T_guess = has_last_ ? last_T_ : ref_.stagnation.T;
+  const auto r = solver_->sp(ref_.b, s0_, p, T_guess, guess);
+  last_n_ = r.state.n;
+  last_T_ = r.state.T;
+  has_last_ = true;
   return buildState(r.state);
 }
 
@@ -189,13 +227,9 @@ ExpansionState NozzleFlow::atAreaRatio(double area_ratio, bool supersonic) const
        << " solution for A/At = " << area_ratio << " (residuals " << f_lo << ", " << f_hi << ")";
     throw ConvergenceError(os.str());
   }
-  for (int i = 0; i < 300; ++i) {
-    const double pm = 0.5 * (lo + hi);
-    const double fm = flux(pm) - target;
-    if (fm * f_lo > 0.0) { lo = pm; f_lo = fm; } else { hi = pm; f_hi = fm; }
-    if (hi - lo < 1.0e-14 * p0_) break;
-  }
-  ExpansionState st = atPressure(0.5 * (lo + hi));
+  const double p_sol = illinois([&](double p) { return flux(p) - target; }, lo, hi, f_lo, f_hi,
+                                1.0e-13 * p0_, 1.0e-11 * target);
+  ExpansionState st = atPressure(p_sol);
   st.area_ratio = area_ratio;  // exact by construction of the search target
   return st;
 }

@@ -24,8 +24,18 @@
 /// mixture equilibrate *is* the heat release.  The ignition ramp is therefore
 /// modelled by explicitly *withholding* part of the chemical energy:
 /// eta_heat(t) is the fraction of the heat of combustion released, and the
-/// remainder leaves the chamber with the unburned propellant.  Because
-/// c* scales roughly as sqrt(T), eta_heat ~ eta_c*^2.
+/// remainder leaves the chamber with the unburned propellant.
+///
+/// eta_heat is not the same quantity as the steady-state combustion efficiency
+/// eta_c*.  Withholding a fraction (1 - eta_heat) of the heat of combustion
+/// q_comb lowers the chamber temperature by roughly
+///     dT = (1 - eta_heat) q_comb / cp
+/// and, since c* scales as sqrt(T), the two are related by
+///     eta_c* ~ sqrt(1 - (1 - eta_heat) q_comb / (cp T_adiabatic)) .
+/// For the shipped LOX/methane case q_comb / (cp T_ad) is about 0.36, so
+/// eta_c* = 0.96 corresponds to eta_heat near 0.78, not 0.92.  The shipped
+/// transient configuration uses the calibrated value so that the steady part of
+/// the run reproduces the steady-state analysis.
 ///
 /// CLOSURE
 /// -------

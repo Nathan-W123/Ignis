@@ -140,7 +140,10 @@ Closure close(const EquilibriumTable& tab, const TransientSpec& spec, const Stat
   tab.solveState(c.mr, c.u, c.rho, c.T, c.p);
   c.M = tab.molarMass(c.mr, c.T, c.p);
   c.gamma = tab.gammaS(c.mr, c.T, c.p);
-  c.c_star = tab.cStar(c.mr, c.p);
+  // Use the *actual* chamber temperature, not the adiabatic flame value: during
+  // a start-up the chamber is far from equilibrium temperature and the outflow
+  // must reflect that.
+  c.c_star = tab.cStarAt(c.mr, c.T, c.p);
   c.h = c.u + c.p / c.rho;
 
   // Nozzle outflow.
