@@ -326,7 +326,9 @@ def camera_move_animation(profile_csv: str, plume, out: str, *, width: int = 128
                           exposure: float = 0.45, latitude: float = 900.0,
                           shell=None, progress=None,
                           transient_csv: str = "", ignition_fraction: float = 0.42,
-                          ignition_end: float = 0.048) -> str:
+                          ignition_end: float = 0.048,
+                          thrust_ref: float = 0.0, heading: str = "",
+                          label: str = "THRUST") -> str:
     """A moving camera over the running engine.
 
     The scene is axisymmetric, so swinging the camera *around* the nozzle axis
@@ -368,7 +370,8 @@ def camera_move_animation(profile_csv: str, plume, out: str, *, width: int = 128
         steady = tr_table.loc[tr_table["pressure"].idxmax()]
         p_ref, t_ref = float(steady["pressure"]), float(steady["temperature"])
         attach = _attach_pressure(field, plume, p_ref)
-        ramp = (tr_table, p_ref, t_ref, attach)
+        f_ref = float(steady["thrust"])
+        ramp = (tr_table, p_ref, t_ref, attach, f_ref)
 
     dt = 1.0 / fps / slowdown
     tr = T.Tracers(field, plume, count=tracer_count, lifetime=lifetime)
@@ -409,8 +412,9 @@ def camera_move_animation(profile_csv: str, plume, out: str, *, width: int = 128
             # march that stopped at the framing limit would print the end of
             # the marched domain as a hard edge inside the picture.
             frame_field, frame_plume = field, plume
+            thrust = thrust_ref
             if ramp is not None:
-                tr_table, p_ref, t_ref, attach = ramp
+                tr_table, p_ref, t_ref, attach, f_ref = ramp
                 span = max(frames * ignition_fraction, 1.0)
                 t_now = min(k / span, 1.0) * ignition_end
                 p_now = float(np.interp(t_now, tr_table["time"], tr_table["pressure"]))
@@ -419,6 +423,15 @@ def camera_move_animation(profile_csv: str, plume, out: str, *, width: int = 128
                                            p_now / p_ref)
                 frame_plume = plume if p_now >= attach else None
                 tr.field = frame_field
+                # The transient is a zero-dimensional chamber carrying a heat
+                # loss the steady equilibrium solution does not, so its own
+                # thrust does not agree with the steady figure at the altitude
+                # being rendered.  Its normalised shape is what drives the
+                # readout, exactly as it drives the field, so the number and
+                # the picture are the same solution.
+                if f_ref > 0.0 and thrust_ref > 0.0:
+                    thrust = thrust_ref * float(
+                        np.interp(t_now, tr_table["time"], tr_table["thrust"])) / f_ref
             scene = R.Scene(frame_field, shell, frame_plume,
                             plume_reach=(reach + 2.4) * r_exit)
             gas, wall, depth = R.march_scene(scene, camera, max_step=max_step)
@@ -428,7 +441,10 @@ def camera_move_animation(profile_csv: str, plume, out: str, *, width: int = 128
                                  ).reshape(-1, 3) * reference
             img = R.compose(gas, wall, (height, width), latitude=latitude,
                             exposure=exposure, reference=reference)
-            writer.append_data(R.to_uint8(img))
+            frame = R.to_uint8(img)
+            if thrust_ref > 0.0 or heading:
+                frame = _overlay(frame, heading, label, thrust)
+            writer.append_data(frame)
             if progress is not None:
                 progress(k, frames)
     finally:
@@ -449,3 +465,31 @@ def _attach_pressure(field, plume, p_steady: float) -> float:
         return float("inf")
     exit_fraction = float(plume.exit.pressure) / p_steady
     return 0.35 * float(plume.ambient_pressure) / max(exit_fraction, 1e-12)
+
+
+def _overlay(frame, heading: str, label: str, thrust: float):
+    """A heading and a live thrust readout across the top of a frame."""
+    import numpy as np
+    from PIL import Image, ImageDraw, ImageFont
+
+    image = Image.fromarray(frame)
+    draw = ImageDraw.Draw(image)
+    height = image.height
+    pad = max(14, height // 26)
+    small = ImageFont.truetype(_font_file("Liberation Sans"), max(10, height // 46))
+    big = ImageFont.truetype(_font_file("Liberation Sans"), max(18, height // 19))
+
+    y = pad
+    if heading:
+        # Letter-spaced by hand; PIL has no tracking control.
+        draw.text((pad, y), " ".join(heading), font=small, fill="#8c98a8")
+        y += int(small.size * 2.0)
+    if label:
+        # Always drawn, including while the value is zero or negative: a real
+        # start has a moment near ten milliseconds where ambient pressure is
+        # still pushing back harder than the flow is pushing, and a readout
+        # that blinks out through it would be hiding the interesting part.
+        # Padded to a fixed width so the digits do not shuffle as it counts.
+        draw.text((pad, y), f"{label}   {thrust / 1e3:6.1f} kN", font=big,
+                  fill="#f2f4f7")
+    return np.asarray(image)

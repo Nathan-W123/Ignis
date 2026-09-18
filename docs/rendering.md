@@ -219,6 +219,22 @@ that Ignis's separation criterion says the flow separates inside the bell.
 There is no attached plume until chamber pressure passes about 3.9 MPa, so none
 is drawn until it does. Fading one in would look smoother and mean less.
 
+### The thrust readout
+
+`camera_move_animation` can carry a live thrust figure. It is not the
+transient's own thrust: the transient is a zero-dimensional chamber carrying a
+heat-loss efficiency the steady equilibrium solution does not, so at the same
+instant the two disagree — 128.4 kN against 143.7 kN at 3 km. What drives the
+readout is the transient's *normalised* thrust applied to the steady figure at
+the altitude being rendered, which is exactly how the field itself is driven,
+so the number and the picture are the same solution.
+
+It stays on screen through the whole start, including the moment near ten
+milliseconds where it reads negative. That is real: the chamber has lit but the
+nozzle is still far over-expanded, and ambient pressure on the exit plane is
+pushing back harder than the momentum flux is pushing. A readout that blanked
+out through that would be hiding the most interesting part of a start.
+
 ### Camera moves
 
 The scene is axisymmetric, so swinging the camera *around* the nozzle axis
