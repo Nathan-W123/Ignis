@@ -1,0 +1,17 @@
+# Dependencies of the volumetric renders and animations -- tools/make_cover.py
+# and the `render`, `plume`, `tracers` and `blackbody` modules of ignis_viz.
+# Nothing else needs them: the library, the command-line tools, the test suite
+# and the ordinary figures do not, and `import ignis_viz` does not pull them in
+# (the renderer is imported inside the functions that use it).  See
+# requirements.txt for the figure dependencies.
+-r requirements.txt
+
+# gaussian_filter, for the bloom and for softening the tracer splat
+scipy>=1.10
+
+# writing the animations; imageio-ffmpeg carries its own ffmpeg binary
+imageio>=2.30
+imageio-ffmpeg>=0.4.9
+
+# tools/make_cover.py reads the case's own config to get the channel count
+PyYAML>=6.0

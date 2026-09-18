@@ -179,7 +179,9 @@ their colour are the solution.
 ## 5. Running it
 
 ```bash
-# everything: hero still, flow animation, ignition animation
+pip install -r python/requirements-render.txt
+
+# everything: hero still, flow animation, ignition animation, camera move
 python3 tools/make_cover.py
 
 # recompute the plume rather than using the cache (tens of minutes)
