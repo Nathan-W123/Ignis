@@ -22,8 +22,8 @@ every balance it claims to close.
 
 It is also checked against **measurements**, not just against other codes. The
 gas-side heat-transfer correlation is compared with local heat flux measured in
-a heated-air nozzle at JPL in 1965, where it over-predicts by about 45 % given
-the developed boundary layer it assumes and by about 150 % without one; and
+a heated-air nozzle at JPL in 1965, where it over-predicts by about 45 % on the
+high-pressure tests and about 150 % on the low-pressure ones; and
 with a LOX/hydrogen heat-sink rocket fired at NASA Lewis the same year, which
 puts its leading constant within 1 % of the measured value in the chamber and
 72 % high at the throat ([details](docs/validation.md)). Two experiments,

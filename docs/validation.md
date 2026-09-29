@@ -280,14 +280,41 @@ for air at the stagnation condition:
 | 318 | 51.0 | none | 15 | 2.49 | 2.58 | 0.85 – 4.44 |
 | 319 | 35.9 | none | 11 | 2.66 | 2.95 | 0.76 – 5.08 |
 
-**Bartz over-predicts, and the size of the error depends on the inlet boundary
-layer.** With the 18-in. cooled approach that gives a developed turbulent
-layer — the condition the correlation assumes — the median over-prediction is
-about 45 %. With no cooled approach at all, where the layer is thin and still
-growing, it is about 150 %. That ordering is the expected failure mode of the
-correlation, not an implementation fault, and the report's own Fig. 15 shows
-its curve for this same equation (their Ref. 22, Bartz's "Simple Equation")
-lying above the data in the same way.
+**Bartz over-predicts everywhere, and by much more on the 0-in. group.** The
+median over-prediction is about 45 % with the 18-in. cooled approach and about
+150 % with none. That it over-predicts at all is not an implementation fault:
+the report's own Fig. 15 shows its curve for this same equation (their Ref. 22,
+Bartz's "Simple Equation") lying above the data in the same way.
+
+**What that split does *not* establish is the cause.** It is tempting to read
+it as the inlet boundary layer — the 18-in. approach supplies the developed
+turbulent layer the correlation assumes and the 0-in. cases do not — but the
+four tests do not support that reading, because the two groups differ in more
+than one thing at once:
+
+| test | approach | p<sub>t</sub>, psia | Re<sub>D\*</sub> | K | K / K<sub>crit</sub> | Bartz/measured |
+|---|---|---|---|---|---|---|
+| 319 | none | 35.9 | 4.6 × 10⁵ | 3.4 × 10⁻⁶ | 1.14 | 2.66 |
+| 318 | none | 51.0 | 6.6 × 10⁵ | 2.4 × 10⁻⁶ | 0.80 | 2.49 |
+| 271 | 18 in | 175.0 | 2.3 × 10⁶ | 7.0 × 10⁻⁷ | 0.23 | 1.59 |
+| 273 | 18 in | 201.0 | 2.6 × 10⁶ | 6.1 × 10⁻⁷ | 0.20 | 1.44 |
+
+Every 0-in. test is a low-pressure test and every 18-in. test is a
+high-pressure one. Approach length, throat Reynolds number and the
+acceleration parameter *K* = (ν/u²)(du/dx) therefore all track the error at
+|r| > 0.99 — and all track each other at 0.98. With four points and that much
+collinearity the dataset cannot attribute the error to any one of them. The
+ranges asserted in the test are the observation; the explanation is not
+claimed.
+
+Both tables here are reproduced by `tools/analysis/throat_acceleration.py` and
+`tools/analysis/jpl_confounding.py`.
+
+(*K* above is computed from the closed-form throat gradient
+4a\*/[(γ+1)<sup>1.5</sup>√(r<sub>t</sub>R<sub>c</sub>)], not a numerical
+derivative — d*M*/d(*A*/*A*\*) is singular at *M* = 1, so a discrete gradient
+there diverges under refinement. *K*<sub>crit</sub> ≈ 3 × 10⁻⁶ is the usual
+relaminarization threshold, Moretti & Kays 1965.)
 
 `tests/validation/test_heat_transfer_validation.cpp` asserts these ranges. The
 bounds record a measurement; they are not a target.
@@ -348,13 +375,49 @@ factor there is 1.72, and the report puts it in its own words: the throat value
 re-reduces four other investigations the same way and gets throat constants of
 0.019, 0.017, 0.023 and about 0.018 — every one of them below 0.026.
 
-**And that is the factor the air data already gave.** The JPL tests with a
-developed inlet boundary layer over-predict by a median of 1.45; this rocket
-over-predicts at the throat by 1.72. Different fluids, a gas several times
-hotter, a throat nearly three times larger, different laboratories and
-different measurement techniques — and they agree to within 16 %. The test
-asserts that agreement, because two independent experiments landing on the same
-number is the part of this section hardest to get by accident.
+**And that is the factor the air data already gave.** The JPL tests with the
+18-in. approach over-predict by a median of 1.45; this rocket over-predicts at
+the throat by 1.72. Different fluids, a gas several times hotter, a throat
+nearly three times larger, different laboratories and different measurement
+techniques — and they agree to within 16 %. The test asserts that agreement,
+because two independent experiments landing on the same number is the part of
+this section hardest to get by accident.
+
+### What the two datasets together say about the cause
+
+The JPL tests on their own cannot say (above). The rocket adds the constraint
+that settles it, because it varies chamber pressure by a factor of six at
+fixed geometry:
+
+* **It is not primarily a Reynolds-number or relaminarization effect.** Across
+  p<sub>c</sub> = 157 to 966 psia the throat *K* runs from 3.5 × 10⁻⁶ down to
+  5.7 × 10⁻⁷ — from just above the relaminarization threshold to well below
+  it — yet the report fits a single constant per station holding to 13 %. If
+  the deficit were set by *K* crossing a threshold, or by any Reynolds
+  dependence beyond the Re<sup>−0.2</sup> already in the fit, that constant
+  would drift with pressure and it does not.
+* **It is positional.** Read the station table again as a function of place
+  rather than condition: 1.01 in the chamber, 1.08 in the convergent section,
+  1.72 at the throat, 1.70 just downstream, 1.38 by A/A\* = 3.33. The error
+  appears where the contraction has just distorted the boundary layer and
+  fades as the layer re-equilibrates downstream.
+
+That points at the structural assumption rather than at any one flow
+parameter. Bartz is an *algebraic function of the local state*: it replaces the
+boundary layer's momentum and enthalpy thickness — quantities that depend on
+the whole path from the injector face — with a nozzle-scale length
+D<sub>t</sub><sup>−0.2</sup> and a local mass-flux term (A<sub>t</sub>/A)<sup>0.9</sup>.
+In the chamber, where the layer is a slow, pipe-like, fully-developed one, that
+substitution is exact enough to reproduce the measured constant to 1 %. Through
+the throat, where the layer has just been thinned and strained and is nowhere
+near equilibrium with its local freestream, it is not. The correlation has no
+memory, and the throat is where memory matters.
+
+A note against false comfort: the Ignis-M1's own throat *K* is 4.7 × 10⁻⁷ to
+9.3 × 10⁻⁷ depending on which curvature radius is used — below the
+relaminarization threshold. That does **not** exempt it. The rocket at 966 psia
+sits at 5.7 × 10⁻⁷, equally below threshold, and is still over-predicted by
+1.72.
 
 ### What this changes for the Ignis-M1
 
@@ -420,7 +483,9 @@ Stated plainly, because internal consistency is not accuracy:
 * **The thermal and cooling model is an engineering estimate.** Bartz is a
   correlation with a well-documented scatter of roughly ±20–30 % against
   measured rocket heat flux — and §5b measures it as worse than that near the
-  throat, about 70 % high, while being within 1 % in the chamber. The Monte
+  throat, about 70 % high, while being within 1 % in the chamber. The cause is
+  structural (the correlation carries no boundary-layer history), so it is not
+  removable by tuning a constant. The Monte
   Carlo campaign disperses it (`cooling.bartz_multiplier`, lognormal
   σ<sub>ln</sub> = 0.15) for exactly that reason, though that σ is now known to
   be narrower than the measured spread. The 1-D fin/wall treatment ignores

@@ -187,21 +187,24 @@ TEST_CASE("the Bartz correlation is evaluated correctly against measured nozzle 
     CHECK(c_star_measured < 1.06 * c_star_ideal);
   }
 
-  SECTION("Bartz over-predicts, and by how much depends on the inlet boundary layer") {
-    // These bounds record a measurement, not a target.  Bartz assumes a
-    // turbulent boundary layer that has grown from the injector; the report's
-    // 18-in. cooled approach supplies one, and its 0-in. cases deliberately do
-    // not.  The correlation is correspondingly further out on the thin-layer
-    // cases, which is the expected failure mode and not an implementation
-    // fault.  If these ranges move, the correlation, the transcription or the
-    // evaluation changed -- all three are worth knowing about.
-    const double developed = median(ratio_by_approach.at(18));
-    const double thin = median(ratio_by_approach.at(0));
+  SECTION("Bartz over-predicts, and by more on one group of tests than the other") {
+    // These bounds record a measurement, not a target.  The two groups differ
+    // in cooled approach length -- 18 in against none -- and the correlation
+    // is much further out on the 0-in. group.  Do NOT read that as the cause.
+    // The 0-in. tests are also the low-pressure ones (35.9 and 51.0 psia
+    // against 175 and 201), so approach length, throat Reynolds number and the
+    // acceleration parameter all move together across these four tests and the
+    // dataset cannot tell them apart; see docs/validation.md 5b.  What is
+    // asserted here is the observation, not an explanation.  If these ranges
+    // move, the correlation, the transcription or the evaluation changed --
+    // all three are worth knowing about.
+    const double long_approach = median(ratio_by_approach.at(18));
+    const double no_approach = median(ratio_by_approach.at(0));
 
-    CHECK(developed > 1.3);
-    CHECK(developed < 1.9);
-    CHECK(thin > 2.2);
-    CHECK(thin > developed);
+    CHECK(long_approach > 1.3);
+    CHECK(long_approach < 1.9);
+    CHECK(no_approach > 2.2);
+    CHECK(no_approach > long_approach);
   }
 }
 
@@ -254,8 +257,8 @@ TEST_CASE("Bartz's constant against a hydrogen-oxygen rocket",
     // their agreeing to within a quarter is the strongest statement in this
     // file about how far Bartz actually lands from reality.
     const double rocket = kBartzConstant / c_by_station.at("3bar");
-    const double air_developed = median(jplRatios().at(18));
-    INFO("rocket " << rocket << " vs air " << air_developed);
-    CHECK(std::abs(rocket - air_developed) / rocket < 0.25);
+    const double air_long_approach = median(jplRatios().at(18));
+    INFO("rocket " << rocket << " vs air " << air_long_approach);
+    CHECK(std::abs(rocket - air_long_approach) / rocket < 0.25);
   }
 }

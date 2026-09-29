@@ -27,13 +27,12 @@ predicting an engine, and this document is the difference.
 
 One of those parameters is no longer an assumption. The gas-side heat-transfer
 correlation has been compared against two measurements
-([`validation.md` §5b](validation.md)). In a heated-air nozzle, with the
-developed turbulent boundary layer the correlation assumes, Bartz over-predicts
-local heat flux by about 45 %; with a thin inlet layer, by about 150 %. In a
-LOX/GH<sub>2</sub> heat-sink rocket, the published reduction gives a constant
-of 0.0151 ± 0.0020 at the throat against the 0.026 Ignis uses — an
-over-prediction of 1.72 — while in the chamber it gives 0.0257 ± 0.0028, which
-is 0.026 to within 1 %.
+([`validation.md` §5b](validation.md)). In a heated-air nozzle Bartz
+over-predicts local heat flux by about 45 % on the high-pressure tests and
+about 150 % on the low-pressure ones. In a LOX/GH<sub>2</sub> heat-sink rocket,
+the published reduction gives a constant of 0.0151 ± 0.0020 at the throat
+against the 0.026 Ignis uses — an over-prediction of 1.72 — while in the
+chamber it gives 0.0257 ± 0.0028, which is 0.026 to within 1 %.
 
 Three things follow, and they are the honest summary of what is and is not
 known about the thermal side of this tool:
@@ -41,8 +40,11 @@ known about the thermal side of this tool:
 * The M1's 2.3 K wall-temperature margin is far smaller than the uncertainty of
   the model that produced it, and so carries no information.
 * The error is **not a constant**. It is negligible in the chamber and about
-  70 % at the throat, so no single `bartz_multiplier` can correct it; that
-  needs a pressure-gradient-dependent model, which is item 2 below.
+  70 % at the throat, so no single `bartz_multiplier` can correct it. Nor is it
+  a Reynolds-number effect that a re-fitted exponent would absorb: the rocket
+  holds one constant per station to 13 % across a six-fold range of chamber
+  pressure. It is positional, because Bartz carries no boundary-layer history —
+  fixing it means a boundary-layer solution, item 2 below, not a better number.
 * The Monte Carlo dispersion on that multiplier (lognormal, σ<sub>ln</sub> =
   0.15) is **too narrow**. The two measured factors sit 2.5 σ and 3.6 σ from
   its median, so the campaign treats as a tail event something measured twice
