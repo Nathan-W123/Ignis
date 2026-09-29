@@ -322,3 +322,41 @@ TEST_CASE("the conductivity warning describes converged states, not solver trial
     REQUIRE(mentioned);
   }
 }
+
+TEST_CASE("the gas-side survey agrees with the coupled solve at its own wall temperature",
+          "[cooling]") {
+  // `surveyHotGasSide` prescribes the wall temperature and reports the flux,
+  // instead of solving for the wall temperature that balances the coolant.
+  // That is the form a calorimetric experiment reports, and it is what the
+  // heat-transfer validation case needs; this ties it to the coupled solver so
+  // the two cannot drift apart.
+  Fixture f;
+  const auto coupled = solveRegenerativeCooling(f.flow, f.geom, f.ch, f.spec(), f.transport);
+  const auto& hot = coupled.stations[coupled.stations.size() / 2];
+
+  const auto survey = surveyHotGasSide(f.flow, f.geom, f.ch, f.spec(), f.transport,
+                                       hot.t_wall_hot);
+  REQUIRE(survey.stations.size() == coupled.stations.size());
+  const auto& probe = survey.stations[coupled.stations.size() / 2];
+
+  SECTION("at the coupled wall temperature the gas-side flux is the same") {
+    REQUIRE(probe.t_wall_hot == Approx(hot.t_wall_hot).epsilon(1e-12));
+    REQUIRE(probe.h_gas == Approx(hot.h_gas).epsilon(1e-9));
+    REQUIRE(probe.q_total == Approx(hot.q_total).epsilon(1e-9));
+  }
+  SECTION("the survey solves nothing, so it reports no residual to solve") {
+    for (const auto& s : survey.stations) {
+      REQUIRE(s.iterations == 1);
+      REQUIRE(s.flux_residual == 0.0);
+      REQUIRE(s.t_wall_hot == Approx(hot.t_wall_hot).epsilon(1e-12));
+    }
+  }
+  SECTION("a colder wall draws more heat, everywhere") {
+    const auto colder = surveyHotGasSide(f.flow, f.geom, f.ch, f.spec(), f.transport,
+                                         hot.t_wall_hot - 200.0);
+    for (std::size_t i = 0; i < survey.stations.size(); ++i) {
+      INFO("station at x = " << survey.stations[i].x);
+      REQUIRE(colder.stations[i].q_total > survey.stations[i].q_total);
+    }
+  }
+}

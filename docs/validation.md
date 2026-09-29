@@ -232,6 +232,79 @@ for the conceptual engine. Each is a statement the physics must satisfy:
 
 ---
 
+## 5b. Gas-side heat transfer against a measurement
+
+Every comparison above is against another *code*. This one is against an
+*experiment*, and it is the only place in this repository where an Ignis
+prediction meets measured hardware data.
+
+**Source.** L. H. Back, P. F. Massier and H. L. Gier, *Convective Heat Transfer
+in a Convergent-Divergent Nozzle*, JPL Technical Report No. 32-415 (1965);
+NASA NTRS accession 19650010083. Air heated by the internal combustion of
+methanol is expanded through a conical nozzle (throat diameter 1.803 in,
+throat curvature radius 1.800 in, 30° convergent and 15° divergent
+half-angles) and local wall heat flux is measured with thermocouple plugs.
+The report defines `h = q_w/(T_aw − T_w)` with a Pr^(1/3) recovery factor,
+which is the definition Ignis uses.
+
+The tables were transcribed by hand from the scanned page images into
+`validation/reference/nozzle_heat_transfer_reference.csv` and
+`nozzle_contour_reference.csv`. The OCR of that scan is unreliable and was not
+used; stations whose digits could not be read with certainty were dropped
+rather than guessed, as were the stations the report flags as separated. The
+transcribed contour was checked independently by rebuilding it from the stated
+cone angles and throat arc, which reproduces the tabulated area ratios to
+within 0.36 % from the throat downstream.
+
+**The authors' own uncertainty** is about ±8 % on h in the throat at the
+higher stagnation pressures and temperatures, rising to as much as ±21 % near
+the inlet at low stagnation pressure, and they note these are maxima.
+
+**Result.** Ratio of the Bartz coefficient Ignis computes to the measured one,
+over 59 stations in four tests, using Ignis's own thermodynamics and transport
+for air at the stagnation condition:
+
+| Test | p<sub>t</sub>, psia | cooled approach | n | median | mean | range |
+|---|---|---|---|---|---|---|
+| 273 | 201.0 | 18 in | 19 | 1.44 | 1.47 | 1.14 – 2.15 |
+| 271 | 175.0 | 18 in | 14 | 1.59 | 1.58 | 1.20 – 2.02 |
+| 318 | 51.0 | none | 15 | 2.49 | 2.58 | 0.85 – 4.44 |
+| 319 | 35.9 | none | 11 | 2.66 | 2.95 | 0.76 – 5.08 |
+
+**Bartz over-predicts, and the size of the error depends on the inlet boundary
+layer.** With the 18-in. cooled approach that gives a developed turbulent
+layer — the condition the correlation assumes — the median over-prediction is
+about 45 %. With no cooled approach at all, where the layer is thin and still
+growing, it is about 150 %. That ordering is the expected failure mode of the
+correlation, not an implementation fault, and the report's own Fig. 15 shows
+its curve for this same equation (their Ref. 22, Bartz's "Simple Equation")
+lying above the data in the same way.
+
+`tests/validation/test_heat_transfer_validation.cpp` asserts these ranges. The
+bounds record a measurement; they are not a target.
+
+**What this changes for the Ignis-M1.** The shipped configuration uses
+`bartz_multiplier: 1.0`, an assumption. Rescaling by the measured factor for a
+developed boundary layer moves the design substantially:
+
+| | multiplier 1.0 | multiplier 0.69 |
+|---|---|---|
+| peak gas-side wall temperature | 797.7 K | 605.3 K |
+| peak heat flux | 49.7 MW/m² | 38.0 MW/m² |
+| coolant temperature rise | 381.6 K | 264.2 K |
+| coolant pressure drop | 3.33 MPa | 2.10 MPa |
+
+The M1's peak wall sits 2.3 K below the 800 K CuCrZr limit at multiplier 1.0,
+which reads as a design on the edge of failure. It is not: the margin is
+smaller than the uncertainty in the correlation that produced it, in both
+directions. **The default has deliberately not been changed.** This experiment
+is air at about 830 K, not combustion products at 3500 K, and carrying a
+multiplier across that gap would replace one unjustified number with another.
+What the measurement supports is the statement that a 2.3 K margin computed
+this way carries no information.
+
+---
+
 ## 6. What is *not* validated
 
 Stated plainly, because internal consistency is not accuracy:

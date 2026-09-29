@@ -3,7 +3,7 @@
 [![CI](https://github.com/Nathan-W123/Ignis/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nathan-W123/Ignis/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C.svg)
-![Tests](https://img.shields.io/badge/tests-78%20cases%2C%2017%2C550%20assertions-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-80%20cases%2C%2018%2C604%20assertions-brightgreen.svg)
 
 **A thermochemical liquid-rocket propulsion simulator in C++17.**
 
@@ -19,6 +19,13 @@ It is validated against **NASA CEA** and **Cantera**, agrees with CEA to
 **0.18 % or better** on flame temperature and **0.06 % or better** on
 characteristic velocity across 156 rocket cases, and reports the residual of
 every balance it claims to close.
+
+It is also checked against a **measurement**, not just against other codes: the
+gas-side heat-transfer correlation is compared with local heat flux measured in
+a nozzle at JPL in 1965, where it over-predicts by about 45 % given the
+developed boundary layer it assumes, and by about 150 % without one
+([details](docs/validation.md)). That is the correlation's error, not a bug —
+and knowing its size is worth more than assuming it away.
 
 ![The Ignis-M1 engine firing](results/figures/17_engine_render.png)
 
@@ -420,7 +427,7 @@ include/ignis/ + src/          the library, 12 modules, no I/O in the physics
   uncertainty/  distributions, deterministic Monte Carlo, sensitivity
   io/           YAML config with path-qualified errors, JSON, CSV, CLI
 apps/           the six executables -- parse, call, print
-tests/          78 Catch2 cases: unit, verification, validation, integration
+tests/          80 Catch2 cases: unit, verification, validation, integration
 python/         ignis_viz (figures, renders) and ignis_explorer (the desktop UI)
 explorer.py     launcher for the Ignis Engine Explorer
 configs/        12 shipped scenarios

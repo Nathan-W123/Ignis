@@ -1,0 +1,49 @@
+# Ignis reference data: contour of the JPL 32-415 heat-transfer nozzle
+# source: Back, Massier and Gier, JPL Technical Report No. 32-415 (1965),
+#   Table B-2, first two data columns.  NASA NTRS accession 19650010083.
+#   Transcribed from the page image; see nozzle_heat_transfer_reference.csv
+#   for the apparatus description and the stated uncertainties.
+#
+# These are the axial stations of the wall static-pressure taps and the local
+# area ratio at each.  The thermocouple plugs of Table B-3 sit at DIFFERENT
+# stations, so area ratio there is interpolated from this contour.
+#
+# The throat is at z/L = 0.6018, where A/A* = 1.0012.  L = 5.925 in and the
+# throat radius is 0.9015 in.
+#
+#   tap         pressure tap number
+#   z_over_L    axial distance ratio
+#   area_ratio  local A/A*
+tap,z_over_L,area_ratio
+1,0.107,7.001
+2,0.222,4.691
+3,0.3396,2.939
+4,0.3401,2.924
+5,0.395,2.255
+6,0.455,1.631
+7,0.460,1.561
+8,0.506,1.235
+9,0.529,1.135
+10,0.554,1.054
+11,0.587,1.0078
+12,0.6018,1.0012
+13,0.642,1.028
+14,0.691,1.176
+15,0.706,1.231
+16,0.722,1.297
+17,0.741,1.372
+18,0.753,1.423
+19,0.771,1.505
+20,0.789,1.582
+21,0.802,1.642
+22,0.819,1.716
+23,0.838,1.815
+24,0.852,1.866
+25,0.869,1.960
+26,0.887,2.049
+27,0.900,2.112
+28,0.921,2.210
+29,0.932,2.283
+30,0.949,2.379
+31,0.965,2.471
+32,0.985,2.574

@@ -25,6 +25,15 @@ idealisation by amounts that Ignis parameterises (η<sub>c\*</sub>,
 predict. Reproducing an idealisation accurately is not the same thing as
 predicting an engine, and this document is the difference.
 
+One of those parameters is no longer an assumption. The gas-side heat-transfer
+correlation has been compared against measured local heat flux in a nozzle
+([`validation.md` §5b](validation.md)): with the developed turbulent boundary
+layer the correlation assumes, Bartz over-predicts by about 45 %, and with a
+thin inlet layer by about 150 %. That measurement is in air at 830 K rather
+than combustion products at 3500 K, so it does not transfer to an engine
+unaltered — but it does mean the M1's 2.3 K wall-temperature margin is far
+smaller than the uncertainty of the model that produced it.
+
 ---
 
 ## 1. Chemistry
@@ -112,7 +121,11 @@ Honestly stated, in rough order of importance:
 
 1. **Validation against measured engine data** — heat flux, wall temperature and
    delivered I<sub>sp</sub> from an instrumented test article. Everything else
-   on this list is secondary to that.
+   on this list is secondary to that. Partially begun: the gas-side correlation
+   now has a measured error against a nozzle experiment ([`validation.md`
+   §5b](validation.md)), but in air, with no injector, no combustion products
+   and no cooled wall of its own. A rocket test article is still the thing
+   needed.
 2. **A boundary-layer solution** coupled to the core flow, replacing both the
    inviscid-throat assumption and the Bartz correlation.
 3. **A conjugate 2-D or 3-D thermal solution** of the wall and channel,
