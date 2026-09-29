@@ -1,0 +1,50 @@
+# Ignis reference data: measured gas-side heat transfer in a LOX/GH2 rocket
+# source: E. J. Schacht, R. J. Quentmeyer and W. L. Jones, "Experimental
+#   Investigation of Hot-Gas Side Heat-Transfer Rates for a Hydrogen-Oxygen
+#   Rocket", NASA Technical Note D-2832, Lewis Research Center (1965).
+#   NASA NTRS accession 19650016811.
+#
+# Transcribed by hand from the scanned report's page images: the summary table
+# on report page 17 and the area ratios from the Fig. 10 sub-captions on report
+# page 15.  The OCR of that scan is unreliable and was not used as the source.
+#
+# APPARATUS.  A copper heat-sink rocket nozzle, 5 in throat diameter, 4.64
+# contraction and expansion area ratio, 14.5 in from injector face to throat,
+# L* = 54 in, fired on liquid oxygen and gaseous hydrogen through a 234-element
+# coaxial injector.  26 000 lbf at 900 psia.  Transient wall temperatures at
+# five axial stations (plus two extra circumferential stations at the throat)
+# gave the gas-side flux.  Runs covered chamber pressures of 157, 305, 403,
+# 473, 482, 538, 584, 724 and 966 psia at hydrogen mass fractions of 11.3 to
+# 16.8 percent, i.e. mixture ratios of roughly 4.9 to 7.9.
+#
+# WHAT IS TABULATED.  The report fits each station to
+#
+#     St* Pr*^0.7 = C Re*_d^-0.2
+#
+# with transport properties at the reference enthalpy and the local static
+# pressure, chemical equilibrium assumed, and reports the fitted C with its
+# standard deviation.  The report states that the line C = 0.026 in this form
+# "is similar to the simplified Bartz equation (ref. 12)" -- that is the
+# correlation Ignis implements, with the same leading constant, so C_measured
+# is directly comparable with the 0.026 Ignis uses.
+#
+# The headline finding, in the report's own words: the throat value "is 42
+# percent lower than the widely used value of C = 0.026".  The report also
+# recalculates three other investigations the same way and gets throat values
+# of 0.019, 0.017 and 0.023, and a fourth at about 0.018 -- every one of them
+# below 0.026.
+#
+#   station      report station label; "3bar" is the average of the three
+#                circumferential measuring stations at the throat (3, 3A, 3B)
+#   area_ratio   local A/A*, from the Fig. 10 sub-captions
+#   region       where it sits in the engine
+#   c_measured   fitted constant C
+#   c_sigma      its standard deviation
+#   sigma_pct    100 sigma / C
+station,area_ratio,region,c_measured,c_sigma,sigma_pct
+1,4.64,chamber,0.0257,0.0028,10.9
+2,1.78,convergent,0.0240,0.0039,16.3
+3,1.00,throat,0.0148,0.0020,13.5
+3bar,1.00,throat,0.0151,0.0020,13.2
+4,1.27,divergent,0.0153,0.0016,10.4
+5,3.33,divergent,0.0188,0.0015,7.9

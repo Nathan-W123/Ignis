@@ -98,15 +98,11 @@ double median(std::vector<double> v) {
   return v.empty() ? 0.0 : v[v.size() / 2];
 }
 
-}  // namespace
-
-TEST_CASE("the Bartz correlation is evaluated correctly against measured nozzle data",
-          "[validation][thermal][bartz]") {
+/// Ratio of the Bartz coefficient Ignis computes to the one JPL measured, at
+/// every tabulated station, keyed by the cooled approach length in inches.
+std::map<int, std::vector<double>> jplRatios() {
   const ReferenceTable ref(referenceDir() + "/nozzle_heat_transfer_reference.csv");
   const ReferenceTable contour(referenceDir() + "/nozzle_contour_reference.csv");
-  REQUIRE(ref.rows() > 50);
-  REQUIRE(contour.rows() == 32);
-
   const auto& db = ignis_test::fullDatabase();
   const Air air = dryAir(db);
   const ignis::GasMixture mix(db);
@@ -157,12 +153,28 @@ TEST_CASE("the Bartz correlation is evaluated correctly against measured nozzle 
     ratio_by_approach[static_cast<int>(ref.num("approach_in", row))]
         .push_back(predicted / measured);
   }
+  return ratio_by_approach;
+}
 
+}  // namespace
+
+TEST_CASE("the Bartz correlation is evaluated correctly against measured nozzle data",
+          "[validation][thermal][bartz]") {
+  const ReferenceTable ref(referenceDir() + "/nozzle_heat_transfer_reference.csv");
+  const ReferenceTable contour(referenceDir() + "/nozzle_contour_reference.csv");
+  REQUIRE(ref.rows() > 50);
+  REQUIRE(contour.rows() == 32);
+
+  const auto ratio_by_approach = jplRatios();
   REQUIRE(ratio_by_approach.size() == 2);
 
   SECTION("c* recovered from the measured mass flow is physical for air") {
     // p_t A* / mdot should sit a few percent above the ideal value, the
     // difference being the throat discharge coefficient.
+    const auto& db = ignis_test::fullDatabase();
+    const Air air = dryAir(db);
+    const ignis::GasMixture mix(db);
+    const double throat_area = ignis::constants::pi * kThroatRadius * kThroatRadius;
     const double t0 = 1507.0 * kRankine;
     const double cp = mix.cpFrozen(air.n, t0);
     const double r_specific = ignis::constants::R_universal / air.molar_mass;
@@ -190,5 +202,60 @@ TEST_CASE("the Bartz correlation is evaluated correctly against measured nozzle 
     CHECK(developed < 1.9);
     CHECK(thin > 2.2);
     CHECK(thin > developed);
+  }
+}
+
+
+TEST_CASE("Bartz's constant against a hydrogen-oxygen rocket",
+          "[validation][thermal][bartz]") {
+  // The JPL comparison above is air at 830 K.  This one is a real engine:
+  // NASA TN D-2832 fired liquid oxygen and gaseous hydrogen through a copper
+  // heat-sink nozzle and fitted the same correlation Ignis uses, station by
+  // station, reporting the constant it actually takes.  Ignis uses 0.026
+  // everywhere; the measurement says that is right in the chamber and much too
+  // high at the throat.
+  const ReferenceTable ref(referenceDir() + "/rocket_heat_transfer_reference.csv");
+  REQUIRE(ref.rows() == 6);
+
+  constexpr double kBartzConstant = 0.026;  // as in HeatTransfer.hpp
+  std::map<std::string, double> c_by_station;
+  std::map<std::string, double> sigma_by_station;
+  for (std::size_t row = 0; row < ref.rows(); ++row) {
+    const std::string station = ref.text("station", row);
+    c_by_station[station] = ref.num("c_measured", row);
+    sigma_by_station[station] = ref.num("c_sigma", row);
+  }
+
+  SECTION("in the chamber the constant Ignis uses is the measured one") {
+    // Station 1 sits at an area ratio of 4.64, where the flow is barely
+    // accelerating and the boundary layer is the ordinary turbulent pipe-like
+    // one the correlation was built for.  The tolerance is the report's own
+    // standard deviation on the fit, read from the table rather than written
+    // in here, so the assertion cannot drift away from the data it checks.
+    const double measured = c_by_station.at("1");
+    const double sigma = sigma_by_station.at("1");
+    CHECK(std::abs(kBartzConstant - measured) < sigma);
+  }
+
+  SECTION("at the throat it is high by about seventy percent") {
+    // The report puts it at "42 percent lower than the widely used value of
+    // C = 0.026", which is this ratio seen from the other side.  The cause is
+    // the favourable pressure gradient through the throat, which the
+    // correlation has no term for.
+    const double throat = kBartzConstant / c_by_station.at("3bar");
+    CHECK(throat > 1.6);
+    CHECK(throat < 1.9);
+    CHECK(kBartzConstant / c_by_station.at("1") < throat);
+  }
+
+  SECTION("two independent experiments agree on the size of the error") {
+    // One is air at 830 K in a conical nozzle; the other is a hydrogen-oxygen
+    // rocket at up to 966 psia.  Nothing links them but the correlation, so
+    // their agreeing to within a quarter is the strongest statement in this
+    // file about how far Bartz actually lands from reality.
+    const double rocket = kBartzConstant / c_by_station.at("3bar");
+    const double air_developed = median(jplRatios().at(18));
+    INFO("rocket " << rocket << " vs air " << air_developed);
+    CHECK(std::abs(rocket - air_developed) / rocket < 0.25);
   }
 }

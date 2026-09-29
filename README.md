@@ -3,7 +3,7 @@
 [![CI](https://github.com/Nathan-W123/Ignis/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nathan-W123/Ignis/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C.svg)
-![Tests](https://img.shields.io/badge/tests-80%20cases%2C%2018%2C604%20assertions-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-81%20cases%2C%2018%2C730%20assertions-brightgreen.svg)
 
 **A thermochemical liquid-rocket propulsion simulator in C++17.**
 
@@ -20,12 +20,16 @@ It is validated against **NASA CEA** and **Cantera**, agrees with CEA to
 characteristic velocity across 156 rocket cases, and reports the residual of
 every balance it claims to close.
 
-It is also checked against a **measurement**, not just against other codes: the
+It is also checked against **measurements**, not just against other codes. The
 gas-side heat-transfer correlation is compared with local heat flux measured in
-a nozzle at JPL in 1965, where it over-predicts by about 45 % given the
-developed boundary layer it assumes, and by about 150 % without one
-([details](docs/validation.md)). That is the correlation's error, not a bug —
-and knowing its size is worth more than assuming it away.
+a heated-air nozzle at JPL in 1965, where it over-predicts by about 45 % given
+the developed boundary layer it assumes and by about 150 % without one; and
+with a LOX/hydrogen heat-sink rocket fired at NASA Lewis the same year, which
+puts its leading constant within 1 % of the measured value in the chamber and
+72 % high at the throat ([details](docs/validation.md)). Two experiments,
+different fluids, different laboratories, agreeing to within 16 % on how wrong
+the correlation is. That is the correlation's error, not a bug — and knowing
+its size, and its shape along the engine, is worth more than assuming it away.
 
 ![The Ignis-M1 engine firing](results/figures/17_engine_render.png)
 
@@ -427,14 +431,15 @@ include/ignis/ + src/          the library, 12 modules, no I/O in the physics
   uncertainty/  distributions, deterministic Monte Carlo, sensitivity
   io/           YAML config with path-qualified errors, JSON, CSV, CLI
 apps/           the six executables -- parse, call, print
-tests/          80 Catch2 cases: unit, verification, validation, integration
+tests/          81 Catch2 cases: unit, verification, validation, integration
 python/         ignis_viz (figures, renders) and ignis_explorer (the desktop UI)
 explorer.py     launcher for the Ignis Engine Explorer
 configs/        12 shipped scenarios
 data/           species, propellants, materials, coolant tables (all cited)
 tools/          the generators that build data/ and validation/reference/,
                 and make_cover.py, which renders the engine
-validation/     externally produced reference data (CEA, Cantera, CoolProp)
+validation/     externally produced reference data (CEA, Cantera, CoolProp,
+                and two 1965 heat-transfer experiments transcribed by hand)
 scripts/        build.sh  test.sh  validate.sh  run_all.sh
 docs/           theory, architecture, configuration, V&V, benchmarks, limits
 ```
@@ -478,9 +483,10 @@ The short version — the full list is [`docs/limitations.md`](docs/limitations.
   by an empirical criterion and flagged, but the inviscid solution is not
   modified — so a separated nozzle's reported thrust is optimistic.
 * **The thermal model is an engineering estimate.** Bartz carries ±20–30 %
-  scatter, and the Monte Carlo campaign disperses it explicitly rather than
-  pretending otherwise. No axial conduction, no thermal stress, no life
-  analysis.
+  scatter — measured here as 1 % in the chamber and about 70 % high at the
+  throat ([validation.md §5b](docs/validation.md)) — and the Monte Carlo
+  campaign disperses it explicitly rather than pretending otherwise. No axial
+  conduction, no thermal stress, no life analysis.
 * **η<sub>c\*</sub> is an assumed input, not a prediction.** There is no
   injector or mixing model. Ideal and corrected quantities are reported
   separately everywhere so the assumption stays visible.

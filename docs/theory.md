@@ -628,6 +628,15 @@ boundary-layer solution, no film or transpiration cooling, no injector streak
 and no soot layer. `bartz_multiplier` makes the correlation uncertainty
 explicit and is one of the dispersed Monte Carlo inputs.
 
+How large that uncertainty is has been measured against two 1965 experiments
+([`validation.md` §5b](validation.md)): the correlation is within 1 % of the
+measured constant in a rocket chamber, and about 70 % high at the throat, where
+the favourable pressure gradient drives the boundary layer furthest from the
+equilibrium turbulent profile it assumes. The error therefore has a *shape*
+along the engine, which a single scalar `bartz_multiplier` cannot reproduce —
+so the default is left at 1.0 and the error is carried as uncertainty rather
+than corrected away.
+
 ---
 
 ## 13. Regenerative cooling
