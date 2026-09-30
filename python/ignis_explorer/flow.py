@@ -45,7 +45,7 @@ import numpy as np
 from matplotlib import colormaps
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from . import shell, styles
+from . import shell, styles, viewport3d
 from .solver import Result
 from .widgets import panel
 
@@ -288,6 +288,9 @@ class FlowTab(QtWidgets.QWidget):
         self._thread: Optional[QtCore.QThread] = None
         self._worker: Optional[PlumeWorker] = None
         self._ranges: dict = {}
+        self._engine_meshes = None
+        self._engine_length = 0.0
+        self._scene_dirty = True
         self._build()
 
         self._timer = QtCore.QTimer(self)
@@ -317,7 +320,11 @@ class FlowTab(QtWidgets.QWidget):
         outer.addWidget(geometry)
 
         self.view = FieldView()
-        outer.addWidget(self.view, 1)
+        self.view3d = viewport3d.Viewport3D()
+        self.stack = QtWidgets.QStackedWidget()
+        self.stack.addWidget(self.view)
+        self.stack.addWidget(self.view3d)
+        outer.addWidget(self.stack, 1)
 
         self.colorbar = shell.ColorBar(list(FIELDS), RAMPS)
         self.colorbar.fieldChanged.connect(self._field_changed)
@@ -337,6 +344,12 @@ class FlowTab(QtWidgets.QWidget):
         self.play_button.clicked.connect(self._toggle_play)
         self.play_button.setEnabled(False)
         row.addWidget(self.play_button)
+
+        self.view_box = QtWidgets.QComboBox()
+        self.view_box.addItems(["2-D slice", "3-D model"])
+        self.view_box.currentIndexChanged.connect(self._view_changed)
+        row.addWidget(QtWidgets.QLabel("View"))
+        row.addWidget(self.view_box)
 
         self.quality_box = QtWidgets.QComboBox()
         self.quality_box.addItems([f"{g[0]}x{g[1]}  ~{g[6]}" for g in GRIDS])
@@ -532,8 +545,62 @@ class FlowTab(QtWidgets.QWidget):
         caption = (f"{name}   full range {true_lo:.4g} to {true_hi:.4g} {unit}\n"
                    f"t = {frame.time * 1e3:.3f} ms   step {frame.step}   "
                    f"frame {index + 1} of {len(self._frames)}")
-        self.view.show_field(values, self.colorbar.ramp(), lo, hi,
-                             caption, frame.extent)
+        if self.stack.currentIndex() == 0:
+            self.view.show_field(values, self.colorbar.ramp(), lo, hi,
+                                 caption, frame.extent)
+        else:
+            self._draw3d(frame, values, lo, hi, caption)
+
+    def _view_changed(self, index: int) -> None:
+        self.stack.setCurrentIndex(index)
+        self._scene_dirty = True
+        self._draw()
+
+    def _draw3d(self, frame: Frame, values: np.ndarray, lo: float, hi: float,
+                caption: str) -> None:
+        """Rebuild the 3-D scene for this frame.
+
+        The engine mesh does not change between frames, so it is built once
+        and kept; only the slice texture is remade, which is a colormap lookup
+        and nothing more.
+        """
+        if self._engine_meshes is None and self._result is not None:
+            profile = self._result.profile
+            x = np.asarray(profile["x"], dtype=float)
+            r = np.asarray(profile["radius"], dtype=float)
+            temperature = np.asarray(profile["temperature"], dtype=float)
+            # A smooth body of revolution does not need 400 stations to look
+            # smooth, and every one of them costs 2 * n_theta triangles.
+            step = max(1, x.size // 70)
+            self._engine_meshes = viewport3d.engine_meshes(
+                np.column_stack([x[::step], r[::step]]),
+                wall=max(0.006, 0.02 * float(r.min())),
+                scalar=temperature[::step], ramp=self.colorbar.ramp(),
+                lo=float(temperature.min()), hi=float(temperature.max()),
+                n_theta=48)
+            self._engine_length = float(x[-1])
+
+        span = self._engine_length or 1.0
+        norm = np.clip((values - lo) / (hi - lo), 0.0, 1.0) if hi > lo else values * 0
+        rgb = colormaps[self.colorbar.ramp()](norm)[:, :, :3].astype(np.float32)
+        cover = frame.data["jet_fraction"]
+        texture = np.concatenate([rgb[::-1], rgb], axis=0)
+        alpha = np.concatenate([cover[::-1], cover], axis=0).astype(np.float32)
+
+        class _F:
+            pass
+
+        f = _F()
+        f.x = np.linspace(0.0, frame.extent[0], values.shape[1])
+        f.r = np.linspace(0.0, frame.extent[1] * 0.5, values.shape[0])
+        meshes = [viewport3d.plume_slice(f, texture, span, alpha=alpha)]
+        meshes += self._engine_meshes or []
+        # Frame the whole scene, not the engine: the plume runs another ten
+        # exit radii past the exit plane, so framing on the engine alone puts
+        # most of what was computed outside the window.
+        total = span + frame.extent[0]
+        self.view3d.set_scene(meshes, target=np.array([total * 0.44, 0.0, 0.0]),
+                              span=total * 0.52, caption=caption)
 
     def _toggle_play(self) -> None:
         if self._timer.isActive():
