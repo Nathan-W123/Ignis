@@ -45,7 +45,7 @@ import numpy as np
 from matplotlib import colormaps
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from . import styles
+from . import shell, styles
 from .solver import Result
 from .widgets import panel
 
@@ -319,6 +319,11 @@ class FlowTab(QtWidgets.QWidget):
         self.view = FieldView()
         outer.addWidget(self.view, 1)
 
+        self.colorbar = shell.ColorBar(list(FIELDS), RAMPS)
+        self.colorbar.fieldChanged.connect(self._field_changed)
+        self.colorbar.rampChanged.connect(lambda _: self._draw())
+        outer.addWidget(self.colorbar)
+
         controls, lay = panel("Flow")
         row = QtWidgets.QHBoxLayout()
         row.setSpacing(8)
@@ -332,18 +337,6 @@ class FlowTab(QtWidgets.QWidget):
         self.play_button.clicked.connect(self._toggle_play)
         self.play_button.setEnabled(False)
         row.addWidget(self.play_button)
-
-        self.field_box = QtWidgets.QComboBox()
-        self.field_box.addItems(FIELDS.keys())
-        self.field_box.currentTextChanged.connect(self._field_changed)
-        row.addWidget(QtWidgets.QLabel("Field"))
-        row.addWidget(self.field_box)
-
-        self.ramp_box = QtWidgets.QComboBox()
-        self.ramp_box.addItems(RAMPS)
-        self.ramp_box.currentTextChanged.connect(lambda _: self._draw())
-        row.addWidget(QtWidgets.QLabel("Colour"))
-        row.addWidget(self.ramp_box)
 
         self.quality_box = QtWidgets.QComboBox()
         self.quality_box.addItems([f"{g[0]}x{g[1]}  ~{g[6]}" for g in GRIDS])
@@ -514,11 +507,16 @@ class FlowTab(QtWidgets.QWidget):
 
     # ----------------------------------------------------------------- display
     def _field_changed(self, _: str) -> None:
-        default_ramp = FIELDS[self.field_box.currentText()][2]
-        if self.ramp_box.currentText() != default_ramp:
-            self.ramp_box.blockSignals(True)
-            self.ramp_box.setCurrentText(default_ramp)
-            self.ramp_box.blockSignals(False)
+        # Each field carries the ramp that suits it, but a ramp the user picked
+        # by hand should not be overwritten on every field change, so this only
+        # moves the selector, silently, when the field itself changes.
+        default_ramp = FIELDS[self.colorbar.field()][2]
+        if self.colorbar.ramp() != default_ramp:
+            self.colorbar.ramp_box.blockSignals(True)
+            self.colorbar.ramp_box.setCurrentText(default_ramp)
+            self.colorbar.ramp_box.blockSignals(False)
+            self.colorbar._ramp = default_ramp
+            self.colorbar.strip.set_ramp(default_ramp)
         self._draw()
 
     def _draw(self) -> None:
@@ -526,15 +524,15 @@ class FlowTab(QtWidgets.QWidget):
             return
         index = min(self.slider.value(), len(self._frames) - 1)
         frame = self._frames[index]
-        name = self.field_box.currentText()
+        name = self.colorbar.field()
         key, unit, _ = FIELDS[name]
         values = frame.data[key]
         lo, hi, true_lo, true_hi = self._ranges[key]
-        caption = (f"{name}   colour {lo:.4g} to {hi:.4g} {unit}   "
-                   f"(full range {true_lo:.4g} to {true_hi:.4g})\n"
+        self.colorbar.set_range(lo, hi, unit)
+        caption = (f"{name}   full range {true_lo:.4g} to {true_hi:.4g} {unit}\n"
                    f"t = {frame.time * 1e3:.3f} ms   step {frame.step}   "
                    f"frame {index + 1} of {len(self._frames)}")
-        self.view.show_field(values, self.ramp_box.currentText(), lo, hi,
+        self.view.show_field(values, self.colorbar.ramp(), lo, hi,
                              caption, frame.extent)
 
     def _toggle_play(self) -> None:

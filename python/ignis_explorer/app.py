@@ -22,6 +22,7 @@ from PySide6 import QtCore, QtGui, QtWidgets  # noqa: E402
 from . import styles  # noqa: E402
 from .charts import (AltitudeChart, AxialChart, CompositionChart,  # noqa: E402
                      ContourChart, ThermalChart)
+from . import shell  # noqa: E402
 from .flow import FlowTab  # noqa: E402
 from .solver import PROPELLANTS, Design, Result, Solver  # noqa: E402
 from .widgets import Card, Choice, ConstraintRow, Field, panel  # noqa: E402
@@ -174,31 +175,45 @@ class Explorer(QtWidgets.QMainWindow):
         self.compare = False
 
         styles.apply_matplotlib()
-        self.setStyleSheet(styles.STYLESHEET)
 
-        root = QtWidgets.QWidget()
-        root.setObjectName("centralRoot")
-        self.setCentralWidget(root)
-        outer = QtWidgets.QVBoxLayout(root)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
-        outer.addWidget(self._ribbon())
+        self.setStyleSheet(styles.STYLESHEET + shell.SHELL_STYLE)
 
-        body = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
-        body.addWidget(self._left_column())
-        body.addWidget(self._charts())
-        body.addWidget(self._right_column())
-        body.setStretchFactor(0, 0)
-        body.setStretchFactor(1, 1)
-        body.setStretchFactor(2, 0)
-        body.setSizes([300, 790, 460])
-        inner = QtWidgets.QWidget()
-        inner_lay = QtWidgets.QVBoxLayout(inner)
-        inner_lay.setContentsMargins(10, 8, 10, 8)
-        inner_lay.addWidget(body)
-        outer.addWidget(inner, 1)
+        # The window is a simulation application, not a dashboard: a ribbon of
+        # verbs on top, the model on the left, the viewport in the middle with
+        # its legend beneath it, the read-outs docked right.  Panes are real
+        # QDockWidgets so they can be torn off, re-tabbed or closed, which is
+        # what anyone who drives one of these every day will try first.
+        self.addToolBar(QtCore.Qt.TopToolBarArea, self._ribbon_bar())
+
+        self.viewport = self._charts()
+        self.setCentralWidget(self.viewport)
+
+        self.tree = shell.ModelTree()
+        self.tree.selected.connect(self._tree_selected)
+        self.properties = shell.PropertyGrid()
+
+        browser = shell.dock("Model", self.tree)
+        details = shell.dock("Properties", self.properties)
+        inputs = shell.dock("Design", self._left_column())
+        readouts = shell.dock("Results", self._right_column())
+
+        self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, browser)
+        self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, details)
+        self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, inputs)
+        self.addDockWidget(QtCore.Qt.RightDockWidgetArea, readouts)
+        self.splitDockWidget(browser, details, QtCore.Qt.Vertical)
+        self.tabifyDockWidget(details, inputs)
+        details.raise_()
+        self.resizeDocks([browser, details], [270, 330], QtCore.Qt.Vertical)
+        self.resizeDocks([browser, readouts], [330, 430], QtCore.Qt.Horizontal)
+        self._docks = {"Model": browser, "Properties": details,
+                       "Design": inputs, "Results": readouts}
+        self._build_tree()
 
         self.status = self.statusBar()
+        self.solver_light = QtWidgets.QLabel()
+        self.solver_light.setObjectName("solverLight")
+        self.status.addPermanentWidget(self.solver_light)
         self._set_status("ready")
 
         self.thread = QtCore.QThread(self)
@@ -215,43 +230,194 @@ class Explorer(QtWidgets.QMainWindow):
             QtCore.QTimer.singleShot(60, lambda: self.run_slot("A"))
 
     # --- construction ----------------------------------------------------
-    def _ribbon(self) -> QtWidgets.QWidget:
-        bar = QtWidgets.QFrame()
-        bar.setObjectName("ribbonBar")
-        lay = QtWidgets.QHBoxLayout(bar)
-        lay.setContentsMargins(14, 8, 14, 8)
-        lay.setSpacing(14)
+    def _ribbon_bar(self) -> QtWidgets.QToolBar:
+        bar = QtWidgets.QToolBar("Ribbon")
+        bar.setObjectName("ribbonToolBar")
+        bar.setMovable(False)
+        bar.setFloatable(False)
+
+        ribbon = shell.Ribbon()
+
+        case = ribbon.group("Case")
+        self.preset = QtWidgets.QComboBox()
+        self.preset.addItems(list(PRESETS))
+        self.preset.setMinimumWidth(190)
+        self.preset.currentTextChanged.connect(self._load_preset)
+        case.button("open", "Preset", self.preset.showPopup,
+                    tip="Load one of the shipped designs")
+        case.stack([self.preset])
+
+        sim = ribbon.group("Simulation")
+        self.run_button = sim.button("run", "Solve", self.run_all,
+                                     tip="Solve every visible design  (Ctrl+Enter)")
+        self.run_button.setShortcut(QtGui.QKeySequence("Ctrl+Return"))
+        self.compare_box = QtWidgets.QCheckBox("Compare A / B")
+        self.compare_box.toggled.connect(self._toggle_compare)
+        sim.stack([self.compare_box])
+
+        geom = ribbon.group("Geometry")
+        geom.button("import", "Import", lambda: self._go_to_flow_and("import"),
+                    tip="Load an engine wall contour, or a CAD mesh to take one from")
+        geom.button("engine", "Contour", lambda: self._show_tab("Contour"),
+                    tip="Show the wall contour of the solved design")
+
+        flow = ribbon.group("Flow")
+        flow.button("flow", "Run", lambda: self._go_to_flow_and("run"),
+                    tip="March the plume from the solved exit state")
+        flow.button("play", "Play", lambda: self._go_to_flow_and("play"),
+                    tip="Play the captured march")
+        flow.button("video", "Export", lambda: self._go_to_flow_and("save"),
+                    tip="Write the march out as an mp4")
+
+        view = ribbon.group("View")
+        view.button("chart", "Results", lambda: self._toggle_dock("Results"),
+                    tip="Show or hide the results pane")
+        view.button("grid", "Model", lambda: self._toggle_dock("Model"),
+                    tip="Show or hide the model browser")
+        view.button("thermal", "Thermal", lambda: self._show_tab("Thermal"),
+                    tip="Show the wall and coolant temperatures")
 
         titles = QtWidgets.QVBoxLayout()
         titles.setSpacing(0)
-        t = QtWidgets.QLabel("IGNIS  ·  Engine Explorer")
-        t.setObjectName("appTitle")
-        sub = QtWidgets.QLabel("thermochemical liquid-rocket propulsion — conceptual designs only")
+        title = QtWidgets.QLabel("IGNIS")
+        title.setObjectName("appTitle")
+        title.setAlignment(QtCore.Qt.AlignRight)
+        sub = QtWidgets.QLabel("conceptual designs only")
         sub.setObjectName("appSubtitle")
-        titles.addWidget(t)
+        sub.setAlignment(QtCore.Qt.AlignRight)
+        titles.addWidget(title)
         titles.addWidget(sub)
-        lay.addLayout(titles)
-        lay.addSpacing(18)
+        holder = QtWidgets.QWidget()
+        holder.setLayout(titles)
+        ribbon.finish(holder)
 
-        self.preset = QtWidgets.QComboBox()
-        self.preset.addItems(list(PRESETS))
-        self.preset.setMinimumWidth(180)
-        self.preset.currentTextChanged.connect(self._load_preset)
-        lay.addWidget(QtWidgets.QLabel("Preset"))
-        lay.addWidget(self.preset)
-
-        self.compare_box = QtWidgets.QCheckBox("Compare A / B")
-        self.compare_box.toggled.connect(self._toggle_compare)
-        lay.addWidget(self.compare_box)
-
-        lay.addStretch(1)
-        self.run_button = QtWidgets.QPushButton("Run")
-        self.run_button.setObjectName("runButton")
-        self.run_button.clicked.connect(self.run_all)
-        self.run_button.setShortcut(QtGui.QKeySequence("Ctrl+Return"))
-        self.run_button.setToolTip("Solve every visible design slot   (Ctrl+Enter)")
-        lay.addWidget(self.run_button)
+        bar.addWidget(ribbon)
         return bar
+
+    # --- the model browser ------------------------------------------------
+    def _build_tree(self) -> None:
+        self.tree.build([
+            ("engine", "Engine", "engine", [
+                ("propellants", "Propellants", "flow"),
+                ("chamber", "Chamber", "thermal"),
+                ("nozzle", "Nozzle", "engine"),
+                ("cooling", "Cooling jacket", "grid"),
+            ]),
+            ("results", "Results", "chart", [
+                ("performance", "Performance", "chart"),
+                ("geometry", "Geometry", "grid"),
+                ("thermal", "Thermal", "thermal"),
+                ("plume", "Plume", "flow"),
+            ]),
+        ])
+
+    def _tree_selected(self, key: str) -> None:
+        r = self.results.get("A")
+        if r is None or not r.ok:
+            self.properties.show_rows(
+                key.title(), [("state", "not solved yet")])
+            return
+        d = r.design
+
+        def num(k: str, scale: float = 1.0, unit: str = "", fmt: str = "{:.4g}") -> str:
+            v = r.get(k)
+            return "-" if v != v else f"{fmt.format(v * scale)} {unit}".strip()
+
+        pages = {
+            "engine": ("Engine", [
+                ("name", d.propellant if d else "-"),
+                ("solved by", r.version or "-"),
+                ("thrust", num("performance.thrust", 1e-3, "kN")),
+                ("specific impulse", num("performance.isp", 1.0, "s")),
+            ]),
+            "propellants": ("Propellants", [
+                ("oxidiser", "LOX"),
+                ("fuel", "LCH4" if d and d.propellant.endswith("CH4") else "LH2"),
+                ("mixture ratio", f"{d.mixture_ratio:.3f}" if d else "-"),
+                ("composition", d.composition if d else "-"),
+            ]),
+            "chamber": ("Chamber", [
+                ("pressure", num("chamber.pressure", 1e-6, "MPa")),
+                ("temperature", num("chamber.temperature", 1.0, "K")),
+                ("c* ideal", num("chamber.c_star_ideal", 1.0, "m/s")),
+                ("eta c*", f"{d.eta_c_star:.3f}" if d else "-"),
+                ("mass flow", num("performance.mdot", 1.0, "kg/s")),
+            ]),
+            "nozzle": ("Nozzle", [
+                ("contour", "imported" if (d and d.contour_file) else "analytic bell"),
+                ("expansion ratio", num("performance.area_ratio")),
+                ("exit radius", num("geometry.exit_radius", 1e3, "mm")),
+                ("exit Mach", num("performance.exit_mach")),
+                ("exit pressure", num("performance.exit_pressure", 1e-3, "kPa")),
+                ("regime", r.strings.get("performance.regime", "-")),
+            ]),
+            "cooling": ("Cooling jacket", [
+                ("enabled", "yes" if (d and d.cooling) else "no"),
+                ("peak heat flux", num("cooling.max_heat_flux", 1e-6, "MW/m^2")),
+                ("peak wall", num("cooling.max_wall_temperature", 1.0, "K")),
+                ("coolant rise", num("cooling.coolant_temperature_rise", 1.0, "K")),
+                ("pressure drop", num("cooling.coolant_pressure_drop", 1e-6, "MPa")),
+            ]),
+            "performance": ("Performance", [
+                ("thrust", num("performance.thrust", 1e-3, "kN")),
+                ("specific impulse", num("performance.isp", 1.0, "s")),
+                ("thrust coefficient", num("performance.cf")),
+                ("ambient", num("performance.ambient_pressure", 1e-3, "kPa")),
+                ("altitude", f"{d.altitude / 1e3:.1f} km" if d else "-"),
+            ]),
+            "geometry": ("Geometry", [
+                ("exit radius", num("geometry.exit_radius", 1e3, "mm")),
+                ("total length", num("geometry.total_length", 1e3, "mm")),
+                ("L*", num("geometry.l_star", 1e3, "mm")),
+                ("chamber volume", num("geometry.chamber_volume", 1e6, "cm^3")),
+                ("residence time", num("geometry.residence_time", 1e3, "ms")),
+            ]),
+            "thermal": ("Thermal", [
+                ("peak heat flux", num("cooling.max_heat_flux", 1e-6, "MW/m^2")),
+                ("peak wall", num("cooling.max_wall_temperature", 1.0, "K")),
+                ("wall limit", num("cooling.wall_limit_temperature", 1.0, "K")),
+                ("coolant out", num("cooling.coolant_outlet_temperature", 1.0, "K")),
+            ]),
+            "plume": ("Plume", [
+                ("solver", "axisymmetric Euler, inviscid"),
+                ("frames captured", str(len(self.flow.frames()))),
+                ("turbulence model", "none - not modelled"),
+                ("exit Mach", num("performance.exit_mach")),
+            ]),
+            "results": ("Results", [
+                ("thrust", num("performance.thrust", 1e-3, "kN")),
+                ("specific impulse", num("performance.isp", 1.0, "s")),
+                ("warnings", str(len(r.warnings))),
+            ]),
+        }
+        title, rows = pages.get(key, (key.title(), [("", "")]))
+        self.properties.show_rows(title, rows)
+
+    # --- ribbon actions ---------------------------------------------------
+    def _show_tab(self, name: str) -> None:
+        for i in range(self.tabs.count()):
+            if self.tabs.tabText(i) == name:
+                self.tabs.setCurrentIndex(i)
+                return
+
+    def _go_to_flow_and(self, what: str) -> None:
+        self._show_tab("Flow")
+        button = {"run": self.flow.run_button, "play": self.flow.play_button,
+                  "save": self.flow.save_button,
+                  "import": self.flow.import_button}.get(what)
+        if button is not None and button.isEnabled():
+            button.click()
+        elif button is not None:
+            self._set_status(
+                {"run": "solve a design first, then Flow > Run",
+                 "play": "run the flow first - there are no frames to play",
+                 "save": "run the flow first - there is nothing to export",
+                 "import": "import is busy"}.get(what, ""), "warning")
+
+    def _toggle_dock(self, name: str) -> None:
+        d = self._docks.get(name)
+        if d is not None:
+            d.setVisible(not d.isVisible())
 
     def _left_column(self) -> QtWidgets.QWidget:
         col = QtWidgets.QWidget()
