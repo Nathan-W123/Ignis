@@ -45,7 +45,7 @@ import numpy as np
 from matplotlib import colormaps
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from . import shell, styles, viewport3d
+from . import cases, shell, styles, viewport3d
 from .solver import Result
 from .widgets import panel
 
@@ -291,7 +291,9 @@ class FlowTab(QtWidgets.QWidget):
         self._engine_meshes = None
         self._engine_length = 0.0
         self._scene_dirty = True
+        self._cases: List = []
         self._build()
+        self._load_cases()
 
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(60)
@@ -306,8 +308,25 @@ class FlowTab(QtWidgets.QWidget):
         geometry, glay = panel("Engine")
         grow = QtWidgets.QHBoxLayout()
         grow.setSpacing(8)
-        self.geometry_label = QtWidgets.QLabel("Ignis-M1 (analytic bell)")
-        self.geometry_label.setStyleSheet(f"color: {styles.TEXT};")
+        self.source_box = QtWidgets.QComboBox()
+        self.source_box.setMinimumWidth(230)
+        self.source_box.currentIndexChanged.connect(self._source_changed)
+        grow.addWidget(QtWidgets.QLabel("Engine"))
+        grow.addWidget(self.source_box)
+
+        self.altitude_label = QtWidgets.QLabel("Altitude")
+        grow.addWidget(self.altitude_label)
+        self.altitude_box = QtWidgets.QDoubleSpinBox()
+        self.altitude_box.setRange(0.0, 80.0)
+        self.altitude_box.setDecimals(1)
+        self.altitude_box.setSingleStep(1.0)
+        self.altitude_box.setSuffix(" km")
+        self.altitude_box.setValue(10.0)
+        self.altitude_box.valueChanged.connect(self._altitude_changed)
+        grow.addWidget(self.altitude_box)
+
+        self.geometry_label = QtWidgets.QLabel("")
+        self.geometry_label.setStyleSheet(f"color: {styles.TEXT_MUTED};")
         grow.addWidget(self.geometry_label, 1)
         self.import_button = QtWidgets.QPushButton("Import engine...")
         self.import_button.clicked.connect(self._import)
@@ -383,12 +402,75 @@ class FlowTab(QtWidgets.QWidget):
         outer.addWidget(controls)
 
     # ------------------------------------------------------------- public API
+    def _load_cases(self) -> None:
+        """Offer the solved design first, then whatever is frozen on disk."""
+        self._cases = cases.available()
+        self.source_box.blockSignals(True)
+        self.source_box.clear()
+        self.source_box.addItem("Solved design A", userData=None)
+        for case in self._cases:
+            self.source_box.addItem(f"{case.name}  (saved)", userData=case)
+        self.source_box.blockSignals(False)
+        self._source_changed(0)
+
+    def current_case(self):
+        """The frozen case in use, or None when following the solved design."""
+        return self.source_box.currentData()
+
+    def _source_changed(self, _index: int) -> None:
+        case = self.current_case()
+        self._engine_meshes = None
+        for widget in (self.altitude_label, self.altitude_box):
+            widget.setVisible(case is not None)
+        if case is None:
+            self.geometry_label.setText(
+                "live solve" if self._result is not None
+                else "no solver - pick a saved engine")
+        else:
+            floor = case.lowest_attached_altitude() / 1e3
+            if self.altitude_box.value() < floor:
+                self.altitude_box.blockSignals(True)
+                self.altitude_box.setValue(floor)
+                self.altitude_box.blockSignals(False)
+            self.geometry_label.setText(
+                f"exit state replayed from {case.solved_by}; plume solved live")
+        self._update_ready()
+        self._altitude_changed(self.altitude_box.value())
+
+    def _altitude_changed(self, km: float) -> None:
+        case = self.current_case()
+        if case is None:
+            return
+        pressure, separated = case.at_altitude(km * 1e3)
+        if separated:
+            self.status.setText(
+                f"Ignis predicts the nozzle separates at {km:.1f} km "
+                f"(ambient {pressure / 1e3:.1f} kPa) - marching an attached "
+                f"plume there would contradict the solver")
+        else:
+            self.status.setText(f"ambient {pressure / 1e3:.2f} kPa at "
+                                f"{km:.1f} km")
+        self._update_ready()
+
+    def _update_ready(self) -> None:
+        case = self.current_case()
+        if case is not None:
+            _, separated = case.at_altitude(self.altitude_box.value() * 1e3)
+            ready = not separated
+        else:
+            ready = self._result is not None and bool(self._result.profile)
+        self.run_button.setEnabled(ready and self._thread is None)
+
     def set_result(self, result: Optional[Result]) -> None:
         """Hand in the design the Explorer has solved, or None to disable."""
         self._result = result
-        ready = result is not None and bool(result.profile)
-        self.run_button.setEnabled(ready and self._thread is None)
-        if not ready:
+        if self.current_case() is None:
+            self._engine_meshes = None
+            self.geometry_label.setText(
+                "live solve" if result is not None
+                else "no solver - pick a saved engine")
+        self._update_ready()
+        if result is None and not self._cases:
             self.status.setText("Solve a design first.")
 
     # --------------------------------------------------------------- the march
@@ -436,6 +518,9 @@ class FlowTab(QtWidgets.QWidget):
         Only the last stretch is drawn: the whole chamber would dwarf the
         plume window and push the interesting part off the left edge.
         """
+        case = self.current_case()
+        if case is not None:
+            return case.drawn_contour(exit_radius)
         profile = self._result.profile if self._result else None
         if not profile or "x" not in profile or "radius" not in profile:
             return None
@@ -448,9 +533,23 @@ class FlowTab(QtWidgets.QWidget):
         return np.column_stack([x[keep], r[keep]])
 
     def _exit_and_ambient(self):
-        """Exit state and ambient pressure for the solved design."""
+        """Exit state and ambient pressure, from whichever source is selected."""
         from ignis_viz.plume import ExitState
 
+        case = self.current_case()
+        if case is not None:
+            km = self.altitude_box.value()
+            ambient, separated = case.at_altitude(km * 1e3)
+            if separated:
+                raise RuntimeError(
+                    f"Ignis predicts the nozzle separates at {km:.1f} km; "
+                    f"marching an attached plume there would contradict the "
+                    f"solver - raise the altitude")
+            return case.exit_state(), ambient
+
+        if self._result is None:
+            raise RuntimeError(
+                "no design is solved and no saved engine is selected")
         profile = self._result.profile
         if not profile:
             raise RuntimeError("the solved design carries no nozzle profile")
@@ -564,11 +663,22 @@ class FlowTab(QtWidgets.QWidget):
         and kept; only the slice texture is remade, which is a colormap lookup
         and nothing more.
         """
-        if self._engine_meshes is None and self._result is not None:
-            profile = self._result.profile
-            x = np.asarray(profile["x"], dtype=float)
-            r = np.asarray(profile["radius"], dtype=float)
-            temperature = np.asarray(profile["temperature"], dtype=float)
+        case = self.current_case()
+        if self._engine_meshes is None and (case is not None or self._result is not None):
+            if case is not None:
+                # A case carries the contour but not the axial temperature, so
+                # the wall is coloured by area ratio instead -- a geometric
+                # quantity the contour really does contain.  Colouring it by a
+                # gas temperature that was never stored would be inventing a
+                # field, which is exactly what this project does not do.
+                x = case.contour[:, 0]
+                r = case.contour[:, 1]
+                temperature = (r.min() / np.maximum(r, 1e-9)) ** 2
+            else:
+                profile = self._result.profile
+                x = np.asarray(profile["x"], dtype=float)
+                r = np.asarray(profile["radius"], dtype=float)
+                temperature = np.asarray(profile["temperature"], dtype=float)
             # A smooth body of revolution does not need 400 stations to look
             # smooth, and every one of them costs 2 * n_theta triangles.
             step = max(1, x.size // 70)

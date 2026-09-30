@@ -224,10 +224,37 @@ class Explorer(QtWidgets.QMainWindow):
         self.thread.start()
 
         if not self.solver.available():
-            QtWidgets.QMessageBox.warning(self, "Ignis binaries not found",
-                                          self.solver.missing_message())
+            # Without the binaries the design panel cannot solve anything, but
+            # the plume can still be marched from a frozen case -- so the
+            # window opens on the Flow tab instead of opening on a dead
+            # dashboard behind a modal apology.
+            self._no_solver()
         else:
             QtCore.QTimer.singleShot(60, lambda: self.run_slot("A"))
+
+    def _no_solver(self) -> None:
+        saved = len(self.flow._cases)
+        self.run_button.setEnabled(False)
+        self.preset.setEnabled(False)
+        self.compare_box.setEnabled(False)
+        if saved:
+            self._show_tab("Flow")
+            self._set_status(
+                f"solver not built - {saved} saved engines loaded; the plume "
+                f"still solves live", "warning")
+            self.properties.show_rows(
+                "No solver", [
+                    ("state", "the Ignis binaries are not built"),
+                    ("looked in", self.solver.bin_dir),
+                    ("saved engines", str(saved)),
+                    ("what still works", "the Flow tab: the plume is marched "
+                                         "here, in Python"),
+                    ("what does not", "solving a new design, and every other "
+                                      "tab"),
+                ])
+        else:
+            QtWidgets.QMessageBox.warning(self, "Ignis binaries not found",
+                                          self.solver.missing_message())
 
     # --- construction ----------------------------------------------------
     def _ribbon_bar(self) -> QtWidgets.QToolBar:
