@@ -292,6 +292,7 @@ class FlowTab(QtWidgets.QWidget):
         self._engine_length = 0.0
         self._scene_dirty = True
         self._cases: List = []
+        self._solver_available = True
         self._build()
         self._load_cases()
 
@@ -412,7 +413,24 @@ class FlowTab(QtWidgets.QWidget):
         for case in self._cases:
             self.source_box.addItem(f"{case.name}  (saved)", userData=case)
         self.source_box.blockSignals(False)
-        self._source_changed(0)
+        # With no solver behind it, "Solved design A" can never become
+        # anything, so starting there leaves the window dead on arrival with
+        # Run greyed out and no hint that a saved engine would work. Land on
+        # one instead.
+        start = 0
+        if not self._solver_available and self._cases:
+            preferred = next((i for i in range(1, self.source_box.count())
+                              if self.source_box.itemText(i).startswith("Ignis-M1 ")), 1)
+            start = preferred
+            self.source_box.blockSignals(True)
+            self.source_box.setCurrentIndex(start)
+            self.source_box.blockSignals(False)
+        self._source_changed(start)
+
+    def set_solver_available(self, available: bool) -> None:
+        """Tell the tab whether the compiled solver is there to fall back on."""
+        self._solver_available = available
+        self._load_cases()
 
     def current_case(self):
         """The frozen case in use, or None when following the solved design."""

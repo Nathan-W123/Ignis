@@ -233,6 +233,7 @@ class Explorer(QtWidgets.QMainWindow):
             QtCore.QTimer.singleShot(60, lambda: self.run_slot("A"))
 
     def _no_solver(self) -> None:
+        self.flow.set_solver_available(False)
         saved = len(self.flow._cases)
         self.run_button.setEnabled(False)
         self.preset.setEnabled(False)
@@ -252,6 +253,10 @@ class Explorer(QtWidgets.QMainWindow):
                     ("what does not", "solving a new design, and every other "
                                       "tab"),
                 ])
+            # Start marching straight away.  A window that opens on an empty
+            # viewport and an instruction is a window that looks broken; this
+            # one opens with the plume already building.
+            QtCore.QTimer.singleShot(400, self._autostart_flow)
         else:
             QtWidgets.QMessageBox.warning(self, "Ignis binaries not found",
                                           self.solver.missing_message())
@@ -472,6 +477,10 @@ class Explorer(QtWidgets.QMainWindow):
         elif not self.solver.available():
             self._no_solver()
         self._set_status(f"{name} theme")
+
+    def _autostart_flow(self) -> None:
+        if self.flow.run_button.isEnabled() and not self.flow.frames():
+            self.flow._start()
 
     def _cycle_theme(self) -> None:
         names = styles.themes()

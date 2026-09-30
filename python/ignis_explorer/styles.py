@@ -50,9 +50,13 @@ _THEMES = {
                 "serious": "#f97316", "critical": "#ef4444"},
     ),
     "light": dict(
-        BG_DEEP="#e8ecf1", BG_MAIN="#eef1f5", BG_PANEL="#f4f6f9",
+        # Neutral greys with only a trace of blue, the way a desktop
+        # simulation application looks: chrome that recedes, white where the
+        # content is, and a thin grey rule between them.  A strongly tinted
+        # light theme competes with the field colours it is framing.
+        BG_DEEP="#dfe3e8", BG_MAIN="#eceef1", BG_PANEL="#f3f4f6",
         BG_ELEVATED="#ffffff", BG_INPUT="#ffffff",
-        BORDER="#c3cbd6", BORDER_FOCUS="#2f7fa8",
+        BORDER="#bcc2ca", BORDER_FOCUS="#2f7fa8",
         TEXT="#16202c", TEXT_MUTED="#4b5a6b", TEXT_DIM="#7a8899",
         ACCENT="#0e7490", ACCENT_BRIGHT="#0891b2", ACCENT_DEEP="#155e75",
         ACCENT_HOVER="#0891b2",
@@ -70,7 +74,7 @@ _THEMES = {
     ),
 }
 
-_ACTIVE = "dark"
+_ACTIVE = "light"
 
 BG_DEEP = BG_MAIN = BG_PANEL = BG_ELEVATED = BG_INPUT = ""
 BORDER = BORDER_FOCUS = TEXT = TEXT_MUTED = TEXT_DIM = ""
@@ -315,4 +319,6 @@ QToolTip {{
 
 
 # Populate every token at import; the Explorer may switch later.
-use("dark")
+# Light is the default: it is what a simulation application looks like,
+# and the dark theme is there for when the plume is the whole point.
+use("light")

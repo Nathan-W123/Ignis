@@ -30,6 +30,34 @@ from . import styles
 
 ICON_SIZE = 22
 
+# Icons carry their own colour, the way a simulation ribbon's do.  A monochrome
+# strip makes every verb look the same weight and forces the label to do all
+# the work; a green Solve, a red Stop and an amber folder are recognised before
+# they are read.
+#
+# One set serves both themes, which constrains them more than it looks: to
+# clear 3:1 against a near-white panel AND against a near-black one, a colour's
+# relative luminance has to sit inside roughly 0.14 to 0.26.  The amber and the
+# orange were originally outside it and washed out on light; they were solved
+# back into the band rather than nudged by eye.  Two separate sets would drift
+# apart, and a colour that only works on one theme is wrong half the time.
+ICON_COLOURS = {
+    "run": "#2e9e4f",        # go
+    "play": "#2e9e4f",
+    "stop": "#d1434a",       # halt
+    "pause": "#b9801c",
+    "open": "#b9801c",       # a folder is amber everywhere
+    "save": "#3b82c4",
+    "import": "#3b82c4",
+    "video": "#8b5cd6",
+    "fit": "#6b7f99",
+    "chart": "#3b82c4",
+    "engine": "#7c8b9e",     # metal
+    "flow": "#e56426",       # the plume is hot
+    "grid": "#6b7f99",
+    "thermal": "#d1434a",
+}
+
 
 def _pen(colour: str, width: float = 1.8) -> QtGui.QPen:
     pen = QtGui.QPen(QtGui.QColor(colour), width)
@@ -38,8 +66,14 @@ def _pen(colour: str, width: float = 1.8) -> QtGui.QPen:
     return pen
 
 
-def icon(name: str, colour: str = styles.TEXT) -> QtGui.QIcon:
-    """One of the shell's glyphs, drawn at `ICON_SIZE` and coloured to taste."""
+def icon(name: str, colour: Optional[str] = None) -> QtGui.QIcon:
+    """One of the shell's glyphs, drawn at `ICON_SIZE`.
+
+    Without an explicit colour the glyph takes its semantic one from
+    `ICON_COLOURS`, falling back to body text for anything unlisted.
+    """
+    if colour is None:
+        colour = ICON_COLOURS.get(name, styles.TEXT)
     size = ICON_SIZE * 2                     # drawn oversize, scaled down
     pix = QtGui.QPixmap(size, size)
     pix.fill(QtCore.Qt.transparent)
@@ -256,14 +290,14 @@ class ModelTree(QtWidgets.QTreeWidget):
         self.clear()
         for key, label, glyph, children in spec:
             parent = QtWidgets.QTreeWidgetItem([label])
-            parent.setIcon(0, icon(glyph, styles.ACCENT))
+            parent.setIcon(0, icon(glyph))
             parent.setData(0, QtCore.Qt.UserRole, key)
             font = parent.font(0)
             font.setBold(True)
             parent.setFont(0, font)
             for ckey, clabel, cglyph in children:
                 child = QtWidgets.QTreeWidgetItem([clabel])
-                child.setIcon(0, icon(cglyph, styles.TEXT_MUTED))
+                child.setIcon(0, icon(cglyph))
                 child.setData(0, QtCore.Qt.UserRole, ckey)
                 parent.addChild(child)
             self.addTopLevelItem(parent)
