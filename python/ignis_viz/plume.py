@@ -250,13 +250,34 @@ def solve(exit_state: ExitState, ambient_pressure: float, *,
           ambient_temperature: float = 288.15, nx: int = 720, nr: int = 280,
           length: float = 14.0, width: float = 3.2, cfl: float = 0.35,
           max_steps: int = 40000, tolerance: float = 2.0e-4,
-          report: Optional[callable] = None) -> PlumeField:
+          report: Optional[callable] = None, start: str = "established",
+          snapshot: Optional[callable] = None,
+          snapshot_every: int = 0) -> PlumeField:
     """March the plume to steady state.
 
     `length` and `width` are in exit radii.  The gamma used throughout is the
     nozzle exit value -- see the module docstring for why, and for everything
     this model leaves out.
+
+    `start` selects the initial condition.  "established" fills the jet column
+    at the exit state and is the default, because it reaches the same steady
+    state without first paying for the jet to blast a cavity through still air.
+    "rest" fills the whole domain with ambient instead, so the march begins at
+    the instant the nozzle starts flowing.  The steady state is the same; what
+    differs is that the transient is then physically meaningful and worth
+    watching -- the starting vortex, the shock cells forming from the exit
+    plane outward, the Mach disc settling into place.
+
+    If `snapshot` is given it is called as snapshot(step, time, PlumeField)
+    every `snapshot_every` steps, where `time` is the accumulated physical time
+    in seconds.  The field handed over is a fresh copy and is safe to keep.
+    Both default off, so nothing changes for callers that only want the
+    converged answer.
     """
+    if start not in ("established", "rest"):
+        raise ValueError("start must be 'established' or 'rest'")
+    if snapshot is not None and snapshot_every <= 0:
+        raise ValueError("snapshot_every must be positive when snapshot is given")
     g = exit_state.gamma
     r_jet = R_UNIVERSAL / exit_state.molar_mass
     r_air = R_UNIVERSAL / M_AIR
@@ -276,16 +297,31 @@ def solve(exit_state: ExitState, ambient_pressure: float, *,
     ambient = np.array([ambient_pressure / (r_air * ambient_temperature),
                         0.0, 0.0, ambient_pressure, 0.0])
 
-    # Start with the jet column already established rather than with the whole
-    # domain at rest: the same steady state, reached without first paying for
-    # the jet to blast a cavity through still air.
     w = np.repeat(np.repeat(ambient[:, None, None], nr + 4, axis=1), nx + 4, axis=2)
-    w[:, jet_mask, :] = inflow[:, None, None]
+    if start == "established":
+        w[:, jet_mask, :] = inflow[:, None, None]
     _apply_bc(w, r_pad, inflow, jet_mask)
     u = _to_conserved(w, g)
 
+    def pack(primitives, residuals):
+        """Derived fields on the interior cells, as a PlumeField."""
+        rho, vx, vr, p, y = primitives[:, 2:-2, 2:-2]
+        r_mix = y * r_jet + (1.0 - y) * r_air
+        return PlumeField(
+            x=x_centres, r=r_centres, density=rho.copy(), velocity_x=vx.copy(),
+            velocity_r=vr.copy(), pressure=p.copy(),
+            temperature=(p / (rho * r_mix)),
+            mach=(np.sqrt(vx * vx + vr * vr) / np.sqrt(g * p / rho)),
+            jet_fraction=y.copy(), gamma=g,
+            residual_history=np.asarray(residuals),
+            ambient_pressure=ambient_pressure, exit=exit_state)
+
     history = []
     peak = 0.0
+    elapsed = 0.0
+    reached = start == "established"
+    if snapshot is not None:
+        snapshot(0, 0.0, pack(w, history))
     for step in range(max_steps):
         w = _to_primitive(u, g)
         _apply_bc(w, r_pad, inflow, jet_mask)
@@ -307,22 +343,26 @@ def solve(exit_state: ExitState, ambient_pressure: float, *,
         res = float(np.sqrt(np.mean(k1[0] ** 2)))
         peak = max(peak, res)
         history.append(res / peak if peak > 0.0 else 0.0)
+        elapsed += float(dt)
         if report is not None and step % 500 == 0:
             report(step, history[-1], dt)
-        if step > 400 and history[-1] < tolerance:
+        # From rest the residual is small again for a while before the jet
+        # front has gone anywhere, so the tolerance test alone would "converge"
+        # on a domain the jet has not reached yet.  Require the front to have
+        # crossed to the outflow first.
+        if start == "rest" and not reached:
+            reached = bool(np.max(u[4, 2:-2, -3]) > 0.5 * np.max(u[4, 2:-2, 2]))
+        converged = step > 400 and history[-1] < tolerance and reached
+        if snapshot is not None and ((step + 1) % snapshot_every == 0 or converged):
+            w_snap = _to_primitive(u, g)
+            _apply_bc(w_snap, r_pad, inflow, jet_mask)
+            snapshot(step + 1, elapsed, pack(w_snap, history))
+        if converged:
             break
 
     w = _to_primitive(u, g)
     _apply_bc(w, r_pad, inflow, jet_mask)
-    rho, vx, vr, p, y = w[:, 2:-2, 2:-2]
-    r_mix = y * r_jet + (1.0 - y) * r_air
-    temperature = p / (rho * r_mix)
-    mach = np.sqrt(vx * vx + vr * vr) / np.sqrt(g * p / rho)
-    return PlumeField(x=x_centres, r=r_centres, density=rho, velocity_x=vx,
-                      velocity_r=vr, pressure=p, temperature=temperature,
-                      mach=mach, jet_fraction=y, gamma=g,
-                      residual_history=np.asarray(history),
-                      ambient_pressure=ambient_pressure, exit=exit_state)
+    return pack(w, history)
 
 
 def mach_disc_location(field: PlumeField) -> Optional[float]:

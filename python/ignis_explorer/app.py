@@ -22,6 +22,7 @@ from PySide6 import QtCore, QtGui, QtWidgets  # noqa: E402
 from . import styles  # noqa: E402
 from .charts import (AltitudeChart, AxialChart, CompositionChart,  # noqa: E402
                      ContourChart, ThermalChart)
+from .flow import FlowTab  # noqa: E402
 from .solver import PROPELLANTS, Design, Result, Solver  # noqa: E402
 from .widgets import Card, Choice, ConstraintRow, Field, panel  # noqa: E402
 
@@ -288,6 +289,12 @@ class Explorer(QtWidgets.QMainWindow):
             hl.setContentsMargins(6, 6, 6, 6)
             hl.addWidget(chart)
             self.tabs.addTab(holder, name)
+
+        # The Flow tab is not a chart: it runs its own solver on design A's
+        # exit state and owns a worker thread, so it is added by hand and fed
+        # separately in _refresh.
+        self.flow = FlowTab()
+        self.tabs.addTab(self.flow, "Flow")
         return self.tabs
 
     def _right_column(self) -> QtWidgets.QWidget:
@@ -396,6 +403,7 @@ class Explorer(QtWidgets.QMainWindow):
 
         a = self.results.get("A")
         b = self.results.get("B") if self.compare else None
+        self.flow.set_result(a if (a is not None and a.ok) else None)
         for key, card in self.cards.items():
             scale = self._card_scale.get(key, 1.0)
             va = a.get(key) * scale if (a and a.ok) else None

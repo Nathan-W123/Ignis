@@ -161,6 +161,16 @@ they returned, including the refusal when a design does not close. The model's
 limitations are pinned open next to the answer rather than hidden behind a
 menu. See [`docs/explorer.md`](docs/explorer.md).
 
+Its **Flow** tab takes the exit state of whatever design is solved and marches
+the axisymmetric Euler equations outward from it, starting from rest, so you
+watch the plume establish itself: the jet front driving into still air, the
+starting vortex, the shock cells forming from the exit plane outward and the
+Mach disc settling. Every frame is a solution at that instant — nothing is
+interpolated between frames and nothing is painted on — and the march can be
+written straight out as an mp4. The plume model is inviscid and axisymmetric,
+so it solves shock structure and wave propagation and does **not** model
+turbulent breakup; that caveat is printed under the viewer, not buried here.
+
 ### The six tools
 
 | Tool | What it does |

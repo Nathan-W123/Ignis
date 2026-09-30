@@ -248,3 +248,48 @@ A moving camera means new geometry every frame, so none of the march can be
 reused; a static camera over a steady field marches once and every frame after
 that is a matrix multiply. That is the whole difference in cost between
 `19_engine_flow.mp4` and `21_engine_move.mp4`.
+
+
+---
+
+## The Explorer's Flow tab
+
+`python/ignis_explorer/flow.py` is the interactive counterpart to everything
+above. The volumetric renderer in `render.py` is an offline tool — tens of
+seconds a frame — so it cannot be driven from a GUI. The Flow tab shows the
+same physics a different way: a 2-D field on the (x, r) plane, mirrored about
+the axis, painted straight from the solver's arrays through a perceptually
+uniform ramp.
+
+Two things were added to `plume.solve` for it, both off by default so nothing
+that existed before changed by a single bit:
+
+* `start="rest"` fills the domain with ambient instead of pre-filling the jet
+  column. The steady state is identical; what differs is that the transient is
+  then physically meaningful. The default stays `"established"` because the
+  offline renders only want the converged answer and should not pay for the
+  jet to blast a cavity through still air.
+* `snapshot`/`snapshot_every` hand out a copy of the field every *n* steps,
+  with the accumulated physical time, so the march can be watched as it runs
+  and scrubbed afterwards.
+
+The from-rest start needed one extra convergence guard. The residual is small
+again for a while before the jet front has gone anywhere, so the tolerance test
+on its own would declare victory on a domain the jet had not reached. The
+solver now requires the front to have crossed to the outflow first.
+
+**Colour.** Every field offered is a magnitude, so it gets a sequential ramp:
+one hue, ordered, perceptually uniform. `turbo` is available because it is what
+most published CFD figures use and people look for it, but it is not the
+default — a rainbow ramp invents contours the data does not have. The range is
+taken from the 1st and 99.5th percentile across the whole march rather than
+from the extremes: the starting shock carries a handful of cells far hotter
+than anything that survives, and scaling to them leaves the rest of the plume
+black for the entire run. The caption prints the true extremes alongside the
+ramp limits so the clipping is visible rather than silent.
+
+**Scale.** The image is laid out on the *physical* aspect ratio, not the grid's.
+`nx` and `nr` are chosen for accuracy and are not in proportion to the domain,
+so scaling by pixel counts would stretch the plume. The engine wall drawn
+upstream of the exit plane is the contour Ignis actually solved, at the same
+metres-per-pixel as the flow.
