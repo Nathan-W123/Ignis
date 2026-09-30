@@ -433,3 +433,181 @@ TEST_CASE("the ambient-pressure family follows the exit state exactly",
     REQUIRE(marginal.separation_margin == Approx(0.0).margin(1e-9));
   }
 }
+
+
+// ===========================================================================
+// Tabulated contours
+// ===========================================================================
+
+namespace {
+
+/// Sample an analytic geometry into the (x, r) table a file would carry.
+std::vector<ignis::ContourSample> tabulate(const ignis::NozzleGeometry& g) {
+  std::vector<ignis::ContourSample> out;
+  out.reserve(g.stations().size());
+  for (const auto& p : g.stations()) out.push_back({p.x, p.r});
+  return out;
+}
+
+ignis::NozzleGeometrySpec m1Spec() {
+  ignis::NozzleGeometrySpec spec;
+  spec.throat_radius = 0.070;
+  spec.contraction_ratio = 2.8;
+  spec.chamber_length = 0.22;
+  spec.converging_half_angle = 30.0;
+  spec.throat_upstream_ratio = 1.5;
+  spec.throat_downstream_ratio = 0.382;
+  spec.expansion_ratio = 20.0;
+  spec.divergent = ignis::DivergentType::kBell;
+  spec.bell_length_fraction = 0.8;
+  spec.bell_initial_angle = 33.0;
+  spec.bell_exit_angle = 8.0;
+  spec.num_stations = 400;
+  return spec;
+}
+
+}  // namespace
+
+TEST_CASE("a tabulated contour reproduces the analytic one it was sampled from",
+          "[nozzle][geometry][contour]") {
+  // The strongest check available without external hardware: take a contour
+  // Ignis built analytically, throw the parameterisation away, hand back only
+  // the (x, r) table a CAD revolve would give, and see whether the geometry
+  // that comes back is the same engine.
+  const ignis::NozzleGeometry analytic = ignis::NozzleGeometry::build(m1Spec());
+  const ignis::NozzleGeometry table =
+      ignis::NozzleGeometry::fromContour(tabulate(analytic), m1Spec());
+
+  SECTION("the measured throat and exit match the analytic ones") {
+    CHECK(table.isTabulated());
+    CHECK_FALSE(analytic.isTabulated());
+    // The throat is the minimum of the table, so it can only be as good as the
+    // sampling.  400 stations over this contour put it within a tenth of a
+    // percent, and the error is one-sided: a sampled minimum is never below
+    // the true one.
+    CHECK(table.throatRadius() >= analytic.throatRadius());
+    CHECK(table.throatRadius() ==
+          Approx(analytic.throatRadius()).epsilon(1e-3));
+    CHECK(table.exitRadius() == Approx(analytic.exitRadius()).epsilon(1e-12));
+    CHECK(table.exitPosition() == Approx(analytic.exitPosition()).epsilon(1e-12));
+    CHECK(table.expansionRatio() == Approx(analytic.expansionRatio()).epsilon(2e-3));
+    CHECK(table.contractionRatio() == Approx(analytic.contractionRatio()).epsilon(2e-3));
+  }
+
+  SECTION("the chamber volume and L* survive the round trip") {
+    // Both are integrals over the same stations, so they should agree far
+    // better than the throat does.
+    CHECK(table.chamberVolume() ==
+          Approx(analytic.chamberVolume()).epsilon(1e-6));
+    CHECK(table.characteristicLength() ==
+          Approx(analytic.characteristicLength()).epsilon(3e-3));
+  }
+
+  SECTION("the throat curvature is recovered by the circle fit, not assumed") {
+    // The analytic throat is two arcs: Ru = 1.5 rt upstream, Rd = 0.382 rt
+    // downstream, and Bartz is handed their mean.  A circle fitted across both
+    // should land between them rather than on either.
+    const double ru = 1.5 * analytic.throatRadius();
+    const double rd = 0.382 * analytic.throatRadius();
+    INFO("fit gave " << table.bartzCurvatureRadius() << " m; Rd = " << rd
+                     << ", Ru = " << ru << "; " << table.curvatureProvenance());
+    CHECK(table.curvatureProvenance().find("circle fitted") != std::string::npos);
+    CHECK(table.bartzCurvatureRadius() > 0.5 * rd);
+    CHECK(table.bartzCurvatureRadius() < 1.5 * ru);
+  }
+
+  SECTION("the exit wall angle is measured, not defaulted") {
+    // This is the one that would bite silently: NozzleFlow turns the exit
+    // angle into the divergence loss, so a contour that arrived without one
+    // would quietly be charged an 8-degree bell's loss whatever its shape.
+    CHECK(table.spec().bell_exit_angle > 0.0);
+    CHECK(table.spec().bell_exit_angle ==
+          Approx(analytic.spec().bell_exit_angle).margin(1.5));
+  }
+
+  SECTION("the wall departs from the analytic one only by chord error") {
+    // A polyline through samples of a smooth curve misses it between samples.
+    // The gap is the chord error of an arc, h^2/(8R), so it is worst where the
+    // curvature is tightest -- the Rao downstream throat arc, Rd = 0.382 rt.
+    // Asserting that, rather than a tolerance picked to pass, is what
+    // distinguishes "the representation has a known accuracy limit" from "the
+    // conversion has a bug".
+    double worst = 0.0;
+    double worst_x = 0.0;
+    double spacing_at_worst = 0.0;
+    const double x0 = analytic.stations().front().x;
+    for (int i = 0; i <= 2000; ++i) {
+      const double x = x0 + (analytic.exitPosition() - x0) * i / 2000.0;
+      const double err = std::abs(table.radius(x) - analytic.radius(x));
+      if (err > worst) { worst = err; worst_x = x; }
+    }
+    for (std::size_t i = 1; i < table.stations().size(); ++i) {
+      if (table.stations()[i].x >= worst_x) {
+        spacing_at_worst = table.stations()[i].x - table.stations()[i - 1].x;
+        break;
+      }
+    }
+    const double rd = 0.382 * analytic.throatRadius();
+    const double predicted = spacing_at_worst * spacing_at_worst / (8.0 * rd);
+    INFO("worst " << worst * 1e6 << " um at x = " << worst_x << " m; spacing "
+                  << spacing_at_worst * 1e3 << " mm; chord error predicted "
+                  << predicted * 1e6 << " um");
+
+    // It is small in absolute terms.
+    CHECK(worst < 1e-3 * analytic.throatRadius());
+    // It sits in the throat region, where the wall curves hardest.
+    CHECK(std::abs(worst_x - analytic.throatPosition()) <
+          0.5 * analytic.throatRadius());
+    // And it is the size chord error says it should be, not something else
+    // wearing chord error's clothes.
+    CHECK(worst == Approx(predicted).epsilon(0.6));
+  }
+}
+
+TEST_CASE("a tabulated contour is rejected when it is not a nozzle",
+          "[nozzle][geometry][contour]") {
+  const auto good = tabulate(ignis::NozzleGeometry::build(m1Spec()));
+
+  SECTION("too few samples") {
+    std::vector<ignis::ContourSample> few(good.begin(), good.begin() + 5);
+    REQUIRE_THROWS_WITH(ignis::NozzleGeometry::fromContour(few, m1Spec()),
+                        Catch::Matchers::ContainsSubstring("at least 9 samples"));
+  }
+
+  SECTION("a repeated axial station") {
+    auto bad = good;
+    bad[40].x = bad[39].x;
+    REQUIRE_THROWS_WITH(ignis::NozzleGeometry::fromContour(bad, m1Spec()),
+                        Catch::Matchers::ContainsSubstring("strictly increasing"));
+  }
+
+  SECTION("a non-positive radius") {
+    auto bad = good;
+    bad[40].r = 0.0;
+    REQUIRE_THROWS_WITH(ignis::NozzleGeometry::fromContour(bad, m1Spec()),
+                        Catch::Matchers::ContainsSubstring("non-positive radius"));
+  }
+
+  SECTION("a bump in the divergent section") {
+    // The kind of defect a noisy STL silhouette produces.  It must be
+    // reported, with the station, rather than quietly smoothed away.
+    auto bad = good;
+    const std::size_t n = bad.size();
+    bad[n - 10].r = bad[n - 11].r * 0.98;
+    REQUIRE_THROWS_WITH(
+        ignis::NozzleGeometry::fromContour(bad, m1Spec()),
+        Catch::Matchers::ContainsSubstring("not monotonically expanding"));
+  }
+
+  SECTION("a throat at the very end") {
+    // A pure converging contour is not a nozzle Ignis can expand through.
+    std::vector<ignis::ContourSample> converging;
+    for (const auto& s : good) {
+      if (s.x > 0.3455) break;
+      converging.push_back(s);
+    }
+    REQUIRE(converging.size() > 9);
+    REQUIRE_THROWS_WITH(ignis::NozzleGeometry::fromContour(converging, m1Spec()),
+                        Catch::Matchers::ContainsSubstring("must lie inside it"));
+  }
+}

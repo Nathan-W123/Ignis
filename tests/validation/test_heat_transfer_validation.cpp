@@ -25,6 +25,7 @@
 #include <string>
 #include <vector>
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
@@ -32,9 +33,11 @@
 #include "ignis/core/Constants.hpp"
 #include "ignis/thermo/GasMixture.hpp"
 #include "ignis/thermo/Transport.hpp"
+#include "ignis/nozzle/NozzleGeometry.hpp"
 #include "ignis/thermal/HeatTransfer.hpp"
 
 using ignis_test::ReferenceTable;
+using Catch::Approx;
 using ignis_test::referenceDir;
 
 namespace {
@@ -260,5 +263,79 @@ TEST_CASE("Bartz's constant against a hydrogen-oxygen rocket",
     const double air_long_approach = median(jplRatios().at(18));
     INFO("rocket " << rocket << " vs air " << air_long_approach);
     CHECK(std::abs(rocket - air_long_approach) / rocket < 0.25);
+  }
+}
+
+
+TEST_CASE("the JPL test nozzle can be built from its own published table",
+          "[validation][nozzle][contour]") {
+  // Until now this file has used the JPL contour by interpolating the
+  // reference table directly, because Ignis could only construct a nozzle
+  // from its bell/conical parameterisation -- it had no way to be handed a
+  // contour.  It does now, so the test article can be built as the geometry
+  // it actually was.
+  //
+  // This is a validation, not a unit test: the report states the nozzle's
+  // dimensions independently of the tap table, so the geometry Ignis derives
+  // from the table can be checked against what the authors said they built.
+  const ReferenceTable contour(referenceDir() + "/nozzle_contour_reference.csv");
+  REQUIRE(contour.rows() == 32);
+
+  constexpr double kLength = 5.925 * kInch;
+  std::vector<ignis::ContourSample> samples;
+  samples.reserve(contour.rows());
+  for (std::size_t row = 0; row < contour.rows(); ++row) {
+    // The table gives A/A*; a radius follows because the nozzle is circular.
+    samples.push_back({contour.num("z_over_L", row) * kLength,
+                       kThroatRadius * std::sqrt(contour.num("area_ratio", row))});
+  }
+
+  ignis::NozzleGeometrySpec spec;
+  spec.throat_radius = kThroatRadius;
+  spec.expansion_ratio = 2.68;
+  spec.chamber_length = samples.front().x;
+  spec.num_stations = 400;
+  const ignis::NozzleGeometry geom =
+      ignis::NozzleGeometry::fromContour(samples, spec);
+
+  SECTION("the throat lands where the report says it is") {
+    // Tap 12, at z/L = 0.6018 and A/A* = 1.0012.  The table's minimum is that
+    // tap, so the recovered throat radius is high by half of that 0.12 % in
+    // area -- the resolution of the measurement, not an error in the fit.
+    CHECK(geom.throatRadius() == Approx(kThroatRadius).epsilon(1e-3));
+    CHECK(geom.throatPosition() == Approx(0.6018 * kLength).epsilon(1e-9));
+    CHECK(geom.throatRadius() >= kThroatRadius);
+  }
+
+  SECTION("the area ratios at the ends are the tabulated ones") {
+    // The taps stop short of both ends, so these are the first and last tap
+    // values (7.001 and 2.574), NOT the nozzle's full 7.75 and 2.68.  Checking
+    // against the report's overall ratios here would be checking the wrong
+    // thing.
+    CHECK(geom.contractionRatio() == Approx(7.001).epsilon(3e-3));
+    CHECK(geom.expansionRatio() == Approx(2.574).epsilon(3e-3));
+  }
+
+  SECTION("the throat curvature is recovered from the taps") {
+    // The independent check.  The report states a throat curvature radius of
+    // 1.800 in, which is nowhere in the tap table -- the fit has to find it
+    // from the A/A* values alone.  Tap spacing through the throat is coarse,
+    // so this is a real test of the circle fit rather than a restatement of
+    // an input.
+    //
+    // It gets 1.854 in from nine taps, 3.0 % from the stated value.  The bound
+    // is 6 %, which is loose enough not to be brittle and tight enough that a
+    // regression in the fit would break it -- a 35 % bound, which this would
+    // also have passed, would have asserted nothing.
+    INFO("fitted " << geom.bartzCurvatureRadius() / kInch << " in against the "
+                   << kThroatCurvature / kInch << " in the report states; "
+                   << geom.curvatureProvenance());
+    CHECK(geom.curvatureProvenance().find("circle fitted") != std::string::npos);
+    CHECK(geom.bartzCurvatureRadius() ==
+          Approx(kThroatCurvature).epsilon(0.06));
+  }
+
+  SECTION("the divergent half-angle matches the stated 15 degrees") {
+    CHECK(geom.spec().bell_exit_angle == Approx(15.0).margin(1.5));
   }
 }

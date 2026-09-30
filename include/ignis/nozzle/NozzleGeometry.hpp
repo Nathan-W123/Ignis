@@ -51,6 +51,17 @@ enum class NozzleSegment {
 };
 std::string toString(NozzleSegment s);
 
+/// One point of an externally supplied wall contour, as read from a file.
+///
+/// This is the *input* form -- just a wall radius at an axial station, which
+/// is all a CAD revolve profile or a published nozzle table actually gives
+/// you.  `ContourPoint` below is the *output* form, carrying the derived
+/// quantities Ignis computes from it.
+struct ContourSample {
+  double x = 0.0;   ///< m from the injector face, strictly increasing
+  double r = 0.0;   ///< m, wall radius, positive
+};
+
 /// User-facing geometry inputs.  Exactly one of `throat_radius` and
 /// `throat_area` must be positive; likewise for `chamber_radius` and
 /// `contraction_ratio`.
@@ -74,6 +85,12 @@ struct NozzleGeometrySpec {
   /// Which curvature radius Bartz's correlation should use at the throat:
   /// "upstream", "downstream" or "mean".
   std::string bartz_curvature = "mean";
+  /// A tabulated wall contour.  When this is non-empty every analytic field
+  /// above is ignored except `num_stations` and `throat_upstream_ratio` (the
+  /// latter only as a fallback if the throat circle fit fails), and `build`
+  /// dispatches to `fromContour`.  The io layer fills it from `contour_file`;
+  /// the geometry module itself does no file access.
+  std::vector<ContourSample> contour;
 };
 
 /// One point on the contour.
@@ -100,6 +117,43 @@ class NozzleGeometry {
 
   /// Build and validate a contour.  Throws ConfigError on any inconsistency.
   static NozzleGeometry build(const NozzleGeometrySpec& spec);
+
+  /// Build from a tabulated wall contour rather than the analytic
+  /// parameterisation above.
+  ///
+  /// This is how a real engine gets into Ignis: a CAD revolve profile, or a
+  /// nozzle table out of a test report, reduced to (x, r) pairs.  The contour
+  /// is taken as given and is NOT fitted to the bell/conical family -- the
+  /// wall between consecutive samples is a straight line, so the geometry is
+  /// exactly the polyline handed in and its resolution is the file's
+  /// resolution.
+  ///
+  /// Quantities the analytic path takes from the spec are measured from the
+  /// contour instead: throat radius and position, contraction and expansion
+  /// ratio, the exit wall angle that sets the divergence loss, and the throat
+  /// curvature radius Bartz needs (least-squares circle through the samples
+  /// around the throat).  The spec is still read for `num_stations` and is
+  /// returned back-filled with what was measured, so anything downstream that
+  /// consults `spec()` sees the real geometry.
+  ///
+  /// Throws ConfigError if the samples are not strictly increasing in x, if
+  /// any radius is not positive, if there are too few of them, if the throat
+  /// falls at either end, or if the contour is not monotone on either side of
+  /// the throat.  A contour that fails is reported with the station that
+  /// failed rather than quietly repaired.
+  static NozzleGeometry fromContour(std::vector<ContourSample> samples,
+                                    NozzleGeometrySpec spec);
+
+  /// True when this geometry came from a tabulated contour.  Such a contour is
+  /// C0 but not C1 -- the wall slope steps at every sample -- so
+  /// `checkContinuity` reports slope jumps that are a property of the input,
+  /// not a defect in the construction.
+  bool isTabulated() const { return tabulated_; }
+
+  /// How the throat curvature radius was obtained.  Empty for the analytic
+  /// path; for a tabulated contour it says whether the circle fit succeeded
+  /// or the spec's ratio was used as a fallback.
+  const std::string& curvatureProvenance() const { return curvature_note_; }
 
   const NozzleGeometrySpec& spec() const { return spec_; }
   const std::vector<ContourPoint>& stations() const { return stations_; }
@@ -143,6 +197,9 @@ class NozzleGeometry {
  private:
   struct Segment;
   const Segment& segmentFor(double x) const;
+  /// Shared tail of both constructors: monotonicity checks and the chamber
+  /// volume integral, run once `segments_` and `stations_` are populated.
+  void finalise();
 
   NozzleGeometrySpec spec_;
   std::vector<Segment> segments_;
@@ -151,6 +208,8 @@ class NozzleGeometry {
   double xt_ = 0.0, xe_ = 0.0, l15_ = 0.0;
   double bartz_rc_ = 0.0, v_chamber_ = 0.0;
   double theta_n_ = 0.0, theta_e_ = 0.0;
+  bool tabulated_ = false;
+  std::string curvature_note_;
 };
 
 }  // namespace ignis

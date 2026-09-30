@@ -34,6 +34,10 @@ have.
 """
 from __future__ import annotations
 
+import contextlib
+import io
+import os
+import sys
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -272,6 +276,11 @@ class FieldView(QtWidgets.QWidget):
 class FlowTab(QtWidgets.QWidget):
     """Run the plume from a solved design and scrub through its time evolution."""
 
+    #: Emitted with a contour path (or "" to go back to the analytic bell) when
+    #: the user imports geometry.  The Explorer owns solving, so the tab asks
+    #: rather than running the solver itself.
+    contourChosen = QtCore.Signal(str)
+
     def __init__(self) -> None:
         super().__init__()
         self._frames: List[Frame] = []
@@ -290,6 +299,22 @@ class FlowTab(QtWidgets.QWidget):
         outer = QtWidgets.QVBoxLayout(self)
         outer.setContentsMargins(6, 6, 6, 6)
         outer.setSpacing(8)
+
+        geometry, glay = panel("Engine")
+        grow = QtWidgets.QHBoxLayout()
+        grow.setSpacing(8)
+        self.geometry_label = QtWidgets.QLabel("Ignis-M1 (analytic bell)")
+        self.geometry_label.setStyleSheet(f"color: {styles.TEXT};")
+        grow.addWidget(self.geometry_label, 1)
+        self.import_button = QtWidgets.QPushButton("Import engine...")
+        self.import_button.clicked.connect(self._import)
+        grow.addWidget(self.import_button)
+        self.revert_button = QtWidgets.QPushButton("Back to M1")
+        self.revert_button.clicked.connect(lambda: self._use_contour(""))
+        self.revert_button.setEnabled(False)
+        grow.addWidget(self.revert_button)
+        glay.addLayout(grow)
+        outer.addWidget(geometry)
 
         self.view = FieldView()
         outer.addWidget(self.view, 1)
@@ -527,6 +552,85 @@ class FlowTab(QtWidgets.QWidget):
             self.slider.setValue(0)
         else:
             self.slider.setValue(self.slider.value() + 1)
+
+    # ---------------------------------------------------------------- geometry
+    def _import(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Import an engine", "",
+            "Engine geometry (*.stl *.csv *.txt *.dat);;"
+            "Triangle mesh (*.stl);;Contour table (*.csv *.txt *.dat)")
+        if not path:
+            return
+        if path.lower().endswith(".stl"):
+            path = self._contour_from_stl(path)
+            if not path:
+                return
+        self._use_contour(path)
+
+    def _contour_from_stl(self, stl: str) -> str:
+        """Reduce a mesh to a contour, asking only what cannot be guessed."""
+        axis, ok = QtWidgets.QInputDialog.getItem(
+            self, "Axis of revolution",
+            "Which model axis is the engine's centreline?",
+            ["x", "y", "z"], 0, False)
+        if not ok:
+            return ""
+        units, ok = QtWidgets.QInputDialog.getItem(
+            self, "Model units", "The model is drawn in:",
+            ["millimetres", "metres", "inches"], 0, False)
+        if not ok:
+            return ""
+        scale = {"millimetres": 1e-3, "metres": 1.0, "inches": 0.0254}[units]
+
+        sys.path.insert(0, os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__)))), "tools"))
+        try:
+            import contour_from_stl as extractor
+        except ImportError as exc:
+            self.status.setText(f"cannot load the STL reader: {exc}")
+            return ""
+
+        out = os.path.splitext(stl)[0] + "_contour.csv"
+        argv = [stl, "-o", out, "--axis", axis, "--scale", str(scale)]
+        buf = io.StringIO()
+        err = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+                code = extractor.main(argv)
+        except Exception as exc:                        # noqa: BLE001
+            self.status.setText(f"the STL could not be read: {exc}")
+            return ""
+        report = (buf.getvalue() + err.getvalue()).strip()
+        if code != 0:
+            QtWidgets.QMessageBox.warning(self, "Import failed", report)
+            return ""
+        # The axisymmetry warning is the one that matters: a model that is not
+        # a body of revolution yields a contour that looks fine and means
+        # nothing, so it is put in front of the user rather than logged.
+        if "WARNING" in report:
+            answer = QtWidgets.QMessageBox.warning(
+                self, "This model may not be a body of revolution",
+                report + "\n\nUse it anyway?",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                QtWidgets.QMessageBox.No)
+            if answer != QtWidgets.QMessageBox.Yes:
+                return ""
+        self.status.setText(report.splitlines()[-2] if report else "")
+        return out
+
+    def _use_contour(self, path: str) -> None:
+        self.geometry_label.setText(
+            os.path.basename(path) if path else "Ignis-M1 (analytic bell)")
+        self.revert_button.setEnabled(bool(path))
+        self._frames = []
+        self._ranges = {}
+        self.slider.setEnabled(False)
+        self.play_button.setEnabled(False)
+        self.save_button.setEnabled(False)
+        self.view.clear()
+        self.view.set_contour(None)
+        self.contourChosen.emit(path)
 
     # ------------------------------------------------------------------ export
     def frames(self) -> List[Frame]:

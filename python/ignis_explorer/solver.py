@@ -52,6 +52,11 @@ class Design:
     throat_radius: float = 0.070        # m
     expansion_ratio: float = 20.0
     altitude: float = 0.0               # m
+    # A tabulated wall contour to use instead of the analytic bell.  When set,
+    # the throat radius and expansion ratio controls stop having any effect --
+    # both are measured from the contour -- and the UI says so rather than
+    # leaving live-looking controls that do nothing.
+    contour_file: str = ""
     composition: str = "equilibrium"    # equilibrium (shifting) | frozen
     eta_c_star: float = 0.96
     cooling: bool = True
@@ -127,20 +132,35 @@ def _config_text(d: Design) -> str:
         f"  eta_c_star: {d.eta_c_star!r}",
         f"  composition: {d.composition}",
         "nozzle:",
-        f"  throat_radius: {d.throat_radius!r}",
-        "  contraction_ratio: 2.8",
-        "  chamber_length: 0.22",
-        "  converging_half_angle: 30.0",
-        "  chamber_fillet_ratio: 0.5",
-        "  throat_upstream_ratio: 1.5",
-        "  throat_downstream_ratio: 0.382",
-        f"  expansion_ratio: {d.expansion_ratio!r}",
-        "  type: bell",
-        "  bell_length_fraction: 0.8",
-        "  bell_initial_angle: 33.0",
-        "  bell_exit_angle: 8.0",
-        "  stations: 240",
-        "  bartz_curvature: mean",
+    ]
+    if d.contour_file:
+        # Everything the analytic path takes as input, the tabulated path
+        # measures, so emitting the analytic keys here would be writing down
+        # numbers the solver is about to ignore.  Only the fallback curvature
+        # ratio and the station count still mean anything.
+        lines += [
+            f"  contour_file: {d.contour_file}",
+            "  throat_upstream_ratio: 1.5",
+            "  stations: 240",
+        ]
+    else:
+        lines += [
+            f"  throat_radius: {d.throat_radius!r}",
+            "  contraction_ratio: 2.8",
+            "  chamber_length: 0.22",
+            "  converging_half_angle: 30.0",
+            "  chamber_fillet_ratio: 0.5",
+            "  throat_upstream_ratio: 1.5",
+            "  throat_downstream_ratio: 0.382",
+            f"  expansion_ratio: {d.expansion_ratio!r}",
+            "  type: bell",
+            "  bell_length_fraction: 0.8",
+            "  bell_initial_angle: 33.0",
+            "  bell_exit_angle: 8.0",
+            "  stations: 240",
+            "  bartz_curvature: mean",
+        ]
+    lines += [
         "performance:",
         f"  altitude: {d.altitude!r}",
         "  auto_divergence: true",

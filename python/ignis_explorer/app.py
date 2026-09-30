@@ -67,6 +67,11 @@ class DesignPanel(QtWidgets.QWidget):
 
     changed = QtCore.Signal()
 
+    #: Path of an imported wall contour, or "" for the analytic bell.  Owned
+    #: here rather than in the Flow tab because it is part of the design the
+    #: solver is asked for, not part of how the plume is displayed.
+    contour_file: str = ""
+
     def __init__(self, slot: str, design: Design) -> None:
         super().__init__()
         self.slot = slot
@@ -115,6 +120,7 @@ class DesignPanel(QtWidgets.QWidget):
     def design(self) -> Design:
         name = self.propellant.value()
         return Design(
+            contour_file=self.contour_file,
             propellant=name,
             chamber_pressure=self.pressure.value() * 1e6,
             mixture_ratio=self.mixture.value(),
@@ -294,8 +300,22 @@ class Explorer(QtWidgets.QMainWindow):
         # exit state and owns a worker thread, so it is added by hand and fed
         # separately in _refresh.
         self.flow = FlowTab()
+        self.flow.contourChosen.connect(self._contour_chosen)
         self.tabs.addTab(self.flow, "Flow")
         return self.tabs
+
+    def _contour_chosen(self, path: str) -> None:
+        """Re-solve design A on an imported contour (or back on the bell)."""
+        self.panel_a.contour_file = path
+        # Throat radius and expansion ratio are measured from a contour, so the
+        # controls that set them stop meaning anything; dimming them is the
+        # honest signal that they are no longer in the loop.
+        for widget in (self.panel_a.throat, self.panel_a.expansion):
+            widget.setEnabled(not path)
+        self._set_status(
+            f"solving on {os.path.basename(path)} …" if path
+            else "solving on the analytic bell …")
+        self.run_slot("A")
 
     def _right_column(self) -> QtWidgets.QWidget:
         col = QtWidgets.QWidget()

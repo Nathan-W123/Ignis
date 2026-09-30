@@ -3,7 +3,7 @@
 [![CI](https://github.com/Nathan-W123/Ignis/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nathan-W123/Ignis/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C.svg)
-![Tests](https://img.shields.io/badge/tests-81%20cases%2C%2018%2C730%20assertions-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-85%20cases%2C%2018%2C775%20assertions-brightgreen.svg)
 
 **A thermochemical liquid-rocket propulsion simulator in C++17.**
 
@@ -172,6 +172,23 @@ interpolated between frames and nothing is painted on — and the march can be
 written straight out as an mp4. The plume model is inviscid and axisymmetric,
 so it solves shock structure and wave propagation and does **not** model
 turbulent breakup; that caveat is printed under the viewer, not buried here.
+
+You can also give it a real engine. `nozzle: contour_file:` takes a wall
+contour as `x,r` pairs in metres, and `tools/contour_from_stl.py` reduces a CAD
+mesh to one:
+
+```bash
+python3 tools/contour_from_stl.py engine.stl --axis x --scale 0.001 -o contour.csv
+```
+
+Everything the analytic parameterisation declares is then measured from the
+contour instead — throat, contraction and expansion ratio, L\*, the exit wall
+angle that sets the divergence loss, and the throat curvature radius Bartz
+needs. On the JPL test nozzle of [`validation.md` §5b](docs/validation.md),
+that curvature fit recovers 1.854 in from nine published tap values against the
+1.800 in the report states independently. What an import cannot give you is
+hardware: a quasi-1D model is a wall radius, so manifolds, injector and channel
+routing are discarded, and the flow passage is what remains.
 
 ### The six tools
 
@@ -443,12 +460,13 @@ include/ignis/ + src/          the library, 12 modules, no I/O in the physics
   uncertainty/  distributions, deterministic Monte Carlo, sensitivity
   io/           YAML config with path-qualified errors, JSON, CSV, CLI
 apps/           the six executables -- parse, call, print
-tests/          81 Catch2 cases: unit, verification, validation, integration
+tests/          85 Catch2 cases: unit, verification, validation, integration
 python/         ignis_viz (figures, renders) and ignis_explorer (the desktop UI)
 explorer.py     launcher for the Ignis Engine Explorer
 configs/        12 shipped scenarios
 data/           species, propellants, materials, coolant tables (all cited)
 tools/          the generators that build data/ and validation/reference/,
+                contour_from_stl.py for importing CAD geometry,
                 and make_cover.py, which renders the engine
 validation/     externally produced reference data (CEA, Cantera, CoolProp,
                 and two 1965 heat-transfer experiments transcribed by hand)

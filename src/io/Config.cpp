@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <sstream>
 
 #include "ignis/nozzle/Atmosphere.hpp"
@@ -126,6 +127,51 @@ double EngineConfig::resolveAmbientPressure() const {
   return ambient_pressure;
 }
 
+
+namespace {
+
+/// Read a two-column wall contour, x then r, both in metres.
+///
+/// The format is deliberately the least a file can be: one x,r pair per line,
+/// comma or whitespace separated, with `#` comments and an optional header
+/// line skipped.  That is what falls out of a CAD revolve profile export, a
+/// table typed out of a report, or `tools/contour_from_stl.py`.  Anything
+/// richer would be a format of this project's invention that no tool emits.
+std::vector<ContourSample> readContourFile(const std::string& path,
+                                           const std::string& where) {
+  std::ifstream in(path);
+  if (!in)
+    throw ConfigError(where + ": cannot open the contour file '" + path + "'");
+
+  std::vector<ContourSample> out;
+  std::string line;
+  std::size_t lineno = 0;
+  while (std::getline(in, line)) {
+    ++lineno;
+    const auto hash = line.find('#');
+    if (hash != std::string::npos) line.erase(hash);
+    for (char& c : line) if (c == ',' || c == '\t' || c == ';') c = ' ';
+    std::istringstream ls(line);
+    double x = 0.0, r = 0.0;
+    if (!(ls >> x >> r)) {
+      // A header line is normal and is skipped, but only as the first
+      // non-empty line: further unreadable lines mean the file is not what it
+      // claims, and saying which line is more use than a generic parse error.
+      if (line.find_first_not_of(" \r\n") == std::string::npos) continue;
+      if (out.empty()) continue;
+      throw ConfigError(where + ": could not read an x,r pair from line " +
+                        std::to_string(lineno) + " of '" + path + "'");
+    }
+    out.push_back({x, r});
+  }
+  if (out.empty())
+    throw ConfigError(where + ": the contour file '" + path +
+                      "' contains no x,r pairs");
+  return out;
+}
+
+}  // namespace
+
 EngineConfig EngineConfig::load(const std::string& path) {
   YAML::Node doc;
   try {
@@ -185,18 +231,29 @@ EngineConfig EngineConfig::load(const std::string& path) {
                    "chamber_length", "converging_half_angle", "chamber_fillet_ratio",
                    "throat_upstream_ratio", "throat_downstream_ratio", "expansion_ratio",
                    "type", "cone_half_angle", "bell_length_fraction", "bell_initial_angle",
-                   "bell_exit_angle", "stations", "bartz_curvature"});
+                   "bell_exit_angle", "stations", "bartz_curvature", "contour_file"});
     auto& g = cfg.nozzle;
     g.throat_radius = n.optional("throat_radius").number(0.0);
     g.throat_area = n.optional("throat_area").number(0.0);
     g.chamber_radius = n.optional("chamber_radius").number(0.0);
     g.contraction_ratio = n.optional("contraction_ratio").number(0.0);
-    g.chamber_length = n["chamber_length"].number(0.0, 100.0, 0.0);
+    g.chamber_length = 0.0;   // set below; measured when a contour is supplied
     g.converging_half_angle = n.optional("converging_half_angle").number(2.0, 80.0, 30.0);
     g.chamber_fillet_ratio = n.optional("chamber_fillet_ratio").number(0.05, 5.0, 0.5);
     g.throat_upstream_ratio = n.optional("throat_upstream_ratio").number(0.1, 10.0, 1.5);
     g.throat_downstream_ratio = n.optional("throat_downstream_ratio").number(0.05, 10.0, 0.382);
-    g.expansion_ratio = n["expansion_ratio"].number(1.0001, 1000.0, 0.0);
+    // A tabulated contour replaces the analytic shape.  `expansion_ratio` is
+    // required by the analytic path and measured by the tabulated one, so it
+    // stops being mandatory once a contour is supplied.
+    const std::string contour_file = n.optional("contour_file").text("");
+    if (!contour_file.empty()) {
+      g.contour = readContourFile(contour_file, n["contour_file"].path());
+      g.expansion_ratio = n.optional("expansion_ratio").number(0.0);
+      g.chamber_length = n.optional("chamber_length").number(0.0);
+    } else {
+      g.expansion_ratio = n["expansion_ratio"].number(1.0001, 1000.0, 0.0);
+      g.chamber_length = n["chamber_length"].number(0.0, 100.0, 0.0);
+    }
     g.divergent = divergentTypeFromString(n.optional("type").text("bell"));
     g.cone_half_angle = n.optional("cone_half_angle").number(1.0, 45.0, 15.0);
     g.bell_length_fraction = n.optional("bell_length_fraction").number(0.3, 1.2, 0.8);
