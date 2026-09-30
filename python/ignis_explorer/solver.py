@@ -216,15 +216,38 @@ class Solver:
         self.bin_dir = os.path.join(self.build_dir, "bin")
 
     def binary(self, name: str) -> str:
-        return os.path.join(self.bin_dir, name)
+        """Path to one solver binary, wherever this platform's build put it.
+
+        `build/bin` is where every generator is told to write, but a build made
+        before that was pinned -- or one driven by hand -- leaves Visual Studio
+        and Xcode output under a per-configuration subdirectory instead.  Those
+        are searched too, so an existing build keeps working rather than
+        producing a "binaries not found" dialog next to a directory full of
+        binaries.
+        """
+        exe = name + (".exe" if os.name == "nt" else "")
+        candidates = [os.path.join(self.bin_dir, exe)]
+        candidates += [os.path.join(self.bin_dir, cfg, exe)
+                       for cfg in ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")]
+        for path in candidates:
+            if os.path.exists(path):
+                return path
+        return candidates[0]
 
     def available(self) -> bool:
         return os.path.exists(self.binary("ignis_engine"))
 
     def missing_message(self) -> str:
+        if os.name == "nt":
+            how = ("Build them first, from the repository root:\n"
+                   "    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release\n"
+                   "    cmake --build build --config Release")
+        else:
+            how = "Build them first:\n    ./scripts/build.sh"
         return ("Could not find the Ignis binaries.\n\n"
-                f"Looked in: {self.bin_dir}\n\n"
-                "Build them first:\n    ./scripts/build.sh\n\n"
+                f"Looked in: {self.bin_dir}\n"
+                "(and in Release/ RelWithDebInfo/ Debug/ below it)\n\n"
+                f"{how}\n\n"
                 "or point the Explorer at an existing build with the "
                 "IGNIS_BUILD_DIR environment variable.")
 

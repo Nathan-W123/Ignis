@@ -102,18 +102,36 @@ endif()
 # ---------------------------------------------------------------------------
 # Applications
 # ---------------------------------------------------------------------------
+
+# Put executables in build/bin on every generator.
+#
+# RUNTIME_OUTPUT_DIRECTORY alone is not enough on a multi-config generator --
+# Visual Studio and Xcode append the configuration, so the binary lands in
+# build/bin/Release and anything looking in build/bin (the Explorer, the
+# scripts, a developer) does not find it.  Setting the per-configuration
+# properties as well pins all of them to the same directory.
+function(ignis_output_to_bin target)
+  set_target_properties(${target} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
+  foreach(cfg IN LISTS CMAKE_CONFIGURATION_TYPES)
+    string(TOUPPER ${cfg} CFG)
+    set_target_properties(${target} PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY_${CFG} ${PROJECT_BINARY_DIR}/bin)
+  endforeach()
+endfunction()
+
 if(IGNIS_BUILD_APPS)
   foreach(app ignis_equilibrium ignis_engine ignis_nozzle ignis_transient ignis_sweep ignis_mc)
     add_executable(${app} ${PROJECT_SOURCE_DIR}/apps/${app}.cpp)
     target_link_libraries(${app} PRIVATE ignis ${IGNIS_YAML_TARGET})
-    set_target_properties(${app} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
+    ignis_output_to_bin(${app})
   endforeach()
 endif()
 
 if(IGNIS_BUILD_BENCH)
   add_executable(ignis_bench ${PROJECT_SOURCE_DIR}/bench/ignis_bench.cpp)
   target_link_libraries(ignis_bench PRIVATE ignis ${IGNIS_YAML_TARGET})
-  set_target_properties(ignis_bench PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
+  ignis_output_to_bin(ignis_bench)
 endif()
 
 # ---------------------------------------------------------------------------

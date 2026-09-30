@@ -6,7 +6,7 @@ target_link_libraries(ignis_tests PRIVATE ignis Catch2::Catch2WithMain ${IGNIS_Y
 target_include_directories(ignis_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(ignis_tests PRIVATE
   IGNIS_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
-set_target_properties(ignis_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
+ignis_output_to_bin(ignis_tests)
 
 include(Catch)
 catch_discover_tests(ignis_tests
