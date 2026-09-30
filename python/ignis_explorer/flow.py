@@ -58,13 +58,21 @@ RAMPS = ["inferno", "viridis", "magma", "cividis", "plasma", "turbo"]
 
 # (nx, nr, length, width, max steps, snapshot cadence, rough wall time).
 # Length and width are in exit radii.  The domain is long and narrow because a
-# plume is: a square window spends most of its pixels on ambient air.  The
-# times are measured on the machine this was written on and will not hold
-# everywhere, which is why they are labelled "~".
+# plume is: a square window spends most of its pixels on ambient air.
+#
+# The first row's time is measured -- 9000 steps on a 300x90 grid took 561 s on
+# the machine this was written on.  The other two are that measurement scaled
+# by the product of cell count and step count, which is what an explicit
+# finite-volume march costs.  They are labelled "~" because neither the
+# measurement nor the scaling transfers to another machine.
+#
+# Nothing here is a wait in the usual sense: frames start arriving a few
+# seconds in and the plume is watchable while it builds, so the number is how
+# long until it stops changing, not how long until there is something to see.
 GRIDS = [
-    (300, 90, 12.0, 4.5, 9000, 60, "2 min"),
-    (440, 130, 14.0, 4.5, 13000, 90, "8 min"),
-    (640, 190, 16.0, 5.0, 18000, 130, "30 min"),
+    (300, 90, 12.0, 4.5, 9000, 60, "9 min"),
+    (440, 130, 14.0, 4.5, 13000, 90, "28 min"),
+    (640, 190, 16.0, 5.0, 18000, 130, "85 min"),
 ]
 
 
@@ -313,7 +321,7 @@ class FlowTab(QtWidgets.QWidget):
         row.addWidget(self.ramp_box)
 
         self.quality_box = QtWidgets.QComboBox()
-        self.quality_box.addItems([f"{g[0]}x{g[1]}  ~{g[5]}" for g in GRIDS])
+        self.quality_box.addItems([f"{g[0]}x{g[1]}  ~{g[6]}" for g in GRIDS])
         row.addWidget(QtWidgets.QLabel("Grid"))
         row.addWidget(self.quality_box)
 
