@@ -306,18 +306,17 @@ class PropertyGrid(QtWidgets.QTreeWidget):
         head.setForeground(0, QtGui.QColor(styles.ACCENT))
         self.addTopLevelItem(head)
         for key, value in rows:
-            item = QtWidgets.QTreeWidgetItem([key, value])
-            item.setForeground(1, QtGui.QColor(styles.TEXT))
-            self.addTopLevelItem(item)
+            # No explicit foreground: the stylesheet owns text colour, so the
+            # grid follows a theme switch instead of keeping the colour it was
+            # built with.
+            self.addTopLevelItem(QtWidgets.QTreeWidgetItem([key, value]))
         for name, sub in groups or ():
             parent = QtWidgets.QTreeWidgetItem([name, ""])
             pf = parent.font(0)
             pf.setBold(True)
             parent.setFont(0, pf)
             for key, value in sub:
-                child = QtWidgets.QTreeWidgetItem([key, value])
-                child.setForeground(1, QtGui.QColor(styles.TEXT))
-                parent.addChild(child)
+                parent.addChild(QtWidgets.QTreeWidgetItem([key, value]))
             self.addTopLevelItem(parent)
             parent.setExpanded(True)
 
@@ -443,7 +442,8 @@ def dock(title: str, widget: QtWidgets.QWidget, *,
     return d
 
 
-SHELL_STYLE = f"""
+def shell_style() -> str:
+    return f"""
 QFrame#ribbonBar {{
     background: {styles.BG_PANEL};
     border-bottom: 1px solid {styles.BORDER};
@@ -521,4 +521,4 @@ QStatusBar::item {{ border: 0; }}
 """
 
 __all__ = ["ColorBar", "ModelTree", "PropertyGrid", "Ribbon", "RibbonButton",
-           "RibbonGroup", "SHELL_STYLE", "dock", "icon"]
+           "RibbonGroup", "dock", "icon", "shell_style"]

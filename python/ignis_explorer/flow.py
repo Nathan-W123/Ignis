@@ -395,6 +395,7 @@ class FlowTab(QtWidgets.QWidget):
             "Inviscid axisymmetric Euler, marched from rest. Shock structure "
             "and wave propagation are solved; turbulent breakup is not "
             "modelled.")
+        note.setObjectName("flowNote")
         note.setWordWrap(True)
         note.setStyleSheet(f"color: {styles.TEXT_DIM}; font-size: 11px;")
         lay.addWidget(note)
@@ -667,13 +668,13 @@ class FlowTab(QtWidgets.QWidget):
         if self._engine_meshes is None and (case is not None or self._result is not None):
             if case is not None:
                 # A case carries the contour but not the axial temperature, so
-                # the wall is coloured by area ratio instead -- a geometric
-                # quantity the contour really does contain.  Colouring it by a
-                # gas temperature that was never stored would be inventing a
-                # field, which is exactly what this project does not do.
+                # there is no field to colour the wall by.  It is drawn as
+                # metal instead.  Substituting a geometric stand-in would put a
+                # colour ramp on the wall that looks like a solved field and
+                # is not one.
                 x = case.contour[:, 0]
                 r = case.contour[:, 1]
-                temperature = (r.min() / np.maximum(r, 1e-9)) ** 2
+                temperature = None
             else:
                 profile = self._result.profile
                 x = np.asarray(profile["x"], dtype=float)
@@ -685,8 +686,11 @@ class FlowTab(QtWidgets.QWidget):
             self._engine_meshes = viewport3d.engine_meshes(
                 np.column_stack([x[::step], r[::step]]),
                 wall=max(0.006, 0.02 * float(r.min())),
-                scalar=temperature[::step], ramp=self.colorbar.ramp(),
-                lo=float(temperature.min()), hi=float(temperature.max()),
+                scalar=None if temperature is None else temperature[::step],
+                ramp=self.colorbar.ramp(),
+                lo=0.0 if temperature is None else float(temperature.min()),
+                hi=1.0 if temperature is None else float(temperature.max()),
+                wall_colour=None if temperature is not None else (0.62, 0.65, 0.70),
                 n_theta=48)
             self._engine_length = float(x[-1])
 
@@ -806,6 +810,19 @@ class FlowTab(QtWidgets.QWidget):
         self.view.clear()
         self.view.set_contour(None)
         self.contourChosen.emit(path)
+
+    def retheme(self) -> None:
+        """Rebuild the chrome this tab painted with literal colours."""
+        self.geometry_label.setStyleSheet(f"color: {styles.TEXT_MUTED};")
+        for label in self.findChildren(QtWidgets.QLabel):
+            if label.objectName() == "flowNote":
+                label.setStyleSheet(
+                    f"color: {styles.TEXT_DIM}; font-size: 11px;")
+        self.status.setStyleSheet(f"color: {styles.TEXT_DIM};")
+        # The 3-D scene bakes the background into its own framebuffer and the
+        # 2-D view into its caption, so both are redrawn rather than repainted.
+        self._engine_meshes = None
+        self._draw()
 
     # ------------------------------------------------------------------ export
     def frames(self) -> List[Frame]:

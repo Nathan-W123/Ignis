@@ -176,7 +176,7 @@ class Explorer(QtWidgets.QMainWindow):
 
         styles.apply_matplotlib()
 
-        self.setStyleSheet(styles.STYLESHEET + shell.SHELL_STYLE)
+        self._apply_theme(styles.active())
 
         # The window is a simulation application, not a dashboard: a ribbon of
         # verbs on top, the model on the left, the viewport in the middle with
@@ -303,6 +303,8 @@ class Explorer(QtWidgets.QMainWindow):
                     tip="Show or hide the model browser")
         view.button("thermal", "Thermal", lambda: self._show_tab("Thermal"),
                     tip="Show the wall and coolant temperatures")
+        view.button("fit", "Theme", self._cycle_theme,
+                    tip="Switch between the dark and light themes")
 
         titles = QtWidgets.QVBoxLayout()
         titles.setSpacing(0)
@@ -440,6 +442,40 @@ class Explorer(QtWidgets.QMainWindow):
                  "play": "run the flow first - there are no frames to play",
                  "save": "run the flow first - there is nothing to export",
                  "import": "import is busy"}.get(what, ""), "warning")
+
+    def _apply_theme(self, name: str) -> None:
+        """Switch theme and rebuild everything that baked a colour.
+
+        A Qt stylesheet cascades, so most of the window follows on its own.
+        What does not are the widgets that wrote a colour into an inline
+        stylesheet or a painter when they were built: the ribbon icons, the
+        tree icons, and the handful of labels with a literal colour. Those are
+        rebuilt here rather than left one theme behind.
+        """
+        styles.use(name)
+        styles.apply_matplotlib()
+        self.setStyleSheet(styles.STYLESHEET + shell.shell_style())
+        # This also runs from __init__, before the panes exist, where setting
+        # the stylesheet is the whole job.
+        if not hasattr(self, "tree"):
+            return
+        self._build_tree()
+        self.flow.retheme()
+        for chart in self.charts.values():
+            chart.show_results([self.results.get(s) for s in self._slots()],
+                               list(self._slots()))
+        current = self.tree.currentItem()
+        if current is not None:
+            key = current.data(0, QtCore.Qt.UserRole)
+            if key:
+                self._tree_selected(key)
+        elif not self.solver.available():
+            self._no_solver()
+        self._set_status(f"{name} theme")
+
+    def _cycle_theme(self) -> None:
+        names = styles.themes()
+        self._apply_theme(names[(names.index(styles.active()) + 1) % len(names)])
 
     def _toggle_dock(self, name: str) -> None:
         d = self._docks.get(name)

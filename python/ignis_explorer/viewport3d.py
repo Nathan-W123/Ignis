@@ -456,6 +456,7 @@ def engine_meshes(contour: np.ndarray, *, wall: float,
                   scalar: Optional[np.ndarray] = None, ramp: str = "inferno",
                   lo: float = 0.0, hi: float = 1.0,
                   cut_deg: float = 80.0, cut_azimuth: float = np.pi,
+                  wall_colour: Optional[Tuple[float, float, float]] = None,
                   n_theta: int = 64):
     """The engine as an inner gas-side surface, an outer shell, and end caps.
 
@@ -472,7 +473,8 @@ def engine_meshes(contour: np.ndarray, *, wall: float,
     theta1 = cut_azimuth + 2.0 * np.pi - half
 
     inner = revolve(x, r, theta0=theta0, theta1=theta1, n_theta=n_theta,
-                    scalar=scalar, ramp=ramp, lo=lo, hi=hi, flip_normals=True)
+                    scalar=scalar, ramp=ramp, lo=lo, hi=hi,
+                    flat_colour=wall_colour, flip_normals=True)
     inner.name = "wall (gas side)"
     outer = revolve(x, r + wall, theta0=theta0, theta1=theta1, n_theta=n_theta,
                     flat_colour=(0.30, 0.33, 0.38))

@@ -26,21 +26,55 @@ from __future__ import annotations
 
 import matplotlib.colors as mcolors
 
-# --- chrome ---------------------------------------------------------------
-BG_DEEP = "#0a0e14"
-BG_MAIN = "#0f1419"
-BG_PANEL = "#151c24"
-BG_ELEVATED = "#1a2332"
-BG_INPUT = "#1e2a3a"
-BORDER = "#2d3a4f"
-BORDER_FOCUS = "#3d7ea6"
-TEXT = "#e2e8f0"
-TEXT_MUTED = "#94a3b8"
-TEXT_DIM = "#64748b"
-ACCENT = "#2dd4bf"
-ACCENT_BRIGHT = "#4de8ff"
-ACCENT_DEEP = "#14b8a6"
-ACCENT_HOVER = "#5eead4"
+# --- chrome, per theme ----------------------------------------------------
+# Two palettes, not one inverted.  Inverting a dark scheme gives muddy greys
+# and an accent that no longer clears contrast, so the light theme is chosen
+# against its own surface.  The categorical slots below are shared: they were
+# re-validated on the light surface (#f4f6f9) and pass all six checks there
+# too, so the series keep their identity when the theme changes.
+_THEMES = {
+    "dark": dict(
+        BG_DEEP="#0a0e14", BG_MAIN="#0f1419", BG_PANEL="#151c24",
+        BG_ELEVATED="#1a2332", BG_INPUT="#1e2a3a",
+        BORDER="#2d3a4f", BORDER_FOCUS="#3d7ea6",
+        TEXT="#e2e8f0", TEXT_MUTED="#94a3b8", TEXT_DIM="#64748b",
+        ACCENT="#2dd4bf", ACCENT_BRIGHT="#4de8ff", ACCENT_DEEP="#14b8a6",
+        ACCENT_HOVER="#5eead4",
+        # Dark surface: the ramp runs dark to light, and its darkest step
+        # still has to clear the surface or its own low end is invisible.
+        SEQUENTIAL_STEPS=[
+            "#3580a2", "#3a8cb0", "#3f98be", "#44a4cc", "#4ab0d9", "#55bbe2",
+            "#57bce3", "#6cc7ea", "#85d3f0", "#9fdef5", "#bae9fa", "#d6f3fd",
+        ],
+        STATUS={"good": "#22c55e", "warning": "#eab308",
+                "serious": "#f97316", "critical": "#ef4444"},
+    ),
+    "light": dict(
+        BG_DEEP="#e8ecf1", BG_MAIN="#eef1f5", BG_PANEL="#f4f6f9",
+        BG_ELEVATED="#ffffff", BG_INPUT="#ffffff",
+        BORDER="#c3cbd6", BORDER_FOCUS="#2f7fa8",
+        TEXT="#16202c", TEXT_MUTED="#4b5a6b", TEXT_DIM="#7a8899",
+        ACCENT="#0e7490", ACCENT_BRIGHT="#0891b2", ACCENT_DEEP="#155e75",
+        ACCENT_HOVER="#0891b2",
+        # Light surface: the ramp runs the other way, light to dark, so that
+        # larger still reads as heavier.  Reusing the dark ramp here would put
+        # its high end almost on the background.
+        SEQUENTIAL_STEPS=[
+            "#dbeefb", "#c3e2f6", "#a9d4ef", "#8ec6e8", "#74b7e0", "#5aa7d7",
+            "#4496c9", "#3384b7", "#2572a2", "#1a608c", "#124e74", "#0b3d5c",
+        ],
+        # Darker than the dark theme's: a status dot has to clear 3:1 against
+        # a near-white surface, which the brighter greens and yellows do not.
+        STATUS={"good": "#15803d", "warning": "#a16207",
+                "serious": "#c2410c", "critical": "#b91c1c"},
+    ),
+}
+
+_ACTIVE = "dark"
+
+BG_DEEP = BG_MAIN = BG_PANEL = BG_ELEVATED = BG_INPUT = ""
+BORDER = BORDER_FOCUS = TEXT = TEXT_MUTED = TEXT_DIM = ""
+ACCENT = ACCENT_BRIGHT = ACCENT_DEEP = ACCENT_HOVER = ""
 
 # --- categorical: fixed slot order, never cycled --------------------------
 CATEGORICAL = [
@@ -59,29 +93,46 @@ CATEGORICAL_ALLPAIRS = CATEGORICAL[:3]
 DESIGN_A = "#4de8ff"
 DESIGN_B = "#f0a020"
 
-# --- sequential: one hue, dark to light on a dark surface -----------------
-# The darkest step still has to clear the chart surface (#1a2332): on a dark
-# background a ramp that starts at the surface makes its own low end invisible.
-SEQUENTIAL_STEPS = [
-    "#3580a2", "#3a8cb0", "#3f98be", "#44a4cc", "#4ab0d9", "#55bbe2",
-    "#57bce3", "#6cc7ea", "#85d3f0", "#9fdef5", "#bae9fa", "#d6f3fd",
-]
-SEQUENTIAL = mcolors.LinearSegmentedColormap.from_list("ignis_dark_seq", SEQUENTIAL_STEPS)
+# --- sequential and status: set by the active theme -----------------------
+SEQUENTIAL_STEPS: list = []
+SEQUENTIAL = None
+STATUS: dict = {}
+CHART: dict = {}
 
-# --- status: reserved, never reused for a series --------------------------
-STATUS = {
-    "good": "#22c55e",
-    "warning": "#eab308",
-    "serious": "#f97316",
-    "critical": "#ef4444",
-}
 
-CHART = {
-    "figure_bg": BG_PANEL,
-    "axes_bg": BG_ELEVATED,
-    "text": TEXT_MUTED,
-    "grid": BORDER,
-}
+def active() -> str:
+    """Which theme is in force."""
+    return _ACTIVE
+
+
+def themes() -> list:
+    return list(_THEMES)
+
+
+def use(name: str) -> None:
+    """Make `name` the active theme, rebinding every token in this module.
+
+    Widgets that read a token when they paint follow immediately; widgets that
+    baked one into an inline stylesheet at construction do not, which is why
+    the Explorer re-applies STYLESHEET and rebuilds its painted chrome after
+    calling this rather than assuming a repaint is enough.
+    """
+    global _ACTIVE, SEQUENTIAL, SEQUENTIAL_STEPS, STATUS, CHART, STYLESHEET
+    if name not in _THEMES:
+        raise ValueError(f"unknown theme {name!r}; have {sorted(_THEMES)}")
+    _ACTIVE = name
+    g = globals()
+    for key, value in _THEMES[name].items():
+        g[key] = value
+    SEQUENTIAL = mcolors.LinearSegmentedColormap.from_list(
+        f"ignis_{name}_seq", SEQUENTIAL_STEPS)
+    CHART = {
+        "figure_bg": g["BG_PANEL"],
+        "axes_bg": g["BG_ELEVATED"],
+        "text": g["TEXT_MUTED"],
+        "grid": g["BORDER"],
+    }
+    STYLESHEET = _stylesheet()
 
 
 def apply_matplotlib() -> None:
@@ -129,7 +180,8 @@ def apply_matplotlib() -> None:
     })
 
 
-STYLESHEET = f"""
+def _stylesheet() -> str:
+    return f"""
 QMainWindow, QWidget#centralRoot {{
     background-color: {BG_DEEP};
     color: {TEXT};
@@ -260,3 +312,7 @@ QToolTip {{
     padding: 4px;
 }}
 """
+
+
+# Populate every token at import; the Explorer may switch later.
+use("dark")
