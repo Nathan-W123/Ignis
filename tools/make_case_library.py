@@ -70,15 +70,6 @@ def read_csv(path: str) -> dict:
     return out
 
 
-def git_describe() -> str:
-    try:
-        return subprocess.run(["git", "describe", "--always", "--dirty"],
-                              cwd=REPO, capture_output=True, text=True,
-                              check=True).stdout.strip()
-    except (subprocess.CalledProcessError, OSError):
-        return "unknown"
-
-
 def build_case(stem: str, config: str, name: str, description: str,
                binary: str) -> dict:
     with tempfile.TemporaryDirectory() as tmp:
@@ -116,7 +107,11 @@ def build_case(stem: str, config: str, name: str, description: str,
         "name": name,
         "description": description,
         "config": config,
-        "solved_by": git_describe(),
+        # The binary's own stamp, not a `git describe` of the tree now: this
+        # tool writes several files in turn, so by the second one the tree is
+        # dirty with the first, and a live describe would blame the solve on
+        # changes that did not exist when it ran.
+        "solved_by": engine.get("git", "unknown"),
         "note": ("The exit state and performance below were solved by the Ignis "
                  "binaries and are replayed, not recomputed. The plume is "
                  "solved live from this exit state every time it is run."),

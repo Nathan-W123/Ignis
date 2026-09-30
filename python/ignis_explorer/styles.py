@@ -40,6 +40,7 @@ _THEMES = {
         TEXT="#e2e8f0", TEXT_MUTED="#94a3b8", TEXT_DIM="#64748b",
         ACCENT="#2dd4bf", ACCENT_BRIGHT="#4de8ff", ACCENT_DEEP="#14b8a6",
         ACCENT_HOVER="#5eead4",
+        DESIGN_A="#4de8ff", DESIGN_B="#f0a020",
         # Dark surface: the ramp runs dark to light, and its darkest step
         # still has to clear the surface or its own low end is invisible.
         SEQUENTIAL_STEPS=[
@@ -60,6 +61,10 @@ _THEMES = {
         TEXT="#16202c", TEXT_MUTED="#4b5a6b", TEXT_DIM="#7a8899",
         ACCENT="#0e7490", ACCENT_BRIGHT="#0891b2", ACCENT_DEEP="#155e75",
         ACCENT_HOVER="#0891b2",
+        # The dark theme's slot colours are 1.47:1 and 2.15:1 on white --
+        # nearly invisible.  These were validated as a pair on the light
+        # surface: all six data-viz checks pass, CVD separation 24.7 (deutan).
+        DESIGN_A="#0284c7", DESIGN_B="#c2410c",
         # Light surface: the ramp runs the other way, light to dark, so that
         # larger still reads as heavier.  Reusing the dark ramp here would put
         # its high end almost on the background.
@@ -94,8 +99,7 @@ CATEGORICAL = [
 CATEGORICAL_ALLPAIRS = CATEGORICAL[:3]
 
 # The two design slots are an identity, so they get fixed hues that never move.
-DESIGN_A = "#4de8ff"
-DESIGN_B = "#f0a020"
+DESIGN_A = DESIGN_B = ""     # set per theme by use()
 
 # --- sequential and status: set by the active theme -----------------------
 SEQUENTIAL_STEPS: list = []

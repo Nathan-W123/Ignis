@@ -3,7 +3,7 @@
  "name": "Ignis-M1 vacuum",
  "description": "The same chamber with a vacuum-optimised bell",
  "config": "methane_vacuum.yaml",
- "solved_by": "v1.0.0-15-g1a3634f",
+ "solved_by": "v1.0.0-20-ge020523",
  "note": "The exit state and performance below were solved by the Ignis binaries and are replayed, not recomputed. The plume is solved live from this exit state every time it is run.",
  "exit": {
   "radius": 0.4695742753,
