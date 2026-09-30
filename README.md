@@ -1,5 +1,10 @@
 # Ignis
 
+[![CI](https://github.com/Nathan-W123/Ignis/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nathan-W123/Ignis/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C.svg)
+![Tests](https://img.shields.io/badge/tests-85%20cases%2C%2018%2C775%20assertions-brightgreen.svg)
+
 **A thermochemical liquid-rocket propulsion simulator in C++17.**
 
 Ignis computes what a liquid rocket engine does, from the propellants up:
@@ -14,6 +19,28 @@ It is validated against **NASA CEA** and **Cantera**, agrees with CEA to
 **0.18 % or better** on flame temperature and **0.06 % or better** on
 characteristic velocity across 156 rocket cases, and reports the residual of
 every balance it claims to close.
+
+It is also checked against **measurements**, not just against other codes. The
+gas-side heat-transfer correlation is compared with local heat flux measured in
+a heated-air nozzle at JPL in 1965, where it over-predicts by about 45 % on the
+high-pressure tests and about 150 % on the low-pressure ones; and
+with a LOX/hydrogen heat-sink rocket fired at NASA Lewis the same year, which
+puts its leading constant within 1 % of the measured value in the chamber and
+72 % high at the throat ([details](docs/validation.md)). Two experiments,
+different fluids, different laboratories, agreeing to within 16 % on how wrong
+the correlation is. That is the correlation's error, not a bug — and knowing
+its size, and its shape along the engine, is worth more than assuming it away.
+
+![The Ignis-M1 engine firing](results/figures/17_engine_render.png)
+
+*The Ignis-M1 at 3 km: chamber, throat, bell and exhaust plume. Nothing here is
+painted on — the hue at every point is Planck's law at the computed temperature
+and the brightness is the computed density, integrated along the camera rays.
+Ignis stops at the exit plane, so the plume is a separate axisymmetric Euler
+solution started from the exit state; its lip shock stands at 25.19°, against
+23.88° from exact oblique-shock theory. See
+[how the renders are made](docs/rendering.md), and what the plume model leaves
+out.*
 
 ![Start-up transient of the Ignis-M1 engine](results/figures/00_startup_animation.gif)
 
@@ -59,9 +86,11 @@ reactants at 298.15 K.
 **Nozzle.** Rao-type bell contours from six analytic C¹ segments, or conical.
 Quasi-1D marching on static pressure with shifting-equilibrium or frozen
 chemistry; the throat located by M(p) = 1; area ratios by Illinois regula
-falsi. Real-gas normal shocks, expansion-regime classification, and the
-Summerfield and Schmucker separation criteria. U.S. Standard Atmosphere 1976
-with the standard's own constants.
+falsi. Variable-property equilibrium-gas normal shocks (ideal thermal EOS,
+state-dependent c<sub>p</sub>, γ and molar mass — not a non-ideal
+compressibility model), expansion-regime classification, and the Summerfield
+and Schmucker separation criteria. U.S. Standard Atmosphere 1976 with the
+standard's own constants.
 
 **Thermal.** Chapman–Enskog transport with Neufeld collision integrals, the
 Brokaw polar correction, modified Eucken and Wilke mixing. Bartz hot-gas
@@ -94,7 +123,7 @@ and fetched automatically if not.
 ```bash
 git clone https://github.com/Nathan-W123/Ignis.git && cd Ignis
 ./scripts/build.sh                 # configure + build, ~36 s on 4 cores
-./scripts/test.sh                  # 75 test cases, ~1 min on 4 cores
+./scripts/test.sh                  # 78 test cases, ~1 min on 4 cores
 ```
 
 Run the nominal LOX/methane engine:
@@ -113,6 +142,53 @@ pip install -r python/requirements.txt
 
 It prints its own end-to-end wall time at the end, and it fails loudly on the
 first error.
+
+### The desktop Explorer
+
+![Ignis Engine Explorer](results/figures/16_explorer.png)
+
+```bash
+pip install -r python/requirements-explorer.txt
+python3 explorer.py
+```
+
+**Ignis Engine Explorer** puts the solver behind an interactive dashboard:
+change a chamber pressure, mixture ratio, expansion ratio or altitude and see
+the performance, the flow field and the thermal consequence, with a second
+design slot for side-by-side comparison. It implements no physics of its own —
+it writes a configuration, runs the same binaries listed below, and shows what
+they returned, including the refusal when a design does not close. The model's
+limitations are pinned open next to the answer rather than hidden behind a
+menu. See [`docs/explorer.md`](docs/explorer.md).
+
+![The Explorer's Flow tab](results/figures/18_explorer_flow.png)
+
+Its **Flow** tab takes the exit state of whatever design is solved and marches
+the axisymmetric Euler equations outward from it, starting from rest, so you
+watch the plume establish itself: the jet front driving into still air, the
+starting vortex, the shock cells forming from the exit plane outward and the
+Mach disc settling. Every frame is a solution at that instant — nothing is
+interpolated between frames and nothing is painted on — and the march can be
+written straight out as an mp4. The plume model is inviscid and axisymmetric,
+so it solves shock structure and wave propagation and does **not** model
+turbulent breakup; that caveat is printed under the viewer, not buried here.
+
+You can also give it a real engine. `nozzle: contour_file:` takes a wall
+contour as `x,r` pairs in metres, and `tools/contour_from_stl.py` reduces a CAD
+mesh to one:
+
+```bash
+python3 tools/contour_from_stl.py engine.stl --axis x --scale 0.001 -o contour.csv
+```
+
+Everything the analytic parameterisation declares is then measured from the
+contour instead — throat, contraction and expansion ratio, L\*, the exit wall
+angle that sets the divergence loss, and the throat curvature radius Bartz
+needs. On the JPL test nozzle of [`validation.md` §5b](docs/validation.md),
+that curvature fit recovers 1.854 in from nine published tap values against the
+1.800 in the report states independently. What an import cannot give you is
+hardware: a quasi-1D model is a wall radius, so manifolds, injector and channel
+routing are discarded, and the flow passage is what remains.
 
 ### The six tools
 
@@ -189,29 +265,44 @@ LOX/CH<sub>4</sub> at p<sub>c</sub> = 5.5 MPa, O/F 3.4, ε = 45: shifting
 **7.82 %** of vacuum impulse. Both are computed; neither is presented as *the*
 answer.
 
-### Constrained optimisation
+### Constrained ascent trade study
 
-Maximise vacuum I<sub>sp</sub> over six variables, subject to a 800 K wall
-limit, a 4 MPa jacket budget and a 900 K coolant limit. 2500 evaluations
-(116 of them infeasible analyses), 245 s:
+Maximising vacuum I<sub>sp</sub> under thermal limits alone is not a trade:
+vacuum I<sub>sp</sub> rises monotonically with expansion ratio, so the
+optimiser walks ε to whatever bound it is given and the answer *is* the bound.
+A booster delivers its impulse across a trajectory, and a first stage spends
+most of its burn low, where an over-expanded nozzle loses thrust and eventually
+separates. The shipped study therefore maximises the **time-weighted ascent
+specific impulse** under the constraints that actually size a booster:
 
-| | Baseline | Optimised |
-|---|---:|---:|
-| **Vacuum I<sub>sp</sub>** | 350.91 s | **380.83 s** |
-| Chamber pressure | 5.50 MPa | 8.51 MPa |
-| Mixture ratio | 3.40 | 3.588 |
-| Expansion ratio | 20.0 | 89.8 |
-| Channel height | 5.00 mm | 3.51 mm |
-| Wall thickness | 0.600 mm | 0.651 mm |
-| Channel width fraction | 0.500 | 0.657 |
-| Peak wall temperature | 797.7 K | 779.4 K ✓ (≤ 800) |
-| Jacket pressure drop | 3.33 MPa | 3.94 MPa ✓ (≤ 4.0) |
-| Coolant outlet | 493.3 K | 345.2 K ✓ (≤ 900) |
+| | Baseline | Optimised | |
+|---|---:|---:|---|
+| **Ascent I<sub>sp</sub>** (objective) | 318.19 s | **336.29 s** | +5.7 % |
+| Chamber pressure | 5.50 MPa | 10.75 MPa | |
+| Mixture ratio | 3.40 | 3.412 | |
+| Expansion ratio | 20.0 | **25.67** | interior to [6, 40] |
+| Throat radius | 70.0 mm | 50.4 mm | |
+| Sea-level thrust | 134.1 kN | 149.2 kN | ✓ 130–150 kN class (**active**) |
+| Peak wall temperature | 690.7 K | 794.3 K | ✓ ≤ 800 K (**active**) |
+| Jacket pressure drop | 1.69 MPa | 3.84 MPa | ✓ ≤ 4.0 MPa (**active**) |
+| Separation margin at lift-off | −6.1 % | +7.2 % | ✓ ≥ +2 % |
+| Exit diameter | 626 mm | 511 mm | ✓ ≤ 700 mm |
+| Engine length | 1074 mm | 925 mm | ✓ ≤ 1300 mm |
 
-The optimiser pushes ε to the edge of its bound and buys the extra chamber
-pressure by taking the wall and the jacket right up to their limits — both
-active constraints end within 3 % of their bounds. It is a local method with
-multi-start, not a global proof; see [limitations](docs/limitations.md#6-optimisation-and-uncertainty).
+The story the numbers tell: held to a 130–150 kN sea-level thrust class, the
+optimiser raises chamber pressure until the **liner** and the **jacket** run
+out of margin, shrinks the throat to stay under the thrust ceiling, and settles
+the expansion ratio at 25.7 — where the flow still runs full at lift-off and
+the ascent-averaged impulse peaks. Three constraints from three different
+disciplines end active, and the expansion ratio lands well inside its bounds.
+
+An ε scan at fixed pressure shows why the objective matters: ascent
+I<sub>sp</sub> peaks near ε = 15 and the separation margin goes negative by
+ε = 20, while vacuum I<sub>sp</sub> is still climbing at ε = 90.
+
+It is a local method with Latin-hypercube multi-start, not a global proof, and
+12 starts are needed to find a feasible set this narrow — see
+[limitations](docs/limitations.md#6-optimisation-and-uncertainty).
 
 ### Monte Carlo — 2000 samples, 10 dispersed inputs
 
@@ -251,7 +342,9 @@ away from being unknown.
 | Peak wall temperature and Δp over the channel design space | Output distributions with p5/p50/p95 |
 
 All 16 figures live in `results/figures/` and are regenerated by
-`python3 python/make_figures.py`.
+`python3 python/make_figures.py`. The volumetric renders and animations are
+separate — `python3 tools/make_cover.py`, documented in
+[`docs/rendering.md`](docs/rendering.md).
 
 ---
 
@@ -316,8 +409,11 @@ Full detail in [`docs/verification.md`](docs/verification.md).
   smooth problem; the adaptive and fixed-step integrators agree to 2.4e-7.
 * Equilibrium from 12 random initial guesses lands on the same answer to 1e-8.
 * Monte Carlo at 1, 4 and 7 threads gives **byte-identical** sample matrices.
-* **75 test cases, 17,490 assertions, 0 failures** on GCC 13.3 and Clang 18.1,
+* **78 test cases, 17,550 assertions, 0 failures** on GCC 13.3 and Clang 18.1,
   Release and Debug, with `-Wall -Wextra -Wpedantic -Werror`.
+* Every committed report identifies its binary as `Ignis 1.0.0 (v1.0.0)` — a
+  clean tag, no local modifications — because the whole tree was regenerated
+  from a fresh clone of that tag.
 * The committed `results/` tree was **reproduced bit-for-bit** from a fresh
   clone: 9 reports and 33 CSV tables compared, and the only differences were
   measured wall times ([`verification.md` §6](docs/verification.md)).
@@ -364,12 +460,16 @@ include/ignis/ + src/          the library, 12 modules, no I/O in the physics
   uncertainty/  distributions, deterministic Monte Carlo, sensitivity
   io/           YAML config with path-qualified errors, JSON, CSV, CLI
 apps/           the six executables -- parse, call, print
-tests/          75 Catch2 cases: unit, verification, validation, integration
-python/         ignis_viz: the plotting package, and make_figures.py
+tests/          85 Catch2 cases: unit, verification, validation, integration
+python/         ignis_viz (figures, renders) and ignis_explorer (the desktop UI)
+explorer.py     launcher for the Ignis Engine Explorer
 configs/        12 shipped scenarios
 data/           species, propellants, materials, coolant tables (all cited)
-tools/          the generators that build data/ and validation/reference/
-validation/     externally produced reference data (CEA, Cantera, CoolProp)
+tools/          the generators that build data/ and validation/reference/,
+                contour_from_stl.py for importing CAD geometry,
+                and make_cover.py, which renders the engine
+validation/     externally produced reference data (CEA, Cantera, CoolProp,
+                and two 1965 heat-transfer experiments transcribed by hand)
 scripts/        build.sh  test.sh  validate.sh  run_all.sh
 docs/           theory, architecture, configuration, V&V, benchmarks, limits
 ```
@@ -395,6 +495,8 @@ data-flow diagram and the error policy.
 | [`docs/validation.md`](docs/validation.md) | NASA CEA, Cantera and reference-EOS comparisons with measured errors |
 | [`docs/benchmarks.md`](docs/benchmarks.md) | Measured timings, scaling and parallel efficiency |
 | [`docs/limitations.md`](docs/limitations.md) | What the model cannot do, and what would have to change |
+| [`docs/explorer.md`](docs/explorer.md) | The desktop Explorer: layout, charts, constraints, colour contract |
+| [`docs/rendering.md`](docs/rendering.md) | The volumetric renders, the Euler plume solver and what it omits |
 | [`docs/extending.md`](docs/extending.md) | How to add species, propellants, correlations, figures |
 
 ---
@@ -411,9 +513,10 @@ The short version — the full list is [`docs/limitations.md`](docs/limitations.
   by an empirical criterion and flagged, but the inviscid solution is not
   modified — so a separated nozzle's reported thrust is optimistic.
 * **The thermal model is an engineering estimate.** Bartz carries ±20–30 %
-  scatter, and the Monte Carlo campaign disperses it explicitly rather than
-  pretending otherwise. No axial conduction, no thermal stress, no life
-  analysis.
+  scatter — measured here as 1 % in the chamber and about 70 % high at the
+  throat ([validation.md §5b](docs/validation.md)) — and the Monte Carlo
+  campaign disperses it explicitly rather than pretending otherwise. No axial
+  conduction, no thermal stress, no life analysis.
 * **η<sub>c\*</sub> is an assumed input, not a prediction.** There is no
   injector or mixing model. Ideal and corrected quantities are reported
   separately everywhere so the assumption stays visible.

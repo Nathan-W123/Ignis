@@ -1,0 +1,113 @@
+# Ignis reference data: measured convective heat transfer in a nozzle
+# source: D. R. Bartz-era JPL measurements --
+#   L. H. Back, P. F. Massier and H. L. Gier, "Convective Heat Transfer in a
+#   Convergent-Divergent Nozzle", JPL Technical Report No. 32-415, Jet
+#   Propulsion Laboratory, California Institute of Technology (1965).
+#   NASA NTRS accession 19650010083.
+#
+# Transcribed by hand from the scanned report's Appendix B, Tables B-1, B-2 and
+# B-3, read from the page images.  The OCR of that scan is unreliable and was
+# NOT used as the source; where a digit could not be read with certainty the
+# station was dropped rather than guessed.
+#
+# APPARATUS.  Air heated by the internal combustion of methanol, expanded
+# through a conical convergent-divergent nozzle.  The report states the
+# methanol-to-air weight flow ratio was small enough that the products could be
+# treated as air for viscosity, specific heat and Prandtl number (their Ref. 12,
+# Keenan and Kaye, Gas Tables).  Steady-state wall heat flux from thermocouple
+# plugs; h defined by their Eq. 2 as q_w / (T_aw - T_w) with the adiabatic wall
+# temperature taken at a recovery factor of Pr^(1/3) -- the same definition
+# Ignis uses.
+#
+# GEOMETRY (report Section I and Fig. 5), common to every test:
+#   throat radius            r*  = 0.9015 in
+#   throat diameter          D*  = 1.803  in
+#   throat curvature radius  r_c = 1.800  in
+#   nozzle length            L   = 5.925  in
+#   contraction area ratio         7.75
+#   expansion area ratio           2.68
+#   convergent half-angle          30 deg
+#   divergent half-angle           15 deg
+#   nozzle-inlet radius            2.53 in
+#
+# STATED EXPERIMENTAL UNCERTAINTY (report, Appendix B preamble): about +-8 % on
+# h in the throat region at the higher stagnation pressures and temperatures,
+# rising to as much as +-21 % where adjacent thermocouple differences were
+# smallest, i.e. near the inlet at low stagnation pressure and temperature.
+# The authors note these are maxima and the true accuracy is probably better.
+#
+# COLUMNS.  Values are verbatim in the report's own units so that any row can
+# be checked against the printed table; the test converts to SI.
+#   test          report test number
+#   approach_in   cooled approach length l upstream of the nozzle inlet, in
+#   pt_psia       stagnation pressure, psia
+#   tto_degR      stagnation temperature, deg R
+#   mdot_lbm_s    mass flow rate, lbm/s
+#   z_over_L      axial distance ratio
+#   qw_btu_s_in2  measured wall heat flux, BTU/(s in^2)
+#   tw_degR       measured gas-side wall temperature, deg R
+#   te_degR       free-stream static temperature, deg R
+#   h_btu_s_in2_F measured heat-transfer coefficient, BTU/(s in^2 degF)
+#
+# Stations marked with a dagger in the report (flow separation present) are
+# omitted: the correlation under test does not describe separated flow.
+test,approach_in,pt_psia,tto_degR,mdot_lbm_s,z_over_L,qw_btu_s_in2,tw_degR,te_degR,h_btu_s_in2_F
+319,0,35.9,1508,1.212,0.133,0.0773,690,1507,0.945e-4
+319,0,35.9,1508,1.212,0.276,0.0619,665,1502,0.735e-4
+319,0,35.9,1508,1.212,0.385,0.0792,663,1492,0.940e-4
+319,0,35.9,1508,1.212,0.429,0.0858,658,1480,1.01e-4
+319,0,35.9,1508,1.212,0.469,0.0911,665,1460,1.09e-4
+319,0,35.9,1508,1.212,0.512,0.0989,669,1412,1.19e-4
+319,0,35.9,1508,1.212,0.573,0.0885,650,1300,1.06e-4
+319,0,35.9,1508,1.212,0.603,0.0787,645,1230,0.944e-4
+319,0,35.9,1508,1.212,0.634,0.0657,631,1155,0.782e-4
+319,0,35.9,1508,1.212,0.664,0.0532,619,1080,0.632e-4
+319,0,35.9,1508,1.212,0.693,0.0555,625,995,0.672e-4
+318,0,51.0,1509,1.720,0.133,0.0884,709,1508,1.11e-4
+318,0,51.0,1509,1.720,0.276,0.0745,687,1503,0.906e-4
+318,0,51.0,1509,1.720,0.385,0.0918,686,1492,1.12e-4
+318,0,51.0,1509,1.720,0.429,0.104,686,1480,1.27e-4
+318,0,51.0,1509,1.720,0.469,0.117,702,1460,1.47e-4
+318,0,51.0,1509,1.720,0.512,0.121,710,1412,1.53e-4
+318,0,51.0,1509,1.720,0.573,0.117,693,1300,1.47e-4
+318,0,51.0,1509,1.720,0.603,0.143,718,1230,1.87e-4
+318,0,51.0,1509,1.720,0.634,0.0971,678,1155,1.22e-4
+318,0,51.0,1509,1.720,0.664,0.0757,660,1080,0.943e-4
+318,0,51.0,1509,1.720,0.693,0.0992,686,995,1.29e-4
+318,0,51.0,1509,1.720,0.717,0.0956,681,975,1.25e-4
+318,0,51.0,1509,1.720,0.750,0.101,671,945,1.32e-4
+318,0,51.0,1509,1.720,0.782,0.0875,691,905,1.18e-4
+318,0,51.0,1509,1.720,0.825,0.0762,654,870,0.986e-4
+271,18,175.0,1483,6.011,0.133,0.146,777,1482,2.07e-4
+271,18,175.0,1483,6.011,0.204,0.154,777,1480,2.18e-4
+271,18,175.0,1483,6.011,0.276,0.166,819,1477,2.50e-4
+271,18,175.0,1483,6.011,0.336,0.219,918,1474,3.89e-4
+271,18,175.0,1483,6.011,0.385,0.262,896,1468,4.47e-4
+271,18,175.0,1483,6.011,0.429,0.298,928,1456,5.41e-4
+271,18,175.0,1483,6.011,0.603,0.309,956,1210,6.20e-4
+271,18,175.0,1483,6.011,0.634,0.301,938,1120,5.93e-4
+271,18,175.0,1483,6.011,0.664,0.315,941,1045,6.37e-4
+271,18,175.0,1483,6.011,0.693,0.249,890,990,4.63e-4
+271,18,175.0,1483,6.011,0.717,0.267,887,965,5.00e-4
+271,18,175.0,1483,6.011,0.750,0.300,872,935,5.51e-4
+271,18,175.0,1483,6.011,0.782,0.224,847,900,3.98e-4
+271,18,175.0,1483,6.011,0.825,0.220,805,870,3.68e-4
+273,18,201.0,1507,6.871,0.133,0.154,801,1506,2.18e-4
+273,18,201.0,1507,6.871,0.204,0.172,824,1504,2.53e-4
+273,18,201.0,1507,6.871,0.276,0.221,904,1501,3.67e-4
+273,18,201.0,1507,6.871,0.336,0.241,957,1498,4.39e-4
+273,18,201.0,1507,6.871,0.385,0.274,921,1492,4.69e-4
+273,18,201.0,1507,6.871,0.429,0.349,995,1482,6.87e-4
+273,18,201.0,1507,6.871,0.469,0.371,1024,1459,7.80e-4
+273,18,201.0,1507,6.871,0.512,0.374,1038,1409,8.17e-4
+273,18,201.0,1507,6.871,0.573,0.416,1048,1298,9.54e-4
+273,18,201.0,1507,6.871,0.603,0.328,995,1228,6.78e-4
+273,18,201.0,1507,6.871,0.634,0.358,1015,1143,7.87e-4
+273,18,201.0,1507,6.871,0.664,0.330,975,1058,6.80e-4
+273,18,201.0,1507,6.871,0.693,0.258,917,1003,4.84e-4
+273,18,201.0,1507,6.871,0.717,0.313,943,973,6.25e-4
+273,18,201.0,1507,6.871,0.750,0.314,899,948,5.82e-4
+273,18,201.0,1507,6.871,0.782,0.254,890,924,4.68e-4
+273,18,201.0,1507,6.871,0.825,0.270,875,894,4.91e-4
+273,18,201.0,1507,6.871,0.905,0.210,808,825,3.45e-4
+273,18,201.0,1507,6.871,0.938,0.236,775,800,3.73e-4

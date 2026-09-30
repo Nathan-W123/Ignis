@@ -268,3 +268,95 @@ TEST_CASE("the hot-gas survey isolates the gas side", "[cooling]") {
   REQUIRE(r.total_heat_load > 0.0);
   REQUIRE_THROWS_AS(surveyHotGasSide(f.flow, f.geom, f.ch, s, f.transport, 0.0), ConfigError);
 }
+
+TEST_CASE("the conductivity warning describes converged states, not solver trials",
+          "[cooling][verification]") {
+  Fixture f;
+  auto spec = f.spec();
+
+  // The coupled wall balance is bracketed between the coolant bulk temperature
+  // and the adiabatic wall temperature, so the root finder evaluates k(T) at
+  // states hundreds of kelvin away from the answer.  Reporting those would tell
+  // the reader the wall reached temperatures the model never predicts.
+  const auto res = solveRegenerativeCooling(f.flow, f.geom, f.ch, spec, f.transport);
+  REQUIRE_FALSE(res.stations.empty());
+
+  double converged_min = 1.0e30, converged_max = -1.0e30;
+  for (const auto& s : res.stations) {
+    const double mean = 0.5 * (s.t_wall_hot + s.t_wall_cold);
+    converged_min = std::min(converged_min, mean);
+    converged_max = std::max(converged_max, mean);
+  }
+  INFO("converged mean wall temperature " << converged_min << " to " << converged_max
+       << " K; material fitted over [" << spec.wall.valid_min << ", " << spec.wall.valid_max
+       << "] K");
+
+  if (res.conductivity_extrapolated) {
+    // Whatever it reports must be a state the march actually converged on.
+    REQUIRE(res.conductivity_extrapolation_min >= converged_min - 1e-6);
+    REQUIRE(res.conductivity_extrapolation_max <= converged_max + 1e-6);
+    // ... and it must genuinely be outside the fitted range.
+    REQUIRE_FALSE(spec.wall.inValidRange(res.conductivity_extrapolation_min));
+  } else {
+    // No warning means every converged station was inside the fit, which is the
+    // case for the shipped designs.  The bracket endpoints are not.
+    REQUIRE(spec.wall.inValidRange(converged_min));
+    REQUIRE(spec.wall.inValidRange(converged_max));
+    REQUIRE(converged_min > spec.inlet_temperature);
+  }
+
+  SECTION("a genuinely cold wall does raise the warning") {
+    // Narrow the fitted range so that converged states fall outside it; the
+    // physics is untouched, only the material's declared validity window.
+    auto cold = spec;
+    cold.wall.valid_min = converged_min + 0.25 * (converged_max - converged_min);
+    const auto r = solveRegenerativeCooling(f.flow, f.geom, f.ch, cold, f.transport);
+    REQUIRE(r.conductivity_extrapolated);
+    REQUIRE(r.conductivity_extrapolation_min >= converged_min - 1e-6);
+    REQUIRE(r.conductivity_extrapolation_max <= cold.wall.valid_min);
+    // The warning names the axial extent so the reader can find it.
+    REQUIRE(r.conductivity_extrapolation_x_max >= r.conductivity_extrapolation_x_min);
+    bool mentioned = false;
+    for (const auto& w : r.warnings)
+      if (w.find("wall conductivity was extrapolated") != std::string::npos) mentioned = true;
+    REQUIRE(mentioned);
+  }
+}
+
+TEST_CASE("the gas-side survey agrees with the coupled solve at its own wall temperature",
+          "[cooling]") {
+  // `surveyHotGasSide` prescribes the wall temperature and reports the flux,
+  // instead of solving for the wall temperature that balances the coolant.
+  // That is the form a calorimetric experiment reports, and it is what the
+  // heat-transfer validation case needs; this ties it to the coupled solver so
+  // the two cannot drift apart.
+  Fixture f;
+  const auto coupled = solveRegenerativeCooling(f.flow, f.geom, f.ch, f.spec(), f.transport);
+  const auto& hot = coupled.stations[coupled.stations.size() / 2];
+
+  const auto survey = surveyHotGasSide(f.flow, f.geom, f.ch, f.spec(), f.transport,
+                                       hot.t_wall_hot);
+  REQUIRE(survey.stations.size() == coupled.stations.size());
+  const auto& probe = survey.stations[coupled.stations.size() / 2];
+
+  SECTION("at the coupled wall temperature the gas-side flux is the same") {
+    REQUIRE(probe.t_wall_hot == Approx(hot.t_wall_hot).epsilon(1e-12));
+    REQUIRE(probe.h_gas == Approx(hot.h_gas).epsilon(1e-9));
+    REQUIRE(probe.q_total == Approx(hot.q_total).epsilon(1e-9));
+  }
+  SECTION("the survey solves nothing, so it reports no residual to solve") {
+    for (const auto& s : survey.stations) {
+      REQUIRE(s.iterations == 1);
+      REQUIRE(s.flux_residual == 0.0);
+      REQUIRE(s.t_wall_hot == Approx(hot.t_wall_hot).epsilon(1e-12));
+    }
+  }
+  SECTION("a colder wall draws more heat, everywhere") {
+    const auto colder = surveyHotGasSide(f.flow, f.geom, f.ch, f.spec(), f.transport,
+                                         hot.t_wall_hot - 200.0);
+    for (std::size_t i = 0; i < survey.stations.size(); ++i) {
+      INFO("station at x = " << survey.stations[i].x);
+      REQUIRE(colder.stations[i].q_total > survey.stations[i].q_total);
+    }
+  }
+}

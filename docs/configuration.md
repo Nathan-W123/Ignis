@@ -97,6 +97,56 @@ nozzle:
   cone_half_angle: 15.0         # deg (conical only)
   stations: 400                 # contour stations
   bartz_curvature: mean         # mean | throat | none — which radius feeds Bartz
+
+### Importing a real engine's geometry
+
+Everything above describes a nozzle by parameters. A real engine is usually
+described by its wall, so the nozzle block also accepts one directly:
+
+```yaml
+nozzle:
+  contour_file: my_engine_contour.csv   # x,r pairs in metres
+  throat_upstream_ratio: 1.5            # only a fallback, see below
+  stations: 400
+```
+
+The file is two columns, `x` then `r`, both in **metres**, one pair per line,
+comma or whitespace separated, with `#` comments and an optional header line
+skipped. Nothing richer, because nothing richer is what tools emit.
+
+When `contour_file` is present every other shape key is ignored, and the
+quantities they would have set are **measured from the contour** instead:
+throat radius and position, contraction and expansion ratio, chamber length,
+L\*, the exit wall angle that sets the divergence loss, and the throat
+curvature radius Bartz needs (a least-squares circle through the samples within
+15 % of the throat radius). `expansion_ratio` and `chamber_length` therefore
+stop being required. `throat_upstream_ratio` survives only as a fallback for
+the curvature if that circle fit fails, which happens on a sharp throat where
+the samples are collinear; the run reports which of the two it used.
+
+The wall between consecutive samples is a **straight line**. The geometry is
+exactly the polyline you supply, so its accuracy is the file's resolution —
+the throat area comes out slightly large if the throat is sampled coarsely,
+and that is not silently corrected.
+
+A contour that is not a nozzle is rejected rather than repaired. Samples must
+increase in x, radii must be positive, there must be at least nine of them, the
+throat must lie inside the table with room on both sides, and the wall must
+contract to the throat and expand after it. Each failure names the station that
+caused it.
+
+To get a contour out of a CAD model:
+
+```bash
+python3 tools/contour_from_stl.py engine.stl --axis x --scale 0.001 -o contour.csv
+```
+
+That reduces a triangle mesh to the revolve profile it was drawn from. It takes
+the inner (gas-side) surface by default — `--outer` if your model is of the
+flow volume rather than the solid — and it checks how axisymmetric the mesh
+actually is about the axis you named, because a model that still has its
+flanges on produces a contour that looks reasonable and means nothing.
+
 ```
 
 ## `performance`
@@ -109,7 +159,16 @@ performance:
   eta_nozzle: 1.0               # extra multiplicative nozzle efficiency
   separation: summerfield       # summerfield | schmucker | none
   resolve_internal_shocks: true # search for an internal normal shock when over-expanded
+  ascent_profile:               # optional; enables performance.isp_ascent
+    altitudes: [0, 5000, 10000, 20000, 40000]   # m, geometric
+    weights:   [0.30, 0.25, 0.20, 0.15, 0.10]   # time weights, normalised internally
 ```
+
+`ascent_profile` declares the trajectory over which `performance.isp_ascent` is
+averaged. It is an **input to a trade study, not a prediction**: Ignis has no
+vehicle model. Thrust is exactly linear in ambient pressure for a full-flowing
+nozzle, so the weighted mean is exact rather than a quadrature. Omitting the
+section leaves `performance.isp_ascent` at zero.
 
 `altitude` and `ambient_pressure` are mutually exclusive in effect — whichever
 appears last in the parameter registry wins when a study drives them.
@@ -318,8 +377,11 @@ performance.c_effective    performance.mdot           performance.exit_pressure
 performance.exit_temperature performance.exit_mach    performance.exit_velocity
 performance.pressure_ratio performance.expansion_ratio
 performance.mass_flow_residual performance.energy_residual
+performance.thrust_sea_level performance.isp_sea_level
+performance.isp_ascent     performance.separation_margin
 geometry.l_star            geometry.residence_time    geometry.throat_area
-geometry.exit_area
+geometry.exit_area         geometry.exit_radius       geometry.exit_diameter
+geometry.total_length      geometry.divergent_length
 cooling.max_wall_temperature cooling.max_heat_flux    cooling.total_heat_load
 cooling.pressure_drop      cooling.outlet_temperature cooling.temperature_rise
 cooling.energy_balance_residual cooling.flux_residual

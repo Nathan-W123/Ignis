@@ -1,8 +1,9 @@
 # units: parameter[-] value[-]
 parameter,value
-chamber.pressure,8506273.464
-propellants.mixture_ratio,3.587606038
-nozzle.expansion_ratio,89.81709434
-cooling.channel_height,0.003513799513
-cooling.wall_thickness,0.0006506768383
-cooling.width_fraction,0.656992882
+chamber.pressure,10750036.44
+propellants.mixture_ratio,3.412033728
+nozzle.expansion_ratio,25.67006696
+nozzle.throat_radius,0.05044199383
+cooling.channel_height,0.005259492577
+cooling.wall_thickness,0.0004078575363
+cooling.width_fraction,0.4851337154

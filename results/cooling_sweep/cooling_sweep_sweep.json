@@ -1,6 +1,6 @@
 {
   "ignis_version": "1.0.0",
-  "git": "8db92d8-dirty",
+  "git": "v1.0.0",
   "build_type": "Release",
   "compiler": "GNU 13.3.0",
   "config_file": "configs/cooling_sweep.yaml",
@@ -35,7 +35,7 @@
     "rows": 169,
     "points": 169,
     "failures": 52,
-    "wall_seconds": 4.4825003179999996,
+    "wall_seconds": 4.2554372459999996,
     "failure_messages": ["infeasible: cooling: the coolant pressure reached zero at x = 355.742 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 355.742 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 355.742 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 355.742 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 355.742 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 355.742 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 355.742 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 355.742 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 355.742 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 355.742 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 355.742 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 355.742 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 355.742 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 328.894 mm; the channel cannot pass 10.9177 kg/s", "range error: coolant methane: pressure 259790 Pa outside the tabulated range [500000, 4e+07] Pa", "infeasible: cooling: the coolant pressure reached zero at x = 324.419 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 324.419 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 324.419 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 324.419 mm; the channel cannot pass 10.9177 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 324.419 mm; the channel cannot pass 10.9177 kg/s"]
   }
 }

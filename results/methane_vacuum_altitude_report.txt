@@ -1,7 +1,7 @@
-Ignis 1.0.0 (8db92d8-dirty)
+Ignis 1.0.0 (v1.0.0)
   build type : Release
   compiler   : GNU 13.3.0
-  data dir   : /home/user/Ignis/data
+  data dir   : /tmp/claude-0/-home-user-Ignis/a38ad4d7-ed64-5b14-92a4-ed770272dde9/scratchpad/rel/data
 
 case methane_vacuum: equilibrium expansion, Ae/At = 45.00, mdot = 48.038 kg/s
 

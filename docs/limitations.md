@@ -25,15 +25,43 @@ idealisation by amounts that Ignis parameterises (η<sub>c\*</sub>,
 predict. Reproducing an idealisation accurately is not the same thing as
 predicting an engine, and this document is the difference.
 
+One of those parameters is no longer an assumption. The gas-side heat-transfer
+correlation has been compared against two measurements
+([`validation.md` §5b](validation.md)). In a heated-air nozzle Bartz
+over-predicts local heat flux by about 45 % on the high-pressure tests and
+about 150 % on the low-pressure ones. In a LOX/GH<sub>2</sub> heat-sink rocket,
+the published reduction gives a constant of 0.0151 ± 0.0020 at the throat
+against the 0.026 Ignis uses — an over-prediction of 1.72 — while in the
+chamber it gives 0.0257 ± 0.0028, which is 0.026 to within 1 %.
+
+Three things follow, and they are the honest summary of what is and is not
+known about the thermal side of this tool:
+
+* The M1's 2.3 K wall-temperature margin is far smaller than the uncertainty of
+  the model that produced it, and so carries no information.
+* The error is **not a constant**. It is negligible in the chamber and about
+  70 % at the throat, so no single `bartz_multiplier` can correct it. Nor is it
+  a Reynolds-number effect that a re-fitted exponent would absorb: the rocket
+  holds one constant per station to 13 % across a six-fold range of chamber
+  pressure. It is positional, because Bartz carries no boundary-layer history —
+  fixing it means a boundary-layer solution, item 2 below, not a better number.
+* The Monte Carlo dispersion on that multiplier (lognormal, σ<sub>ln</sub> =
+  0.15) is **too narrow**. The two measured factors sit 2.5 σ and 3.6 σ from
+  its median, so the campaign treats as a tail event something measured twice
+  as typical. Widening it would invalidate every committed run in `results/`
+  and has not been done; the numbers in those runs should be read with this
+  in mind.
+
 ---
 
 ## 1. Chemistry
 
 | Limitation | Consequence |
 |---|---|
+| **A nozzle is a wall radius and nothing else.** Geometry enters as `r(x)`, whether from the analytic parameterisation or an imported contour. | This is what a quasi-1D internal-flow model is, not a gap in the importer. A CAD model's manifolds, injector face, channel routing and mounting hardware have nowhere to go and are discarded. Importing a real engine gives you its flow passage, not its hardware. |
 | **Gas phase only.** No condensed species are carried. | Fuel-rich hydrocarbon cases that would form solid carbon are wrong. For LOX/CH<sub>4</sub> this matters below roughly O/F 1.5; the shipped sweeps stay at O/F ≥ 2. Metallised or chlorine-bearing propellants are out of scope entirely. |
 | **Equilibrium only — no finite-rate kinetics.** | Chamber composition assumes complete mixing and infinite residence time. The real recombination lag in a nozzle lies *between* the frozen and shifting limits; both bounds are computed and reported, but the true answer is not. |
-| **Ideal-gas equation of state for the products.** | At the highest condition used here (20 MPa, 3600 K) the product mixture sits at ≈ 14.5 kg/m³, a molar volume of 1.5 L/mol and a reduced temperature above 15 — deep in the ideal-gas regime, so the approximation is sound at these pressures. It would need revisiting for a very-high-pressure staged-combustion chamber. |
+| **Ideal-gas *thermal* equation of state for the products** (p = ρRT, Z ≡ 1). The *caloric* behaviour is fully variable — c<sub>p</sub>(T), γ(T) and the molar mass all change with the state — which is why the nozzle and shock solvers are described as "variable-property equilibrium-gas" rather than "real-gas". No compressibility factor, fugacity or non-ideal mixing rule is implemented. | At the highest condition used here (20 MPa, 3600 K) the product mixture sits at ≈ 14.5 kg/m³, a molar volume of 1.5 L/mol and a reduced temperature above 15 — deep in the ideal-gas regime, so the approximation is sound at these pressures. It would need revisiting for a very-high-pressure staged-combustion chamber. |
 | **40 species, restricted by element set.** | Species not in `data/thermo/ignis_nasa7.yaml` simply do not exist for the solver. Adding one is a data edit, not a code change, but it is an edit. |
 | **NASA TM-4513 (1993) 7-coefficient data.** | A few parts in 10³ of flame-temperature difference against the CEA 2002 9-coefficient set; this is the dominant term in the CEA comparison and is measured, not assumed. |
 | **No ionisation.** | Irrelevant below ~5000 K, which covers every case here, but it is a hard ceiling. |
@@ -56,7 +84,7 @@ be mistaken for a prediction.
 
 | Limitation | Consequence |
 |---|---|
-| **Bartz correlation for the hot-gas coefficient.** | Bartz has a documented scatter of roughly ±20–30 % against measured rocket heat flux, and it is worst exactly where it matters most — near the throat where curvature effects are strong. The Monte Carlo campaign disperses it explicitly (`cooling.bartz_multiplier`, lognormal σ<sub>ln</sub> = 0.15) because pretending it is exact would be dishonest. It is, unsurprisingly, the dominant driver of wall temperature (SRC 0.994) and pressure drop (SRC 0.915). |
+| **Bartz correlation for the hot-gas coefficient.** | Bartz has a documented scatter of roughly ±20–30 % against measured rocket heat flux, and it is worst exactly where it matters most — near the throat where curvature effects are strong. Both measurements in [`validation.md` §5b](validation.md) confirm this directly: the error is ≈ 1 % in the chamber and ≈ 70 % at the throat. The Monte Carlo campaign disperses the correlation explicitly (`cooling.bartz_multiplier`, lognormal σ<sub>ln</sub> = 0.15) because pretending it is exact would be dishonest, though that σ is now known to be too narrow. It is, unsurprisingly, the dominant driver of wall temperature (SRC 0.994) and pressure drop (SRC 0.915). |
 | **1-D wall, no axial conduction.** | Each station conducts only radially. Near the throat, where the flux gradient is steepest, axial conduction genuinely redistributes heat and the real peak is a little lower and broader than reported. |
 | **Rectangular-fin channel model.** | Fin efficiency uses the straight-fin relation. Real channels have fillets, varying aspect ratio and curvature-induced secondary flow. |
 | **Dittus–Boelter / Gnielinski coolant Nusselt numbers.** | Both are smooth-tube correlations for fully developed turbulent flow. Near-critical methane and supercritical hydrogen show property variation across the boundary layer that neither captures; the two disagree by up to 20 % on the shipped case, and `cooling.nusselt_multiplier` exists so that disagreement can be propagated. |
@@ -88,7 +116,8 @@ be mistaken for a prediction.
 
 | Limitation | Consequence |
 |---|---|
-| **Nelder–Mead is a local method.** | Latin-hypercube multi-start mitigates this, but nothing here proves global optimality. The reported design is the best feasible point found in 2500 evaluations, and it is described that way. |
+| **Nelder–Mead is a local method.** | Latin-hypercube multi-start mitigates this, but nothing here proves global optimality. The reported design is the best feasible point found in the declared evaluation budget, and it is described that way. |
+| **A derivative-free search needs the feasible set to be findable.** | The shipped trade study's feasible set is narrow — a 20 kN-wide thrust band intersected with a wall-temperature limit and a jacket budget. Inside the declared engineering bounds, 12 starts find it reliably and converge to the same optimum. Widening the variable box to 15 MPa and a 40 mm throat makes the search **fail outright**: 6000 evaluations, no feasible point found. That is a property of the method, not of the physics, and Ignis reports it as an `InfeasibleError` rather than returning an infeasible design. It also means the declared variable bounds are doing real work and have to be defensible engineering limits, not arbitrary box edges. |
 | **Derivative-free, so no optimality certificate.** | There are no KKT multipliers to check. What *is* checked is that the returned design re-analyses to the reported objective and satisfies every constraint to 1e-9. |
 | **Monte Carlo propagates the uncertainties you declare.** | The campaign disperses ten inputs. It cannot discover an uncertainty that was not declared — model-form error above all. A 2000-sample campaign with tight distributions will report tight outputs whether or not the model is right. |
 | **Standardised regression coefficients assume near-linearity.** | Each ranking carries its linear-model R², and they are 0.96–1.00 for the shipped case, so the rankings are meaningful there. For a strongly non-linear response the SRC ranking would be misleading and the R² would say so. |
@@ -111,7 +140,15 @@ Honestly stated, in rough order of importance:
 
 1. **Validation against measured engine data** — heat flux, wall temperature and
    delivered I<sub>sp</sub> from an instrumented test article. Everything else
-   on this list is secondary to that.
+   on this list is secondary to that. Partially begun: the gas-side correlation
+   now has a measured error against both a heated-air nozzle and a LOX/GH<sub>2</sub>
+   heat-sink rocket ([`validation.md` §5b](validation.md)). What those two do
+   *not* cover is the rest of the chain — neither has a regeneratively cooled
+   wall, so the coupled gas/wall/coolant solve is still unvalidated end to end;
+   neither constrains η<sub>c\*</sub>, because both take the combustion gas as
+   given rather than predicting it; and neither measures delivered
+   I<sub>sp</sub> at all. A firing of an instrumented regeneratively cooled
+   engine remains the thing needed.
 2. **A boundary-layer solution** coupled to the core flow, replacing both the
    inviscid-throat assumption and the Bartz correlation.
 3. **A conjugate 2-D or 3-D thermal solution** of the wall and channel,

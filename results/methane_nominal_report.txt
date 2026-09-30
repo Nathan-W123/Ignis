@@ -1,7 +1,7 @@
-Ignis 1.0.0 (8db92d8-dirty)
+Ignis 1.0.0 (v1.0.0)
   build type : Release
   compiler   : GNU 13.3.0
-  data dir   : /home/user/Ignis/data
+  data dir   : /tmp/claude-0/-home-user-Ignis/a38ad4d7-ed64-5b14-92a4-ed770272dde9/scratchpad/rel/data
 
 nozzle contour (bell)
   throat radius        70.00000 mm  (At = 153.93804 cm^2)
@@ -75,8 +75,6 @@ regenerative cooling
   coolant pressure drop  3.3347 MPa  (outlet 11.6653 MPa)
   energy balance residual 1.75e-10
   max local flux residual 4.36e-10
-  warnings:
-    - wall conductivity was extrapolated outside the fitted range [250, 900] K for CuCrZr: mean wall temperatures reached 107.065 to 3975.52 K. This happens at the cold inlet end of a cryogenic jacket and makes the predicted wall temperature there slightly conservative; the peak-flux station is unaffected.
 
 feed system (pressure-fed)
   chamber pressure     5.5000 MPa

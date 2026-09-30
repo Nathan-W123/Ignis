@@ -9,6 +9,9 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include "ignis/nozzle/NozzleGeometry.hpp"
+#include <cmath>
+#include <iomanip>
 
 #include "TestHelpers.hpp"
 #include "ignis/io/Config.hpp"
@@ -262,4 +265,145 @@ TEST_CASE("tables export consistent CSV and JSON", "[io][table]") {
   const auto j = t.toJson().dump();
   REQUIRE(j.find("\"rows\": 3") != std::string::npos);
   REQUIRE(j.find("\"x\": [1, 2, 3]") != std::string::npos);
+}
+
+TEST_CASE("the ascent profile is parsed and validated", "[io][config]") {
+  SECTION("the shipped trade study declares one") {
+    const auto cfg = EngineConfig::load(sourceDir() + "/configs/optimization.yaml");
+    REQUIRE(cfg.performance.ascent_altitudes.size() ==
+            cfg.performance.ascent_weights.size());
+    REQUIRE(cfg.performance.ascent_altitudes.size() >= 2);
+    double sum = 0.0;
+    for (double w : cfg.performance.ascent_weights) {
+      REQUIRE(w >= 0.0);
+      sum += w;
+    }
+    REQUIRE(sum > 0.0);
+    // Front-loaded: a first stage spends most of its burn low.
+    REQUIRE(cfg.performance.ascent_weights.front() >
+            cfg.performance.ascent_weights.back());
+  }
+  SECTION("a mismatched profile is rejected with an actionable message") {
+    std::string yaml = kMinimal;
+    yaml += "performance:\n  ascent_profile:\n"
+            "    altitudes: [0, 5000, 10000]\n    weights: [0.5, 0.5]\n";
+    const TempConfig tc(yaml);
+    REQUIRE_THROWS_WITH(EngineConfig::load(tc.path()),
+                        Catch::Matchers::ContainsSubstring("same length"));
+  }
+  SECTION("an altitude outside the atmosphere model is rejected") {
+    std::string yaml = kMinimal;
+    yaml += "performance:\n  ascent_profile:\n"
+            "    altitudes: [0, 120000]\n    weights: [0.5, 0.5]\n";
+    const TempConfig tc(yaml);
+    REQUIRE_THROWS_WITH(EngineConfig::load(tc.path()),
+                        Catch::Matchers::ContainsSubstring("Standard"));
+  }
+  SECTION("weights that sum to zero are rejected") {
+    std::string yaml = kMinimal;
+    yaml += "performance:\n  ascent_profile:\n"
+            "    altitudes: [0, 10000]\n    weights: [0.0, 0.0]\n";
+    const TempConfig tc(yaml);
+    REQUIRE_THROWS_WITH(EngineConfig::load(tc.path()),
+                        Catch::Matchers::ContainsSubstring("sum to zero"));
+  }
+}
+
+
+namespace {
+
+/// Write a contour table to a scratch file, in the format the parser accepts.
+class TempContour {
+ public:
+  explicit TempContour(const std::string& body) {
+    path_ = std::filesystem::temp_directory_path() /
+            ("ignis_contour_" +
+             std::to_string(reinterpret_cast<std::uintptr_t>(this)) + ".csv");
+    std::ofstream out(path_);
+    out << body;
+  }
+  ~TempContour() { std::error_code ec; std::filesystem::remove(path_, ec); }
+  std::string path() const { return path_.string(); }
+
+ private:
+  std::filesystem::path path_;
+};
+
+/// A small convergent-divergent contour: a cone in, an arc through the throat,
+/// a cone out.  Enough to be a nozzle, small enough to read.
+std::string simpleContour() {
+  std::ostringstream os;
+  os << "# a test contour\nx_m,r_m\n";
+  os << std::setprecision(9);
+  for (int i = 0; i <= 40; ++i) {
+    const double x = 0.30 * i / 40.0;
+    // Parabolic waist at x = 0.15 with r = 0.02, opening to 0.05 at each end.
+    const double r = 0.02 + 0.03 * std::pow((x - 0.15) / 0.15, 2.0);
+    os << x << "," << r << "\n";
+  }
+  return os.str();
+}
+
+}  // namespace
+
+TEST_CASE("a nozzle can be given a tabulated contour instead of a shape",
+          "[io][config][contour]") {
+  SECTION("the contour is read and replaces the analytic parameterisation") {
+    const TempContour contour(simpleContour());
+    const TempConfig tc(std::string(R"(
+name: imported
+propellants: { oxidizer: LOX, fuel: LCH4, mixture_ratio: 3.4 }
+chamber: { pressure: 5.0e6 }
+nozzle:
+  contour_file: )") + contour.path() + "\n");
+    const auto cfg = EngineConfig::load(tc.path());
+    REQUIRE(cfg.nozzle.contour.size() == 41);
+    CHECK(cfg.nozzle.contour.front().x == Approx(0.0));
+    CHECK(cfg.nozzle.contour.back().x == Approx(0.30));
+
+    // Neither expansion_ratio nor chamber_length was given, and neither is
+    // needed: with a contour both are measured rather than declared.
+    const auto geom = NozzleGeometry::build(cfg.nozzle);
+    CHECK(geom.isTabulated());
+    CHECK(geom.throatRadius() == Approx(0.02).epsilon(1e-6));
+    CHECK(geom.expansionRatio() == Approx(6.25).epsilon(1e-6));
+  }
+
+  SECTION("a missing contour file is reported with its path") {
+    const TempConfig tc(R"(
+name: imported
+propellants: { oxidizer: LOX, fuel: LCH4, mixture_ratio: 3.4 }
+chamber: { pressure: 5.0e6 }
+nozzle:
+  contour_file: /nonexistent/contour.csv
+)");
+    REQUIRE_THROWS_WITH(
+        EngineConfig::load(tc.path()),
+        Catch::Matchers::ContainsSubstring("cannot open the contour file") &&
+            Catch::Matchers::ContainsSubstring("/nonexistent/contour.csv"));
+  }
+
+  SECTION("a file that is not a contour is reported with the line") {
+    const TempContour contour("x_m,r_m\n0.0,0.05\nthis is not a number\n");
+    const TempConfig tc(std::string(R"(
+name: imported
+propellants: { oxidizer: LOX, fuel: LCH4, mixture_ratio: 3.4 }
+chamber: { pressure: 5.0e6 }
+nozzle:
+  contour_file: )") + contour.path() + "\n");
+    REQUIRE_THROWS_WITH(EngineConfig::load(tc.path()),
+                        Catch::Matchers::ContainsSubstring("line 3"));
+  }
+
+  SECTION("an empty contour file is reported as empty, not as a parse error") {
+    const TempContour contour("# nothing but a comment\n");
+    const TempConfig tc(std::string(R"(
+name: imported
+propellants: { oxidizer: LOX, fuel: LCH4, mixture_ratio: 3.4 }
+chamber: { pressure: 5.0e6 }
+nozzle:
+  contour_file: )") + contour.path() + "\n");
+    REQUIRE_THROWS_WITH(EngineConfig::load(tc.path()),
+                        Catch::Matchers::ContainsSubstring("contains no x,r pairs"));
+  }
 }

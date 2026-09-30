@@ -1,6 +1,6 @@
 {
   "ignis_version": "1.0.0",
-  "git": "8db92d8-dirty",
+  "git": "v1.0.0",
   "build_type": "Release",
   "compiler": "GNU 13.3.0",
   "config_file": "configs/hydrogen_nominal.yaml",
@@ -60,6 +60,11 @@
       "isp_ideal": 460.47510919493266,
       "isp": 459.04801271872827,
       "isp_vacuum": 459.04801271872833,
+      "thrust_sea_level": 54738.068358374163,
+      "isp_sea_level": 203.46800067260972,
+      "isp_ascent": 0,
+      "ascent_mean_ambient": 0,
+      "separation_margin": 1000000,
       "c_effective": 4501.7231939281155,
       "cf_ideal": 1.9915189653516692,
       "cf": 1.9853468842966984,
@@ -75,6 +80,10 @@
     "geometry": {
       "chamber_volume": 0.011699298582590721,
       "l_star": 1.0344451111818433,
+      "exit_radius": 0.46475800154489,
+      "exit_diameter": 0.92951600308978,
+      "total_length": 1.65703090860687,
+      "divergent_length": 1.2865556665132336,
       "residence_time": 0.0010543515050111646
     },
     "cooling": {
@@ -93,7 +102,9 @@
       "max_flux_residual": 3.0169763406321678e-10,
       "boiling_detected": false,
       "wall_limit_exceeded": false,
-      "warnings": ["wall conductivity was extrapolated outside the fitted range [250, 900] K for CuCrZr: mean wall temperatures reached 10.6262 to 3574.23 K. This happens at the cold inlet end of a cryogenic jacket and makes the predicted wall temperature there slightly conservative; the peak-flux station is unaffected."]
+      "wall_limit_temperature": 800,
+      "wall_material": "CuCrZr",
+      "warnings": []
     },
     "feed": {
       "oxidizer": {

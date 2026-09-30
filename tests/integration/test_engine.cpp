@@ -190,7 +190,8 @@ TEST_CASE("a sweep reproduces the single-point analysis exactly",
   }
 }
 
-TEST_CASE("constrained optimisation respects its constraints", "[integration][optimize]") {
+TEST_CASE("constrained optimisation respects its constraints",
+          "[integration][optimize][slow]") {
   auto cfg = EngineConfig::load(configDir() + "/optimization.yaml");
   cfg.sample_profile = false;
   const SteadyEngine engine(cfg);

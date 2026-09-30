@@ -1,16 +1,37 @@
-# Ignis-M1: a generic 130 kN-class LOX/methane booster engine.
+# Ignis-M1 booster: a constrained ascent trade study.
 #
 # This is a CONCEPTUAL engine invented for this project.  It is not a model of
-# any real hardware, and nothing here should be read as a flight design.  The
-# operating point was chosen so that the regenerative jacket closes with a
-# realistic margin, using the design scan in docs/verification.md.
+# any real hardware, and nothing here should be read as a flight design.
+#
+# WHY THE OBJECTIVE IS WHAT IT IS
+#   Maximising vacuum specific impulse under thermal constraints alone is not
+#   a trade: vacuum Isp rises monotonically with expansion ratio, so the
+#   optimiser simply walks epsilon to whatever bound it is given and the answer
+#   is the bound, not a design.  A booster's useful impulse is delivered across
+#   a trajectory, and a first stage spends most of its burn low, where an
+#   over-expanded nozzle loses thrust and eventually separates.  The objective
+#   here is therefore the time-weighted ascent specific impulse, and the
+#   constraints are the ones that actually size a booster engine:
+#
+#     - it must hit its thrust class        -> sea-level thrust band
+#     - it must fit the vehicle             -> exit diameter and length limits
+#     - it must not separate off the pad    -> exit-plane separation margin
+#     - the liner must survive              -> wall temperature limit
+#     - the jacket must close               -> pressure-drop budget
+#
+#   Those five pull in opposite directions, so the optimum is interior.  A
+#   scan over epsilon alone (docs/validation.md) shows ascent Isp peaking near
+#   epsilon = 15 and separation margin going negative by epsilon = 20, while
+#   vacuum Isp is still climbing at epsilon = 90 -- which is exactly why the
+#   earlier vacuum-Isp study ran to its bound.
 name: optimization
 description: >-
-  Constrained design optimisation of the Ignis-M1 vacuum variant: maximise
-  vacuum specific impulse subject to the copper-liner temperature limit, a
-  jacket pressure-drop budget, and geometric and operating bounds.  The result
-  is the best feasible point this model and this optimiser found; it is not a
-  global optimum and not a flight design.
+  Constrained ascent trade study for the Ignis-M1 booster: maximise the
+  time-weighted ascent specific impulse subject to a sea-level thrust band,
+  an engine-envelope limit, a flow-separation margin, the copper-liner
+  temperature limit and a jacket pressure-drop budget.  The result is the best
+  feasible point this model and this optimiser found; it is not a global
+  optimum and not a flight design.
 
 species:
   # Carbon / hydrogen / oxygen species only: nitrogen is absent from both
@@ -37,7 +58,7 @@ nozzle:
   chamber_fillet_ratio: 0.5       # R1/Rc
   throat_upstream_ratio: 1.5      # Ru/Rt
   throat_downstream_ratio: 0.382  # Rd/Rt (Rao)
-  expansion_ratio: 45.0           # Ae/At
+  expansion_ratio: 20.0           # Ae/At (a booster starting point)
   type: bell
   bell_length_fraction: 0.8       # of the equivalent 15 deg cone
   bell_initial_angle: 33.0        # deg
@@ -46,11 +67,23 @@ nozzle:
   bartz_curvature: mean
 
 performance:
-  ambient_pressure: 0.0           # Pa, vacuum
+  # The engine is evaluated at sea level, which is where the binding
+  # constraints live.  Vacuum and ascent-averaged quantities follow from the
+  # same converged exit state without a second solve.
+  ambient_pressure: 101325.0
   auto_divergence: true           # lambda = (1 + cos theta_e)/2
   eta_nozzle: 1.0
   separation: summerfield
   resolve_internal_shocks: true
+  # Time weighting for performance.isp_ascent.  A first stage spends most of
+  # its burn in the lower atmosphere, so the weights are front-loaded.  This is
+  # a stated, reproducible weighting, not a trajectory simulation: Ignis has no
+  # vehicle model, and the profile is an input to the trade study rather than a
+  # prediction of one.  Thrust is exactly linear in ambient pressure for a
+  # full-flowing nozzle, so the weighted mean is exact, not a quadrature.
+  ascent_profile:
+    altitudes: [0, 5000, 10000, 20000, 40000]   # m, geometric
+    weights:   [0.30, 0.25, 0.20, 0.15, 0.10]
 
 cooling:
   enabled: true
@@ -66,8 +99,10 @@ cooling:
   inlet_temperature: 111.66       # K
   inlet_pressure: 15.0e6          # Pa
   counterflow: true               # coolant enters at the downstream end
-  x_end_area_ratio: 10.0          # jacket ends here; the extension beyond is
-                                  # assumed radiation cooled and is not modelled
+  x_end_area_ratio: 8.0           # jacket ends here; the extension beyond is
+                                  # assumed radiation cooled and is not modelled.
+                                  # Tracks the contour as the optimiser moves
+                                  # the expansion ratio.
   nusselt_correlation: dittus-boelter
   nusselt_multiplier: 1.0
   bartz_multiplier: 1.0
@@ -75,10 +110,17 @@ cooling:
   segments: 240
 
 optimization:
-  objective: performance.isp_vacuum
+  objective: performance.isp_ascent
   sense: maximize
-  starts: 6
-  max_evaluations: 2500
+  # The feasible set is narrow: a 20 kN-wide thrust band intersected with a
+  # wall-temperature limit and a jacket budget.  Twelve Latin-hypercube starts
+  # find it reliably inside these bounds.  Widening the box to 15 MPa and a
+  # 40 mm throat makes the search fail outright -- 6000 evaluations, no
+  # feasible point -- which is a real property of a derivative-free method on a
+  # narrow feasible set and is recorded in docs/limitations.md rather than
+  # papered over.
+  starts: 12
+  max_evaluations: 3000
   outer_iterations: 8
   simplex_tolerance: 1.0e-6
   initial_penalty: 10.0
@@ -87,16 +129,20 @@ optimization:
   variables:
     - parameter: chamber.pressure
       min: 3.0e6
-      max: 11.0e6
+      max: 11.0e6                # engineering ceiling for this class of engine
       start: 5.5e6
     - parameter: propellants.mixture_ratio
       min: 2.6
       max: 4.2
       start: 3.4
     - parameter: nozzle.expansion_ratio
-      min: 15.0
-      max: 90.0
-      start: 45.0
+      min: 6.0
+      max: 40.0
+      start: 20.0
+    - parameter: nozzle.throat_radius
+      min: 0.050                 # injector-pattern and manufacturability floor
+      max: 0.095
+      start: 0.070
     - parameter: cooling.channel_height
       min: 2.5e-3
       max: 8.0e-3
@@ -110,15 +156,37 @@ optimization:
       max: 0.70
       start: 0.50
   constraints:
+    # --- mission ---------------------------------------------------------
+    # A vehicle is sized for a thrust class, not for "at least".  Bounding the
+    # sea-level thrust on both sides is what turns this into a sizing problem:
+    # chamber pressure and throat radius have to co-vary to hold the class
+    # while the expansion ratio is pushed by separation and the envelope.
+    - metric: performance.thrust_sea_level
+      op: ">="
+      bound: 130.0e3             # N, the vehicle has to leave the pad
+    - metric: performance.thrust_sea_level
+      op: "<="
+      bound: 150.0e3             # N, and the airframe is sized for this class
+    # --- installation ----------------------------------------------------
+    - metric: geometry.exit_diameter
+      op: "<="
+      bound: 0.70                # m, fits the boat-tail
+    - metric: geometry.total_length
+      op: "<="
+      bound: 1.30                # m, injector face to exit plane, engine bay
+    # --- aerodynamics ----------------------------------------------------
+    - metric: performance.separation_margin
+      op: ">="
+      bound: 0.02                # exit pressure 2 % of ambient above the
+                                 # Summerfield separation pressure, so the
+                                 # nozzle runs full at lift-off with margin
+    # --- thermal ---------------------------------------------------------
     - metric: cooling.max_wall_temperature
       op: "<="
-      bound: 800.0                # CuCrZr continuous-service limit
+      bound: 800.0               # K, CuCrZr continuous-service limit
     - metric: cooling.pressure_drop
       op: "<="
-      bound: 4.0e6                # Pa, jacket budget
-    - metric: cooling.outlet_temperature
-      op: "<="
-      bound: 900.0                # K, coolant table upper limit with margin
+      bound: 4.0e6               # Pa, jacket budget
 
 output:
   directory: results/optimization

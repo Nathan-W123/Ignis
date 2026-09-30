@@ -113,6 +113,11 @@ NozzleGeometry::NozzleGeometry(NozzleGeometry&&) noexcept = default;
 NozzleGeometry& NozzleGeometry::operator=(NozzleGeometry&&) noexcept = default;
 
 NozzleGeometry NozzleGeometry::build(const NozzleGeometrySpec& spec) {
+  // A supplied contour wins over the analytic parameterisation, so that every
+  // caller of build() -- the engine, the nozzle app, the transient -- picks up
+  // imported geometry without knowing it exists.
+  if (!spec.contour.empty()) return fromContour(spec.contour, spec);
+
   NozzleGeometry g;
   g.spec_ = spec;
 
@@ -308,42 +313,235 @@ NozzleGeometry NozzleGeometry::build(const NozzleGeometrySpec& spec) {
     g.stations_.push_back(pnt);
   }
 
+  g.finalise();
+  return g;
+}
+
+namespace {
+
+/// Least-squares circle through (x, r) samples, Kasa's algebraic form.
+///
+/// Minimises sum of (x^2 + r^2 + D x + E r + F)^2, which is linear in
+/// (D, E, F).  The centre is (-D/2, -E/2) and the radius follows.  It is
+/// biased for short arcs, but the throat region is a well-sampled arc of
+/// substantial angular extent and the alternative -- a proper geometric fit --
+/// would need an iteration whose failure modes are harder to report.
+/// Returns false when the normal equations are too ill-conditioned to trust,
+/// which is what happens when the samples are collinear, i.e. a sharp throat.
+bool fitCircle(const std::vector<ContourSample>& pts, double& radius_out) {
+  const std::size_t n = pts.size();
+  if (n < 4) return false;
+  double sx = 0, sr = 0, sxx = 0, srr = 0, sxr = 0;
+  double sxz = 0, srz = 0, sz = 0;
+  for (const auto& p : pts) {
+    const double z = p.x * p.x + p.r * p.r;
+    sx += p.x; sr += p.r; sxx += p.x * p.x; srr += p.r * p.r; sxr += p.x * p.r;
+    sxz += p.x * z; srz += p.r * z; sz += z;
+  }
+  const double dn = static_cast<double>(n);
+  // Normal equations for (D, E, F), centred to keep the conditioning sane.
+  const double a11 = sxx - sx * sx / dn;
+  const double a12 = sxr - sx * sr / dn;
+  const double a22 = srr - sr * sr / dn;
+  const double b1 = 0.5 * (sxz - sx * sz / dn);
+  const double b2 = 0.5 * (srz - sr * sz / dn);
+  const double det = a11 * a22 - a12 * a12;
+  const double scale = std::max(a11 * a22, a12 * a12);
+  if (scale <= 0.0 || std::abs(det) < 1e-12 * scale) return false;
+  const double cx = (b1 * a22 - b2 * a12) / det;
+  const double cr = (b2 * a11 - b1 * a12) / det;
+  double sum = 0.0;
+  for (const auto& p : pts) sum += std::hypot(p.x - cx, p.r - cr);
+  radius_out = sum / dn;
+  return std::isfinite(radius_out) && radius_out > 0.0;
+}
+
+}  // namespace
+
+NozzleGeometry NozzleGeometry::fromContour(std::vector<ContourSample> samples,
+                                           NozzleGeometrySpec spec) {
+  if (samples.size() < 9)
+    throw ConfigError("nozzle: a tabulated contour needs at least 9 samples, got " +
+                      std::to_string(samples.size()));
+  std::sort(samples.begin(), samples.end(),
+            [](const ContourSample& a, const ContourSample& b) { return a.x < b.x; });
+  for (std::size_t i = 0; i < samples.size(); ++i) {
+    if (!(samples[i].r > 0.0)) {
+      std::ostringstream os;
+      os << "nozzle: contour sample " << i << " has a non-positive radius ("
+         << samples[i].r << " m at x = " << samples[i].x << " m)";
+      throw ConfigError(os.str());
+    }
+    if (i > 0 && !(samples[i].x > samples[i - 1].x)) {
+      std::ostringstream os;
+      os << "nozzle: contour samples must be strictly increasing in x, but sample "
+         << i << " is at x = " << samples[i].x << " m and sample " << i - 1
+         << " is at x = " << samples[i - 1].x << " m";
+      throw ConfigError(os.str());
+    }
+  }
+
+  NozzleGeometry g;
+  g.tabulated_ = true;
+
+  // --- throat: the minimum of the table -----------------------------------
+  // Its resolution is the file's resolution.  A contour sampled coarsely
+  // through the throat gives a throat area that is slightly too large, which
+  // is a property of the input and is not silently corrected here.
+  std::size_t it = 0;
+  for (std::size_t i = 1; i < samples.size(); ++i)
+    if (samples[i].r < samples[it].r) it = i;
+  if (it < 3 || it + 3 >= samples.size())
+    throw ConfigError(
+        "nozzle: the throat of a tabulated contour must lie inside it with room on "
+        "both sides -- the minimum radius is at sample " + std::to_string(it) + " of " +
+        std::to_string(samples.size()) + ", which leaves no convergent or divergent "
+        "section to resolve");
+
+  g.rt_ = samples[it].r;
+  g.xt_ = samples[it].x;
+  g.at_ = constants::pi * g.rt_ * g.rt_;
+  g.xe_ = samples.back().x;
+  g.re_ = samples.back().r;
+  g.rc_ = 0.0;
+  for (std::size_t i = 0; i <= it; ++i) g.rc_ = std::max(g.rc_, samples[i].r);
+
+  // --- throat curvature, measured ------------------------------------------
+  // Bartz needs the wall radius of curvature at the throat.  Take the samples
+  // whose radius is within 15 % of the throat -- an arc wide enough to fit but
+  // still local to the throat -- and fit a circle to them.
+  std::vector<ContourSample> near;
+  for (const auto& s : samples)
+    if (s.r <= 1.15 * g.rt_) near.push_back(s);
+  double fitted = 0.0;
+  if (fitCircle(near, fitted) && fitted > 0.05 * g.rt_ && fitted < 50.0 * g.rt_) {
+    g.bartz_rc_ = fitted;
+    std::ostringstream os;
+    os << "circle fitted to " << near.size() << " samples within 15 % of the throat radius";
+    g.curvature_note_ = os.str();
+  } else {
+    g.bartz_rc_ = spec.throat_upstream_ratio * g.rt_;
+    std::ostringstream os;
+    os << "circle fit failed or was implausible on " << near.size()
+       << " near-throat samples, so throat_upstream_ratio ("
+       << spec.throat_upstream_ratio << ") was used instead -- Bartz's (Dt/Rc)^0.1 term "
+          "rests on an assumption here, not on the contour";
+    g.curvature_note_ = os.str();
+  }
+
+  // --- back-fill the spec with what was measured ---------------------------
+  // Downstream code consults spec(); it must see the real geometry.  The exit
+  // wall angle matters most: NozzleFlow turns it into the divergence loss, and
+  // defaulting it would silently apply an 8-degree bell's loss to whatever was
+  // imported.
+  spec.throat_radius = g.rt_;
+  spec.throat_area = 0.0;
+  spec.chamber_radius = g.rc_;
+  spec.contraction_ratio = 0.0;
+  spec.expansion_ratio = (g.re_ * g.re_) / (g.rt_ * g.rt_);
+  const std::size_t last = samples.size() - 1;
+  const double exit_slope = (samples[last].r - samples[last - 1].r) /
+                            (samples[last].x - samples[last - 1].x);
+  spec.bell_exit_angle = std::atan(exit_slope) / kDeg;
+  spec.divergent = DivergentType::kBell;
+  g.theta_e_ = spec.bell_exit_angle;
+  const double init_slope = (samples[it + 2].r - samples[it + 1].r) /
+                            (samples[it + 2].x - samples[it + 1].x);
+  g.theta_n_ = std::atan(init_slope) / kDeg;
+  spec.chamber_length = samples[0].x;
+  g.spec_ = spec;
+
+  g.l15_ = (g.rt_ * (std::sqrt(spec.expansion_ratio) - 1.0) +
+            spec.throat_downstream_ratio * g.rt_ * (1.0 / std::cos(15.0 * kDeg) - 1.0)) /
+           std::tan(15.0 * kDeg);
+
+  // --- the wall is the polyline --------------------------------------------
+  g.segments_.reserve(samples.size() - 1);
+  for (std::size_t i = 1; i < samples.size(); ++i) {
+    Segment s;
+    s.kind = Segment::Kind::kLine;
+    s.x0 = samples[i - 1].x;
+    s.x1 = samples[i].x;
+    s.r0 = samples[i - 1].r;
+    s.slope = (samples[i].r - samples[i - 1].r) / (s.x1 - s.x0);
+    // Label by where the segment sits and what the wall is doing, which is all
+    // a table supports: it has no analytic pieces to name.
+    if (s.x1 <= g.xt_)
+      s.label = (std::abs(s.slope) < 1e-6) ? NozzleSegment::kChamber
+                                           : NozzleSegment::kConvergingCone;
+    else
+      s.label = NozzleSegment::kDivergent;
+    g.segments_.push_back(s);
+  }
+  // The two segments touching the throat are its curvature, however the file
+  // resolved it.
+  g.segments_[it - 1].label = NozzleSegment::kThroatUpstream;
+  g.segments_[it].label = NozzleSegment::kThroatDownstream;
+
+  // --- stations are the samples themselves ---------------------------------
+  // Resampling a polyline onto a uniform grid would only interpolate what is
+  // already there while moving the throat off a station.
+  g.stations_.reserve(samples.size());
+  for (std::size_t i = 0; i < samples.size(); ++i) {
+    const Segment& s = g.segments_[std::min(i, g.segments_.size() - 1)];
+    ContourPoint pnt;
+    pnt.x = samples[i].x;
+    pnt.r = samples[i].r;
+    pnt.area = constants::pi * pnt.r * pnt.r;
+    pnt.area_ratio = pnt.area / g.at_;
+    pnt.drdx = s.slope;
+    pnt.segment = s.label;
+    g.stations_.push_back(pnt);
+  }
+
+  g.finalise();
+  return g;
+}
+
+void NozzleGeometry::finalise() {
   // --- validity ---------------------------------------------------------
   // The throat must be the unique minimum of the area distribution.
   double r_min = 1e300;
   std::size_t i_min = 0;
-  for (std::size_t i = 0; i < g.stations_.size(); ++i)
-    if (g.stations_[i].r < r_min) { r_min = g.stations_[i].r; i_min = i; }
-  if (std::abs(r_min - g.rt_) > 1e-9 * g.rt_) {
+  for (std::size_t i = 0; i < stations_.size(); ++i)
+    if (stations_[i].r < r_min) { r_min = stations_[i].r; i_min = i; }
+  if (std::abs(r_min - rt_) > 1e-9 * rt_) {
     std::ostringstream os;
     os << "nozzle: the minimum sampled radius (" << r_min << " m at x = "
-       << g.stations_[i_min].x << " m) is not the throat radius (" << g.rt_ << " m)";
+       << stations_[i_min].x << " m) is not the throat radius (" << rt_ << " m)";
     throw ConfigError(os.str());
   }
-  for (std::size_t i = 1; i < g.stations_.size(); ++i) {
-    const auto& a = g.stations_[i - 1];
-    const auto& b = g.stations_[i];
+  for (std::size_t i = 1; i < stations_.size(); ++i) {
+    const auto& a = stations_[i - 1];
+    const auto& b = stations_[i];
     if (b.x <= a.x) throw ConfigError("nozzle: station positions are not strictly increasing");
-    const double tol = -1e-9 * g.rt_;
-    if (b.x <= g.xt_ && (b.r - a.r) > -tol && (b.r - a.r) > 1e-9 * g.rt_)
-      throw ConfigError("nozzle: the converging section is not monotonically contracting");
-    if (a.x >= g.xt_ && (b.r - a.r) < tol)
-      throw ConfigError("nozzle: the diverging section is not monotonically expanding");
+    const double tol = -1e-9 * rt_;
+    if (b.x <= xt_ && (b.r - a.r) > -tol && (b.r - a.r) > 1e-9 * rt_) {
+      std::ostringstream os;
+      os << "nozzle: the converging section is not monotonically contracting -- the wall "
+            "rises from " << a.r << " m at x = " << a.x << " m to " << b.r << " m at x = "
+         << b.x << " m, upstream of the throat at x = " << xt_ << " m";
+      throw ConfigError(os.str());
+    }
+    if (a.x >= xt_ && (b.r - a.r) < tol) {
+      std::ostringstream os;
+      os << "nozzle: the diverging section is not monotonically expanding -- the wall "
+            "falls from " << a.r << " m at x = " << a.x << " m to " << b.r << " m at x = "
+         << b.x << " m, downstream of the throat at x = " << xt_ << " m";
+      throw ConfigError(os.str());
+    }
   }
 
   // --- chamber volume (solid of revolution up to the throat) ------------
-  double vol = 0.0, wet = 0.0;
-  for (std::size_t i = 1; i < g.stations_.size(); ++i) {
-    const auto& a = g.stations_[i - 1];
-    const auto& b = g.stations_[i];
-    if (b.x > g.xt_ + 1e-15) break;
+  double vol = 0.0;
+  for (std::size_t i = 1; i < stations_.size(); ++i) {
+    const auto& a = stations_[i - 1];
+    const auto& b = stations_[i];
+    if (b.x > xt_ + 1e-15) break;
     const double dx = b.x - a.x;
     vol += constants::pi * dx * (a.r * a.r + a.r * b.r + b.r * b.r) / 3.0;   // exact for a frustum
-    wet += constants::pi * (a.r + b.r) * std::hypot(dx, b.r - a.r);
   }
-  g.v_chamber_ = vol;
-  (void)wet;
-  return g;
+  v_chamber_ = vol;
 }
 
 const NozzleGeometry::Segment& NozzleGeometry::segmentFor(double x) const {

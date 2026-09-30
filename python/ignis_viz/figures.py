@@ -465,14 +465,37 @@ def optimization_convergence(history_csv: str, json_path: str, out: str) -> str:
     best = t.frame[feasible][objective].cummax()
     ax.plot(t["evaluation"][feasible], best, color=style.CATEGORICAL[1],
             label="best so far", linewidth=1.8, zorder=6)
+    # The winning evaluation is a single point among thousands and lands inside
+    # the densest part of the cloud; without a mark the reader cannot see that
+    # the best-so-far line actually reaches the reported optimum.
+    if feasible.any():
+        won = t.frame[feasible][objective].idxmax()
+        ax.plot([t.frame["evaluation"][won]], [t.frame[objective][won]], "o",
+                color=style.CATEGORICAL[1], markersize=7, zorder=7,
+                markeredgecolor=style.SURFACE, markeredgewidth=1.4)
+        style.annotate(ax, t.frame["evaluation"][won], t.frame[objective][won],
+                       f"evaluation {int(t.frame['evaluation'][won])}",
+                       dx=-8, dy=-12, ha="right", va="top",
+                       color=style.CATEGORICAL[1])
     ax.axhline(meta["objective"], color=style.INK_MUTED, linewidth=0.9)
     style.annotate(ax, t["evaluation"].min(), meta["objective"],
                    f"best feasible {meta['objective']:.2f} s", dx=2, dy=4)
     ax.set_ylabel(t.label(objective, objective.split(".")[-1].replace("_", " ")))
     ax.set_title("Objective")
     ax.legend(ncols=3, loc="lower right")
-    lo = np.nanpercentile(t.frame[objective][np.isfinite(t.frame[objective])], 5)
-    ax.set_ylim(bottom=lo)
+    # The augmented Lagrangian spends most of its evaluations just outside the
+    # feasible set and close to the optimum, so a percentile of ALL evaluations
+    # crops the feasible points and the best-so-far line straight off the axis.
+    # Frame on what the reader is here for instead: the feasible designs and the
+    # reported optimum.
+    finite = t.frame[objective][np.isfinite(t.frame[objective])]
+    interesting = t.frame[objective][feasible & np.isfinite(t.frame[objective])]
+    if len(interesting) == 0:
+        interesting = finite
+    lo = min(float(interesting.min()), float(meta["objective"]))
+    hi = max(float(np.nanpercentile(finite, 99)), float(meta["objective"]))
+    pad = max(0.05 * (hi - lo), 1e-9)
+    ax.set_ylim(lo - pad, hi + pad)
 
     ax = axes[1]
     # The violation jumps between feasible and infeasible on consecutive
@@ -491,8 +514,10 @@ def optimization_convergence(history_csv: str, json_path: str, out: str) -> str:
             transform=ax.transAxes, fontsize=8, color=style.INK_MUTED)
 
     style.caption(fig, "Augmented Lagrangian around a Nelder-Mead simplex with "
-                       f"Latin-hypercube multi-start. {meta['evaluations']} evaluations, "
-                       f"{meta['failed_evaluations']} failed analyses.")
+                       f"Latin-hypercube multi-start; {meta['evaluations']} evaluations, "
+                       f"{meta['failed_evaluations']} failed analyses.\nThe infeasible cloud sits "
+                       "above the feasible optimum because relaxing a binding constraint buys "
+                       "impulse -- which is the trade the constraints exist to prevent.")
     return _save(fig, out)
 
 

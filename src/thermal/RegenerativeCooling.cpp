@@ -281,18 +281,28 @@ CoolingResult solveCoolingImpl(const NozzleFlow& flow, const NozzleGeometry& geo
     }
 
     // --- solve the coupled wall balance ---------------------------------
+    // The root finder evaluates the wall balance across its whole bracket --
+    // from the coolant bulk temperature up to the adiabatic wall temperature --
+    // so most evaluations are trial states that are nowhere near the answer.
+    // Only the converged evaluation (the one that fills a ThermalStation) is
+    // allowed to record an extrapolation, because only that one describes a
+    // state the engine is actually predicted to be in.
+    bool recording_converged_state = false;
     auto wallConductivity = [&](double t_hot, double t_cold) {
       const double tm = 0.5 * (t_hot + t_cold);
-      if (!spec.wall.inValidRange(tm)) {
+      if (recording_converged_state && !spec.wall.inValidRange(tm)) {
         res.conductivity_extrapolated = true;
         res.conductivity_extrapolation_min = std::min(res.conductivity_extrapolation_min, tm);
         res.conductivity_extrapolation_max = std::max(res.conductivity_extrapolation_max, tm);
+        res.conductivity_extrapolation_x_min = std::min(res.conductivity_extrapolation_x_min, xm);
+        res.conductivity_extrapolation_x_max = std::max(res.conductivity_extrapolation_x_max, xm);
       }
       return spec.wall.conductivity(tm);
     };
 
     // residual(T_wg) = q_gas - q_cool, both per m^2 of gas-side wall.
     auto residual = [&](double t_wg, ThermalStation* out) {
+      recording_converged_state = (out != nullptr);
       const double hg = bartzFilmCoefficient(bref, eps, gas.mach, gas.gas.gamma_s, t_wg);
       const double qc = hg * (st.t_adiabatic_wall - t_wg);
       const double qr = grayGasRadiation(gas.gas.T, t_wg, spec.gas_emissivity,
@@ -378,6 +388,8 @@ CoolingResult solveCoolingImpl(const NozzleFlow& flow, const NozzleGeometry& geo
       res.max_flux_residual = std::max(res.max_flux_residual, st.flux_residual);
     }
 
+    res.wall_limit_temperature = spec.wall.max_temperature;
+    res.wall_material = spec.wall.name;
     if (st.t_wall_hot > spec.wall.max_temperature) res.wall_limit_exceeded = true;
 
     st.segment_heat = st.q_total * dA_gas;
@@ -433,11 +445,12 @@ CoolingResult solveCoolingImpl(const NozzleFlow& flow, const NozzleGeometry& geo
       std::ostringstream os;
       os << "wall conductivity was extrapolated outside the fitted range ["
          << spec.wall.valid_min << ", " << spec.wall.valid_max << "] K for "
-         << spec.wall.name << ": mean wall temperatures reached "
+         << spec.wall.name << ": the converged mean wall temperature was "
          << res.conductivity_extrapolation_min << " to " << res.conductivity_extrapolation_max
-         << " K. This happens at the cold inlet end of a cryogenic jacket and makes the "
-            "predicted wall temperature there slightly conservative; the peak-flux station is "
-            "unaffected.";
+         << " K over x = " << res.conductivity_extrapolation_x_min * 1e3 << " to "
+         << res.conductivity_extrapolation_x_max * 1e3
+         << " mm. k(T) is clamped to the fit endpoints there, which is the cold inlet end of a "
+            "cryogenic jacket; the peak-flux station is inside the fitted range.";
       res.warnings.push_back(os.str());
     }
   }

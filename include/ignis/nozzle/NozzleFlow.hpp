@@ -164,7 +164,11 @@ struct NormalShockResult {
   double entropy_rise = 0.0;               ///< J/(kg K)
 };
 
-/// Solve the normal-shock jump for a real gas at frozen composition.
+/// Solve the normal-shock jump for a variable-property equilibrium gas at
+/// frozen composition.  "Variable-property", not "real-gas": the products are
+/// an ideal-gas mixture (p = rho R T), but c_p, gamma and the molar mass all
+/// vary with the local state, so the jump cannot be solved from constant-gamma
+/// relations.  No compressibility factor or fugacity model is involved.
 /// \throws ConvergenceError if the downstream branch cannot be found,
 ///         InfeasibleError if the upstream state is not supersonic.
 NormalShockResult solveNormalShock(const GasMixture& mix, const ExpansionState& upstream);
@@ -194,6 +198,25 @@ struct NozzlePerformance {
   double cf_ideal = 0.0;
   double cf = 0.0;
   double isp_vacuum = 0.0;            ///< s, same nozzle at p_ambient = 0
+
+  /// Mission and envelope quantities.  For a full-flowing nozzle the thrust is
+  /// exactly linear in ambient pressure -- F(p_a) = F_vac - p_a A_e -- so these
+  /// follow from the converged exit state with no further solve.  They are
+  /// FULL-FLOWING values: if the nozzle separates at the ambient pressure in
+  /// question the real thrust differs, which is what `separation_margin` is for.
+  double thrust_sea_level = 0.0;      ///< N at 101 325 Pa, full-flowing
+  double isp_sea_level = 0.0;         ///< s at 101 325 Pa, full-flowing
+  /// Time-weighted mean specific impulse over the declared ascent profile.
+  /// Zero when no profile was declared.
+  double isp_ascent = 0.0;            ///< s
+  double ascent_mean_ambient = 0.0;   ///< Pa, the weighted mean ambient pressure
+
+  /// Exit-plane separation margin, (p_e - p_sep(M_e)) / p_ambient.  Positive
+  /// means the flow is attached all the way to the lip; negative means the
+  /// empirical criterion predicts separation inside the nozzle.  Set to
+  /// kNoSeparationRisk when the criterion is off or the nozzle is in vacuum.
+  double separation_margin = 0.0;
+  static constexpr double kNoSeparationRisk = 1.0e6;
 
   /// Declared, separately visible loss factors (all default to 1).
   double eta_c_star = 1.0;            ///< combustion efficiency
@@ -231,6 +254,15 @@ struct NozzlePerformanceOptions {
   bool resolve_internal_shocks = true;
   /// |p_e/p_a - 1| below which the nozzle is reported as ideally expanded.
   double ideal_tolerance = 0.01;
+
+  /// Altitudes and time weights defining the ascent over which `isp_ascent` is
+  /// averaged.  A booster's useful impulse is delivered across a trajectory,
+  /// not at one ambient pressure, so optimising a single-altitude Isp drives
+  /// the expansion ratio straight to whatever bound it is given.  Empty
+  /// vectors disable the average.  Weights are normalised internally and need
+  /// not sum to one.
+  std::vector<double> ascent_altitudes;  ///< m, geometric
+  std::vector<double> ascent_weights;    ///< dimensionless
 };
 
 /// Evaluate one steady operating point of a nozzle.

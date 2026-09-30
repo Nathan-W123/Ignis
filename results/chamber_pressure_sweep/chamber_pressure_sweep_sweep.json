@@ -1,6 +1,6 @@
 {
   "ignis_version": "1.0.0",
-  "git": "8db92d8-dirty",
+  "git": "v1.0.0",
   "build_type": "Release",
   "compiler": "GNU 13.3.0",
   "config_file": "configs/chamber_pressure_sweep.yaml",
@@ -39,7 +39,7 @@
     "rows": 21,
     "points": 21,
     "failures": 2,
-    "wall_seconds": 0.627254851,
+    "wall_seconds": 0.58987811899999998,
     "failure_messages": ["infeasible: cooling: the coolant pressure reached zero at x = 18.2553 mm; the channel cannot pass 22.6529 kg/s", "infeasible: cooling: the coolant pressure reached zero at x = 49.1488 mm; the channel cannot pass 23.6277 kg/s"]
   }
 }

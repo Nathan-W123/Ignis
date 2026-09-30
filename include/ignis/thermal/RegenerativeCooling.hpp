@@ -156,6 +156,10 @@ struct CoolingResult {
   double coolant_pressure_drop = 0.0;     ///< Pa
   double coolant_outlet_pressure = 0.0;   ///< Pa
   double cooled_area = 0.0;               ///< m^2
+  /// The material limit this result was judged against, carried out so that a
+  /// reader (or a UI) can draw the constraint without re-reading the library.
+  double wall_limit_temperature = 0.0;    ///< K
+  std::string wall_material;
   /// |sum q dA - mdot (h_out - h_in)| / |sum q dA|.  Conservation check of the
   /// march itself.
   double energy_balance_residual = 0.0;
@@ -164,9 +168,15 @@ struct CoolingResult {
   double max_flux_residual = 0.0;
   bool boiling_detected = false;
   bool wall_limit_exceeded = false;
+  /// Set only when a *converged* station needed k(T) outside the material's
+  /// fitted range.  Root-finder trial evaluations sweep the whole bracket and
+  /// are deliberately not recorded here: they would report temperatures the
+  /// engine is never predicted to reach.
   bool conductivity_extrapolated = false;
-  double conductivity_extrapolation_min = 1.0e30;
-  double conductivity_extrapolation_max = -1.0e30;
+  double conductivity_extrapolation_min = 1.0e30;   ///< K, converged mean wall T
+  double conductivity_extrapolation_max = -1.0e30;  ///< K
+  double conductivity_extrapolation_x_min = 1.0e30;   ///< m, axial extent
+  double conductivity_extrapolation_x_max = -1.0e30;  ///< m
   std::vector<std::string> warnings;
   std::string summary() const;
 };
