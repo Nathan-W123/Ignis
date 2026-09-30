@@ -161,6 +161,8 @@ they returned, including the refusal when a design does not close. The model's
 limitations are pinned open next to the answer rather than hidden behind a
 menu. See [`docs/explorer.md`](docs/explorer.md).
 
+![The Explorer's Flow tab](results/figures/18_explorer_flow.png)
+
 Its **Flow** tab takes the exit state of whatever design is solved and marches
 the axisymmetric Euler equations outward from it, starting from rest, so you
 watch the plume establish itself: the jet front driving into still air, the
