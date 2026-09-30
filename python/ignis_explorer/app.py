@@ -24,7 +24,8 @@ from .charts import (AltitudeChart, AxialChart, CompositionChart,  # noqa: E402
                      ContourChart, ThermalChart)
 from . import shell  # noqa: E402
 from .flow import FlowTab  # noqa: E402
-from .solver import PROPELLANTS, Design, Result, Solver  # noqa: E402
+from .solver import (PRESETS, PROPELLANTS, Design, FrozenSolver,  # noqa: E402
+                     Result, Solver)
 from .widgets import Card, Choice, ConstraintRow, Field, panel  # noqa: E402
 
 ASSUMPTIONS = """\
@@ -150,16 +151,6 @@ class DesignPanel(QtWidgets.QWidget):
         self.cooling.setChecked(d.cooling)
 
 
-PRESETS: Dict[str, Design] = {
-    "Ignis-M1  sea level": Design(),
-    "Ignis-M1  vacuum": Design(expansion_ratio=45.0, altitude=80_000.0),
-    "Ignis-H1  upper stage": Design(propellant="LOX / H2", mixture_ratio=5.5,
-                                    throat_radius=0.060, expansion_ratio=60.0,
-                                    altitude=80_000.0, eta_c_star=0.97,
-                                    num_channels=240, channel_height=6.0e-3,
-                                    wall_thickness=0.7e-3,
-                                    coolant_inlet_pressure=12.0e6),
-}
 
 
 class Explorer(QtWidgets.QMainWindow):
@@ -169,10 +160,18 @@ class Explorer(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle("Ignis Engine Explorer")
         self.resize(1560, 950)
+        # The compiled solver if it is there; otherwise the frozen presets,
+        # which answer for exactly those designs and refuse anything else.
         self.solver = Solver(repo_root)
+        if not self.solver.available():
+            frozen = FrozenSolver()
+            if frozen.available():
+                self._missing_binaries = self.solver.missing_message()
+                self.solver = frozen
         self.results: Dict[str, Optional[Result]] = {"A": None, "B": None}
         self.pending: Dict[str, bool] = {"A": False, "B": False}
         self.compare = False
+        self._autostarted = False
 
         styles.apply_matplotlib()
 
@@ -498,7 +497,7 @@ class Explorer(QtWidgets.QMainWindow):
         lay.setSpacing(8)
 
         frame_a, lay_a = panel("Design A")
-        self.panel_a = DesignPanel("A", Design())
+        self.panel_a = DesignPanel("A", next(iter(PRESETS.values())))
         self.panel_a.changed.connect(lambda: self._mark_stale("A"))
         lay_a.addWidget(self.panel_a)
         lay.addWidget(frame_a)
@@ -645,9 +644,19 @@ class Explorer(QtWidgets.QMainWindow):
             self.run_button.setEnabled(True)
         if not result.ok:
             self._set_status(f"design {slot}: {result.error.splitlines()[0]}", "critical")
+        elif result.replayed:
+            self._set_status(
+                f"design {slot} replayed from a saved solve (Ignis {result.version}) "
+                f"- presets work offline; editing a parameter needs the compiled "
+                f"solver", "warning")
         else:
             self._set_status(f"design {slot} solved — Ignis {result.version}")
         self._refresh()
+        # Something should be moving the first time the window has a solved
+        # design to show, whichever solver produced it.
+        if slot == "A" and result.ok and not self._autostarted:
+            self._autostarted = True
+            QtCore.QTimer.singleShot(300, self._autostart_flow)
 
     def _slots(self) -> List[str]:
         return ["A", "B"] if self.compare else ["A"]

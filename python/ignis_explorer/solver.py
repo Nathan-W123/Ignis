@@ -13,7 +13,7 @@ import json
 import os
 import subprocess
 import tempfile
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from typing import Dict, List, Optional
 
 PROPELLANTS = {
@@ -73,6 +73,25 @@ class Design:
                        coolant_inlet_pressure=15.0e6 if name == "LOX / CH4" else 12.0e6)
 
 
+# The shipped designs.  They live here rather than in the window because the
+# case-freezing tool has to see them without importing a GUI toolkit.
+#
+# "10 km" is first because it is where the M1 is worth looking at: at sea level
+# Ignis predicts the nozzle separates, so the Flow tab rightly refuses to march
+# an attached plume there -- correct, but a poor first thing to be shown.
+PRESETS: Dict[str, Design] = {
+    "Ignis-M1  10 km": Design(altitude=10_000.0),
+    "Ignis-M1  sea level": Design(),
+    "Ignis-M1  vacuum": Design(expansion_ratio=45.0, altitude=80_000.0),
+    "Ignis-H1  upper stage": Design(propellant="LOX / H2", mixture_ratio=5.5,
+                                    throat_radius=0.060, expansion_ratio=60.0,
+                                    altitude=80_000.0, eta_c_star=0.97,
+                                    num_channels=240, channel_height=6.0e-3,
+                                    wall_thickness=0.7e-3,
+                                    coolant_inlet_pressure=12.0e6),
+}
+
+
 @dataclass
 class Result:
     """A solved design, or the reason it could not be solved."""
@@ -88,6 +107,7 @@ class Result:
     altitude: Dict[str, List[float]] = field(default_factory=dict)
     composition: List[tuple] = field(default_factory=list)   # (species, mole fraction)
     version: str = ""
+    replayed: bool = False     # True when FrozenSolver answered, not the binaries
 
     def get(self, key: str, default: float = float("nan")) -> float:
         v = self.scalars.get(key, default)
@@ -209,6 +229,8 @@ def _config_text(d: Design) -> str:
 class Solver:
     """Locates the Ignis binaries and runs a design through them."""
 
+    live = True
+
     def __init__(self, repo_root: str, build_dir: Optional[str] = None) -> None:
         self.repo_root = os.path.abspath(repo_root)
         self.build_dir = build_dir or os.environ.get(
@@ -329,3 +351,96 @@ def _read_csv_strings(path: str, column: str) -> List[str]:
     with open(path, newline="") as fh:
         rows = [r for r in fh if not r.startswith("#")]
     return [row[column] for row in csv.DictReader(rows) if column in row]
+
+
+# ---------------------------------------------------------------------------
+# Frozen results: every pane without a compiler
+# ---------------------------------------------------------------------------
+
+RESULTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "data", "results")
+
+
+def result_to_dict(r: Result) -> dict:
+    """Everything a Result carries, as plain JSON types."""
+    return {
+        "schema": 1,
+        "ok": r.ok, "error": r.error, "version": r.version,
+        "design": asdict(r.design) if r.design is not None else None,
+        "scalars": r.scalars, "strings": r.strings, "warnings": r.warnings,
+        "profile": r.profile, "thermal": r.thermal, "altitude": r.altitude,
+        "composition": [list(c) for c in r.composition],
+    }
+
+
+def result_from_dict(d: dict) -> Result:
+    if d.get("schema") != 1:
+        raise ValueError(f"unknown frozen-result schema {d.get('schema')!r}")
+    return Result(
+        ok=d["ok"], error=d.get("error", ""), version=d.get("version", ""),
+        design=Design(**d["design"]) if d.get("design") else None,
+        scalars=d.get("scalars", {}), strings=d.get("strings", {}),
+        warnings=list(d.get("warnings", [])),
+        profile=d.get("profile", {}), thermal=d.get("thermal", {}),
+        altitude=d.get("altitude", {}),
+        composition=[tuple(c) for c in d.get("composition", [])])
+
+
+def _same_design(a: Design, b: Design) -> bool:
+    """Field-by-field, with a tolerance on floats.
+
+    Exact equality is wrong here: the design panel rebuilds a Design from spin
+    boxes, so 5.0 mm arrives as 5.0 * 1e-3, which is not bit-for-bit the
+    literal 5.0e-3 a preset was written with.  One part in a billion is far
+    tighter than any control can resolve and far looser than that rounding.
+    """
+    for key, va in asdict(a).items():
+        vb = getattr(b, key)
+        if isinstance(va, float) or isinstance(vb, float):
+            if abs(float(va) - float(vb)) > 1e-9 * max(1.0, abs(float(va))):
+                return False
+        elif va != vb:
+            return False
+    return True
+
+
+class FrozenSolver:
+    """Stands in for `Solver` when the compiled binaries are missing.
+
+    It answers from results that `tools/make_case_library.py` produced by
+    running the real solver on each preset -- through this module's own
+    `Solver`, so a replayed Result is identical to what a live solve of that
+    design returns.  It answers ONLY for those designs.  Anything else comes
+    back as a refusal naming what would be needed, never as the nearest
+    preset's numbers dressed up as the answer to a different question.
+    """
+
+    live = False
+
+    def __init__(self, directory: str = RESULTS_DIR) -> None:
+        self.directory = directory
+        self._frozen: List[Result] = []
+        if os.path.isdir(directory):
+            for name in sorted(os.listdir(directory)):
+                if name.endswith(".json"):
+                    try:
+                        with open(os.path.join(directory, name)) as fh:
+                            self._frozen.append(result_from_dict(json.load(fh)))
+                    except (OSError, ValueError, KeyError, TypeError):
+                        continue
+
+    def available(self) -> bool:
+        return bool(self._frozen)
+
+    def missing_message(self) -> str:
+        return f"no frozen results in {self.directory}"
+
+    def run(self, d: Design) -> Result:
+        for r in self._frozen:
+            if r.design is not None and _same_design(r.design, d):
+                return replace(r, replayed=True)
+        return Result(ok=False, design=d, error=(
+            "this design is not one of the saved presets, and solving a new "
+            "one needs the compiled solver.\n"
+            "Pick a preset from the ribbon, or build the binaries."))

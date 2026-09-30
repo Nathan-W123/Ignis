@@ -139,6 +139,40 @@ def build_case(stem: str, config: str, name: str, description: str,
     }
 
 
+
+def freeze_presets(build_dir: str) -> int:
+    """Solve every Explorer preset and write the whole Result to data/results.
+
+    This goes through the Explorer's own `Solver`, not a parallel reading of
+    the binaries' output, so what `FrozenSolver` later replays is the object a
+    live solve of the same design returns -- the property grid, every chart
+    tab and every tile read identical numbers either way.
+    """
+    sys.path.insert(0, os.path.join(REPO, "python"))
+    from ignis_explorer.solver import (PRESETS, RESULTS_DIR, Solver,
+                                       result_to_dict)
+
+    solver = Solver(REPO, build_dir)
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    for name, design in PRESETS.items():
+        result = solver.run(design)
+        if not result.ok:
+            print(f"{name}: the solver refused it\n{result.error}", file=sys.stderr)
+            return 1
+        stem = "".join(c if c.isalnum() else "_" for c in name.lower()).strip("_")
+        stem = "_".join(part for part in stem.split("_") if part)
+        path = os.path.join(RESULTS_DIR, f"{stem}.json")
+        doc = result_to_dict(result)
+        doc["preset"] = name
+        with open(path, "w") as fh:
+            json.dump(doc, fh, separators=(",", ":"))
+            fh.write("\n")
+        print(f"{name:24s} {result.get('performance.thrust') / 1e3:7.1f} kN  "
+              f"{os.path.getsize(path) / 1024:6.1f} kB  -> "
+              f"{os.path.relpath(path, REPO)}")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -154,6 +188,9 @@ def main(argv=None) -> int:
     binary = os.path.join(args.build_dir, "bin", "ignis_engine")
     if not os.path.exists(binary):
         print(f"the solver is not built: {binary} does not exist", file=sys.stderr)
+        return 1
+
+    if freeze_presets(args.build_dir) != 0:
         return 1
 
     os.makedirs(OUT_DIR, exist_ok=True)

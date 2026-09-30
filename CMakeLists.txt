@@ -72,12 +72,32 @@ set(IGNIS_DATA_DIR "${PROJECT_SOURCE_DIR}/data" CACHE PATH "Directory holding Ig
 configure_file(${PROJECT_SOURCE_DIR}/include/ignis/core/Version.hpp.in
                ${PROJECT_BINARY_DIR}/generated/ignis/core/Version.hpp @ONLY)
 
+# ...and again at every build, so the stamp follows the code rather than the
+# commit the build directory happened to be configured at.  See
+# cmake/WriteVersion.cmake.
+add_custom_target(ignis_version
+  COMMAND ${CMAKE_COMMAND}
+          -DSRC=${PROJECT_SOURCE_DIR}/include/ignis/core/Version.hpp.in
+          -DDST=${PROJECT_BINARY_DIR}/generated/ignis/core/Version.hpp
+          -DROOT=${PROJECT_SOURCE_DIR}
+          -DGIT_EXECUTABLE=${GIT_EXECUTABLE}
+          -DPROJECT_VERSION=${PROJECT_VERSION}
+          -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+          -DCMAKE_CXX_COMPILER_ID=${CMAKE_CXX_COMPILER_ID}
+          -DCMAKE_CXX_COMPILER_VERSION=${CMAKE_CXX_COMPILER_VERSION}
+          -DIGNIS_DATA_DIR=${IGNIS_DATA_DIR}
+          -P ${PROJECT_SOURCE_DIR}/cmake/WriteVersion.cmake
+  BYPRODUCTS ${PROJECT_BINARY_DIR}/generated/ignis/core/Version.hpp
+  COMMENT "Stamping the build with git describe"
+  VERBATIM)
+
 # ---------------------------------------------------------------------------
 # Core library
 # ---------------------------------------------------------------------------
 file(GLOB_RECURSE IGNIS_SOURCES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/src/*.cpp)
 add_library(ignis STATIC ${IGNIS_SOURCES})
 add_library(Ignis::ignis ALIAS ignis)
+add_dependencies(ignis ignis_version)
 
 target_include_directories(ignis PUBLIC
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
