@@ -234,6 +234,13 @@ struct NozzlePerformance {
   double isp_vacuum_inviscid = 0.0;     ///< s
   double momentum_deficit = 0.0;        ///< N, 2 pi r_e rho_e u_e^2 theta_e
 
+  /// Finite-rate recombination, when applied (kinetics/NozzleKinetics.hpp):
+  /// the vacuum thrust is scaled by the kinetic efficiency, finite-rate over
+  /// shifting vacuum impulse, and every ambient figure follows from it as
+  /// F = eta_kin F_vac - p_a A_e.  kinetic_loss is the vacuum thrust given up.
+  double kinetic_efficiency = 1.0;
+  double kinetic_loss = 0.0;            ///< N
+
   ExpansionRegime regime = ExpansionRegime::kIdeallyExpanded;
   bool shock_in_nozzle = false;
   double shock_area_ratio = 0.0;
@@ -283,6 +290,10 @@ struct NozzlePerformanceOptions {
     double exit_displacement_thickness = 0.0;    ///< m
     double exit_momentum_thickness = 0.0;        ///< m
   } viscous;
+
+  /// Finite-rate vacuum impulse over shifting (from integrateKineticNozzle).
+  /// 1 = shifting equilibrium, the default.
+  double kinetic_efficiency = 1.0;
 };
 
 /// Evaluate one steady operating point of a nozzle.

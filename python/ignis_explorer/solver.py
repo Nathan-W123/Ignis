@@ -77,6 +77,12 @@ class Design:
     contraction_ratio: float = 2.8
     chamber_length: float = 0.22        # m, cylindrical section
     bell_length_fraction: float = 0.8   # of the equivalent 15-degree cone
+    # Wall film from the injector (Hatch & Papell): a fraction of the fuel, or
+    # a mass flow when one is published, at the jacket outlet temperature
+    # unless a temperature is given.  The M1 carries the 3 % its config does.
+    film_fuel_fraction: float = 0.03
+    film_mass_flow: float = 0.0         # kg/s; overrides the fraction when > 0
+    film_temperature: float = 0.0       # K; 0 = the jacket's coolant outlet
 
     def with_propellant(self, name: str) -> "Design":
         """Switch propellant, moving the propellant-specific settings with it."""
@@ -118,6 +124,14 @@ RS25 = Design(
     coolant_inlet_temperature=(-366.0 + 459.67) * 5.0 / 9.0,  # -366 F
     coolant_inlet_pressure=5647.0 * _PSI,
     jacket_end_area_ratio=4.48,         # the chamber ends at the nozzle attach flange
+    # Fuel film: 4.84 lb/s in the standard-throat SSME chamber (Wang & Luong,
+    # J. Thermophys. Heat Transfer 8(3), 1994, Table 3).  Its temperature is
+    # not published; it is taken as that of the hydrogen leaving the
+    # low-pressure fuel turbine, 0 F on the manual's flow schematic, which then
+    # cools the hot-gas manifold and enters the main injector's own cavity.
+    film_fuel_fraction=0.0,
+    film_mass_flow=4.84 * 0.45359237,
+    film_temperature=(0.0 + 459.67) * 5.0 / 9.0,
 )
 
 # The shipped designs.  They live here rather than in the window because the
@@ -143,7 +157,8 @@ PRESETS: Dict[str, Design] = {
                                     altitude=80_000.0, eta_c_star=0.97,
                                     num_channels=240, channel_height=6.0e-3,
                                     wall_thickness=0.7e-3,
-                                    coolant_inlet_pressure=12.0e6),
+                                    coolant_inlet_pressure=12.0e6,
+                                    film_fuel_fraction=0.0),
 }
 
 
@@ -242,6 +257,7 @@ def _config_text(d: Design) -> str:
         "  eta_nozzle: 1.0",
         "  separation: summerfield",
         "  resolve_internal_shocks: true",
+        "  kinetics: { enabled: true, apply: true }",
         "  ascent_profile:",
         "    altitudes: [0, 5000, 10000, 20000, 40000]",
         "    weights:   [0.30, 0.25, 0.20, 0.15, 0.10]",
@@ -266,6 +282,15 @@ def _config_text(d: Design) -> str:
             "  nusselt_correlation: dittus-boelter",
             "  segments: 160",
         ]
+        if d.film_mass_flow > 0.0 or d.film_fuel_fraction > 0.0:
+            lines += ["  film:"]
+            if d.film_mass_flow > 0.0:
+                lines += [f"    mass_flow: {d.film_mass_flow!r}"]
+            else:
+                lines += [f"    fuel_fraction: {d.film_fuel_fraction!r}"]
+            lines += ["    slot_height: 0.5e-3"]
+            if d.film_temperature > 0.0:
+                lines += [f"    temperature: {d.film_temperature!r}"]
     lines += [
         "feed:",
         "  enabled: true",

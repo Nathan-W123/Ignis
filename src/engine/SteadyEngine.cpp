@@ -210,6 +210,22 @@ SteadyEngineResult SteadyEngine::analyse(const EngineConfig& cfg, double p_ambie
     res.residence_time = res.chamber.residenceTime(res.chamber_volume, res.mdot);
   }
 
+  // --- finite-rate recombination ------------------------------------------
+  if (cfg.kinetics_enabled) {
+    if (cfg.composition != CompositionModel::kEquilibrium)
+      throw ConfigError("performance.kinetics starts from shifting equilibrium, so it needs "
+                        "chamber.composition: equilibrium");
+    const Mechanism mech = Mechanism::loadYaml(
+        cfg.kinetics_mechanism.empty() ? Mechanism::findDefault() : cfg.kinetics_mechanism, *db_);
+    res.kinetics = integrateKineticNozzle(flow, geom, mech, cfg.kinetics);
+    res.has_kinetics = true;
+    if (cfg.kinetics_apply) {
+      perf_opts.kinetic_efficiency = res.kinetics.kinetic_efficiency;
+      res.performance = evaluateNozzle(flow, geom, p_ambient, perf_opts);
+      setFlows();
+    }
+  }
+
   // --- film-cooling performance bracket ----------------------------------
   if (res.has_cooling && res.cooling.has_film) {
     // The unmixed limit of the film's cost (see FilmPerformance).  The core
@@ -315,6 +331,10 @@ std::string SteadyEngineResult::summary() const {
      << "  regime                " << toString(performance.regime) << "\n";
   if (has_boundary_layer) {
     const auto& bl = boundary_layer;
+    // The layer's own share: what remains of the inviscid-to-delivered
+    // difference once any kinetic loss is taken out.
+    const double bl_isp_loss = performance.isp_vacuum_inviscid -
+                               performance.isp_vacuum / performance.kinetic_efficiency;
     os << "  boundary layer        C_d " << std::setprecision(5) << performance.discharge_coefficient
        << ";  delta* throat " << std::setprecision(3) << bl.throat_displacement_thickness * 1e3
        << " mm, exit " << bl.exit_displacement_thickness * 1e3 << " mm;  theta exit "
@@ -322,10 +342,14 @@ std::string SteadyEngineResult::summary() const {
        << "                        core expands to A/A* " << std::setprecision(3)
        << performance.effective_area_ratio << " (geometric " << bl.geometric_area_ratio << ")\n"
        << "  boundary-layer loss   " << std::setprecision(2)
-       << (performance.thrust_inviscid - performance.thrust) * 1e-3 << " kN, "
-       << performance.isp_vacuum_inviscid - performance.isp_vacuum << " s vacuum Isp ("
-       << 100.0 * (1.0 - performance.isp_vacuum / performance.isp_vacuum_inviscid) << " %)\n";
+       << (performance.thrust_inviscid - performance.thrust - performance.kinetic_loss) * 1e-3
+       << " kN, " << bl_isp_loss << " s vacuum Isp ("
+       << 100.0 * bl_isp_loss / performance.isp_vacuum_inviscid << " %)\n";
   }
+  if (performance.kinetic_efficiency != 1.0)
+    os << "  kinetic loss          " << std::setprecision(2) << performance.kinetic_loss * 1e-3
+       << " kN (finite-rate recombination, kinetic efficiency " << std::setprecision(5)
+       << performance.kinetic_efficiency << ")\n";
   if (performance.shock_in_nozzle)
     os << "  internal shock        at A/At = " << std::setprecision(3)
        << performance.shock_area_ratio << " (x = " << std::setprecision(1)
@@ -342,6 +366,7 @@ std::string SteadyEngineResult::summary() const {
      << std::scientific << std::setprecision(2)
      << "  mass-flow residual    " << performance.mass_flow_residual << "\n"
      << "  energy residual       " << performance.energy_residual << "\n";
+  if (has_kinetics) os << "\n" << kinetics.summary();
   if (has_cooling) os << "\n" << cooling.summary() << "\n";
   if (film.present) {
     os << "\nfilm-cooling performance bracket (vacuum Isp)\n" << std::fixed
@@ -384,6 +409,21 @@ Table SteadyEngineResult::profileTable() const {
   t.addColumn("molar_mass", profile.molar_mass, "kg/mol");
   std::vector<double> sup(profile.supersonic.begin(), profile.supersonic.end());
   t.addColumn("supersonic", sup, "-");
+  return t;
+}
+
+Table SteadyEngineResult::kineticsTable() const {
+  Table t("kinetic_nozzle");
+  if (!has_kinetics) return t;
+  const auto& k = kinetics;
+  t.addColumn("x", k.x, "m");
+  t.addColumn("area_ratio", k.area_ratio, "-");
+  t.addColumn("temperature", k.temperature, "K");
+  t.addColumn("pressure", k.pressure, "Pa");
+  t.addColumn("velocity", k.velocity, "m/s");
+  t.addColumn("mach_frozen", k.mach_frozen, "-");
+  for (std::size_t s = 0; s < k.species.size(); ++s)
+    t.addColumn("X_" + k.species[s], k.mole_fraction[s], "-");
   return t;
 }
 
@@ -501,6 +541,30 @@ Json SteadyEngineResult::toJson() const {
   p["cf"] = Json(performance.cf);
   p["lambda_divergence"] = Json(performance.lambda_divergence);
   p["eta_nozzle"] = Json(performance.eta_nozzle);
+  p["kinetic_efficiency"] = Json(performance.kinetic_efficiency);
+  if (has_kinetics) {
+    const auto& k = kinetics;
+    Json kj = Json::object();
+    kj["applied"] = Json(performance.kinetic_efficiency != 1.0);
+    kj["start_area_ratio"] = Json(k.start_area_ratio);
+    kj["start_frozen_mach"] = Json(k.start_frozen_mach);
+    kj["start_x"] = Json(k.start_x);
+    kj["exit_temperature"] = Json(k.t_exit);
+    kj["exit_pressure"] = Json(k.p_exit);
+    kj["exit_velocity"] = Json(k.u_exit);
+    kj["isp_vacuum"] = Json(k.isp_vacuum);
+    kj["isp_vacuum_shifting"] = Json(k.isp_vacuum_shifting);
+    kj["isp_vacuum_frozen"] = Json(k.isp_vacuum_frozen);
+    kj["kinetic_efficiency"] = Json(k.kinetic_efficiency);
+    kj["thrust_loss"] = Json(performance.kinetic_loss);
+    kj["recovered_fraction"] = Json(k.recovered_fraction);
+    kj["steps"] = Json(static_cast<double>(k.steps));
+    kj["rejected_steps"] = Json(static_cast<double>(k.rejected_steps));
+    kj["energy_residual"] = Json(k.energy_residual);
+    kj["element_residual"] = Json(k.element_residual);
+    kj["warnings"] = Json::of(k.warnings);
+    p["kinetics"] = kj;
+  }
   p["regime"] = Json(toString(performance.regime));
   p["shock_in_nozzle"] = Json(performance.shock_in_nozzle);
   if (performance.shock_in_nozzle) {
@@ -531,8 +595,11 @@ Json SteadyEngineResult::toJson() const {
     b["mdot_inviscid"] = Json(performance.mdot_inviscid);
     b["thrust_inviscid"] = Json(performance.thrust_inviscid);
     b["isp_vacuum_inviscid"] = Json(performance.isp_vacuum_inviscid);
-    b["thrust_loss"] = Json(performance.thrust_inviscid - performance.thrust);
-    b["isp_vacuum_loss"] = Json(performance.isp_vacuum_inviscid - performance.isp_vacuum);
+    // The layer's own share, with any applied kinetic loss taken back out.
+    b["thrust_loss"] =
+        Json(performance.thrust_inviscid - performance.thrust - performance.kinetic_loss);
+    b["isp_vacuum_loss"] = Json(performance.isp_vacuum_inviscid -
+                                performance.isp_vacuum / performance.kinetic_efficiency);
     b["cooled_fraction"] = Json(boundary_layer.cooled_fraction);
     b["warnings"] = Json::of(boundary_layer.warnings);
     p["boundary_layer"] = b;

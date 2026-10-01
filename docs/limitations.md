@@ -62,7 +62,7 @@ known about the thermal side of this tool:
 |---|---|
 | **A nozzle is a wall radius and nothing else.** Geometry enters as `r(x)`, whether from the analytic parameterisation or an imported contour. | This is what a quasi-1D internal-flow model is, not a gap in the importer. A CAD model's manifolds, injector face, channel routing and mounting hardware have nowhere to go and are discarded. Importing a real engine gives you its flow passage, not its hardware. |
 | **Gas phase only.** No condensed species are carried. | Fuel-rich hydrocarbon cases that would form solid carbon are wrong. For LOX/CH<sub>4</sub> this matters below roughly O/F 1.5; the shipped sweeps stay at O/F ≥ 2. The exception the code makes on purpose is a fuel-rich hydrocarbon gas generator or preburner (O/F ≈ 0.3), whose gas is taken as equilibrium at the turbine temperature: its temperature is the one asked for, but its composition (no soot, no cracked fuel) is approximate, and the cycle says so. Metallised or chlorine-bearing propellants are out of scope entirely. |
-| **Equilibrium only — no finite-rate kinetics.** | Chamber composition assumes complete mixing and infinite residence time. The real recombination lag in a nozzle lies *between* the frozen and shifting limits; both bounds are computed and reported, but the true answer is not. |
+| **Finite-rate chemistry in the nozzle only, and only recombination.** | The chamber is chemical equilibrium: complete mixing, infinite residence time. Through the divergent nozzle `performance.kinetics` integrates the H/O/CO recombination at GRI-Mech 3.0's rates ([`theory.md` §9.4](theory.md)). That costs 0.21–0.47 % of vacuum I<sub>sp</sub> on the shipped engines. The march starts from shifting equilibrium at frozen Mach 1.10, so any lag in the subsonic and throat region is not represented, and the result barely depends on where it starts. GRI-Mech 3.0 was fitted to combustion experiments, mostly at lower pressures, not to nozzle recombination. The implementation matches Cantera on identical data to 10⁻⁸ ([`validation.md` §2.5](validation.md)), but no measured nozzle composition or kinetic loss has been compared. Fuel-rich hydrocarbon chemistry (soot, cracking) is not in the mechanism. |
 | **Ideal-gas *thermal* equation of state for the products** (p = ρRT, Z ≡ 1). The *caloric* behaviour is fully variable — c<sub>p</sub>(T), γ(T) and the molar mass all change with the state — which is why the nozzle and shock solvers are described as "variable-property equilibrium-gas" rather than "real-gas". No compressibility factor, fugacity or non-ideal mixing rule is implemented. | At the highest condition used here (20 MPa, 3600 K) the product mixture sits at ≈ 14.5 kg/m³, a molar volume of 1.5 L/mol and a reduced temperature above 15 — deep in the ideal-gas regime, so the approximation is sound at these pressures. It would need revisiting for a very-high-pressure staged-combustion chamber. |
 | **40 species, restricted by element set.** | Species not in `data/thermo/ignis_nasa7.yaml` simply do not exist for the solver. Adding one is a data edit, not a code change, but it is an edit. |
 | **NASA TM-4513 (1993) 7-coefficient data.** | A few parts in 10³ of flame-temperature difference against the CEA 2002 9-coefficient set; this is the dominant term in the CEA comparison and is measured, not assumed. |
@@ -164,8 +164,11 @@ Honestly stated, in rough order of importance:
    inviscid interaction that reshapes the core.
 3. **A conjugate 2-D or 3-D thermal solution** of the wall and channel,
    replacing the 1-D fin model, with a thermal-stress and life criterion.
-4. **Finite-rate nozzle kinetics**, replacing the frozen/shifting bracket with
-   an actual recombination calculation.
+4. **Finite-rate nozzle kinetics.** Done for recombination in the divergent
+   nozzle (GRI-Mech 3.0, verified against Cantera on identical data). What is
+   missing is a validation against a measured nozzle, finite-rate chemistry
+   upstream of the throat and in the chamber, and a mechanism fitted for
+   rocket-nozzle conditions.
 5. **A closed cycle balance.** Partly done: gas-generator, staged-combustion
    and expander balances close for a given chamber pressure and say when they
    cannot. Turbomachinery maps, separate shafts and a validation against a

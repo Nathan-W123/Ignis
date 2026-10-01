@@ -49,6 +49,7 @@ enum class ReactionType { kElementary, kThreeBody, kFalloff };
 
 struct Reaction {
   std::string equation;
+  int source_id = 0;    ///< the reaction's number in its source (GRI-Mech 3.0), if given
   ReactionType type = ReactionType::kElementary;
   std::vector<int> reactants, products;            ///< database species indices
   std::vector<double> reactant_nu, product_nu;     ///< stoichiometric coefficients

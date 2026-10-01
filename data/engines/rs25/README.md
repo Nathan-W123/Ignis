@@ -82,6 +82,7 @@ preset is `RS25` in `python/ignis_explorer/solver.py`.
 | Coolant flow | 18.71 % of the hydrogen | 29 lb/s of 155 lb/s | [1] MCC parameters; flow schematic |
 | Coolant inlet | 52.04 K, 38.93 MPa | −366 °F, 5,647 psia | [1] MCC operating parameters |
 | Jacket end | area ratio 4.48 | MCC expansion ratio to the nozzle attach flange 4.48:1 | [1] MCC geometry |
+| Fuel film | 2.195 kg/s | 4.84 lb/s of film coolant in the standard-throat chamber | [3] Table 3 |
 
 Ignis takes chamber pressure as a stagnation pressure (an infinite-area
 combustor, `docs/theory.md` §5), so the manual's *throat stagnation pressure*
@@ -97,6 +98,8 @@ is exactly the quantity it needs.
 | Hot-wall thickness | 0.7 mm | not published in these sources; the value the Ignis-H1 uses |
 | Liner material | CuCrZr | the real liner is NARloy-Z, a copper–silver–zirconium alloy [1]; Ignis's material library has no NARloy-Z |
 | Bell angles | 33° / 8° | Ignis's defaults; not published in these sources |
+| Film temperature | 255.4 K (0 °F) | not published. The film is taken to be the hydrogen that drove the low-pressure fuel turbine, which then cools the hot-gas manifold and enters "a dedicated cavity in the main injector" [1]; 0 °F is that flow's last published temperature, at the turbine's discharge on the flow schematic [1] |
+| Film slot | 0.5 mm | Ignis's default equivalent slot; the real film comes through the injector's outer elements |
 | Altitude | 6 km | see *Sea level* below |
 
 ## Ignis against Rocketdyne's figures
@@ -109,45 +112,64 @@ no uncertainties. Nothing in the design was adjusted to improve it.
 | Quantity | Ignis | Published [1] | Ignis − published |
 |---|---|---|---|
 | Exit diameter | 2.296 m | 2.294 m (90.3 in inside) | +0.1 % |
-| Vacuum specific impulse | 460.5 s | ≈ 452 s | +1.9 % |
-| Propellant flow | 512.8 kg/s | 494.0 kg/s (155 + 934 lb/s) | +3.8 % |
-| Vacuum thrust | 2,316 kN | 2,188 kN (491,900 lbf) | +5.8 % |
-| Chamber coolant exit temperature | 419 K | 265 K (17 °F) | +58 % |
-| Chamber coolant pressure drop | 5.74 MPa | 8.32 MPa (5,647 − 4,441 psia) | −31 % |
-| Peak hot-gas wall temperature | 1,052 K | 811 K (1,000 °F) | +30 % |
+| Vacuum specific impulse | 456.4 s | ≈ 452 s | +1.0 % |
+| Propellant flow | 512.3 kg/s | 494.0 kg/s (155 + 934 lb/s) | +3.7 % |
+| Vacuum thrust | 2,293 kN | 2,188 kN (491,900 lbf) | +4.8 % |
+| Chamber coolant exit temperature | 301 K | 265 K (17 °F) | +14 % |
+| Chamber coolant pressure drop | 4.55 MPa | 8.32 MPa (5,647 − 4,441 psia) | −45 % |
+| Peak hot-gas wall temperature | 890 K | 811 K (1,000 °F) | +80 K (+10 %) |
+
+These are with Ignis's current models: the integral boundary layer for the
+hot-gas side, the published fuel film, boundary-layer losses and finite-rate
+nozzle chemistry. Until those went in, Ignis used Bartz's correlation, no film
+and an inviscid, shifting-equilibrium nozzle. Then it read +1.9 % in vacuum
+impulse, +58 % in coolant exit temperature, 1.85 times the chamber heat and
++241 K at the wall. The gaps narrowed when the physics changed; nothing was
+tuned to narrow them.
 
 What accounts for each gap, as far as these sources allow:
 
-* **Specific impulse, +1.9 %.** Ignis expands an ideal gas mixture in shifting
-  equilibrium with no boundary layer and no finite-rate chemistry. Both of
-  those cost a real engine performance, so Ignis should read high; this is
-  the direction expected.
-* **Propellant flow, +3.8 %.** Ignis computes flow as p<sub>c</sub>A<sub>t</sub>/c\*. The
+* **Specific impulse, +1.0 %.** Ignis now takes off the wall boundary layer
+  (discharge coefficient, displaced exit, momentum deficit; 0.84 % of vacuum
+  impulse) and the finite-rate recombination lag. At 19.75 MPa recombination
+  keeps up almost completely, and the kinetic efficiency is 0.9995. What
+  remains is consistent with what Ignis still does not model, chiefly injector
+  mixing beyond the published 99.6 % combustion efficiency, and with the
+  manual's "approximately 452 s".
+* **Propellant flow, +3.7 %.** Ignis computes flow as C<sub>d</sub>
+  p<sub>c</sub>A<sub>t</sub>/c\*, with the boundary layer's C<sub>d</sub>. The
   manual's pressure, throat area and flow together imply c\* = 2,400 m/s,
   3.4 % *above* the ideal equilibrium c\* Ignis computes for this mixture
   (2,321 m/s), and no combustion efficiency exceeds one. So those three
-  numbers cannot all be what an ideal-flow model takes them to be — the
+  numbers cannot all be what an ideal-flow model takes them to be: the
   effective throat may be smaller than its geometric area, or the pressure
-  defined differently. A discharge coefficient of 0.963 would reconcile
-  them; that is an inference, not something the sources state, and Ignis
-  does not apply one.
-* **Vacuum thrust, +5.8 %,** is the two above together (1.038 × 1.019).
-* **Coolant exit temperature, +58 %.** That is heat: from the coolant's
-  enthalpy (`data/coolants/hydrogen.csv`), the published temperatures and flow
-  imply 38 MW into the chamber's coolant; Ignis puts in 71 MW, 1.85 times as
-  much. Ignis's hot-gas side is the Bartz correlation, which over-predicts in
-  Ignis's own validation against JPL nozzle data (`docs/validation.md`), and
-  SSME chambers are fuel-film cooled near the injector [3], which Ignis does
-  not model.
-* **Peak wall temperature, +241 K,** follows from that heat, and from the
+  defined differently. A discharge coefficient of 0.963 would reconcile them.
+  That is an inference, not something the sources state, and the boundary
+  layer's own C<sub>d</sub> is a fraction of a percent.
+* **Vacuum thrust, +4.8 %,** is the two above together (1.037 × 1.010).
+* **Coolant exit temperature, +14 %.** That is heat. From the coolant's
+  enthalpy, the published temperatures and flow imply 38.4 MW into the
+  chamber's coolant; Ignis puts in 47.4 MW, 1.23 times as much. Without the
+  film the boundary layer, which starts thin at the injector face, puts in
+  70 MW and the injector end of the liner runs at 1,500 K. With the published
+  film it does not. The film's temperature is an inference (above), and a
+  film drawn at the jacket's own outlet temperature instead gives 46.6 MW and
+  877 K. The remaining excess is the boundary layer's, in the same direction
+  as its over-prediction of the long-approach air tests in Ignis's validation
+  (`docs/validation.md` §5b).
+* **Peak wall temperature, +80 K,** follows from that heat, and from the
   single channel depth: the real slots are shallowest at the throat (0.093 in
   [2] against the 0.170 in Ignis uses everywhere), so the real coolant runs
   fastest exactly where the heat flux peaks. The Explorer's constraint panel
-  flags Ignis's 1,052 K against CuCrZr's 800 K limit; that is Ignis's
-  prediction, and the table above is why it should not be read as the engine.
-* **Coolant pressure drop, −31 %,** is the same simplification the other way:
-  the real throat slots, at about half the depth Ignis uses, dominate the
-  real pressure drop.
+  flags Ignis's 890 K against CuCrZr's 800 K limit. That is Ignis's
+  prediction, and the table above is why it should not be read as the engine;
+  the real liner is NARloy-Z.
+* **Coolant pressure drop, −45 %,** is the same simplification the other way.
+  The real throat slots, at about half the depth Ignis uses, dominate the real
+  pressure drop. With less heat in the coolant than before, there is also less
+  acceleration of the coolant, so this gap grew when the others shrank.
+  Ignis's jacket can now taper (`cooling.taper`), but this preset keeps the
+  single depth: the 430-slot liner's own depths are not published.
 
 ## Sea level
 

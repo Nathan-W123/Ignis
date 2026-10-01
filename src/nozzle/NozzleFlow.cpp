@@ -7,6 +7,7 @@
 #include <cmath>
 #include <functional>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 
 namespace ignis {
@@ -40,6 +41,31 @@ double illinois(F&& f, double lo, double hi, double f_lo, double f_hi, double x_
     if (a > b) { std::swap(a, b); std::swap(fa, fb); }
   }
   return x;
+}
+
+/// p/p* of a calorically perfect gas with exponent gamma at area ratio eps, on
+/// one branch.  Only the starting point of the area-ratio search below; the
+/// search itself runs on the flow's own isentrope.
+double perfectGasPressureRatio(double eps, bool supersonic, double gamma) {
+  const double gp = gamma + 1.0, gm = gamma - 1.0;
+  auto area = [&](double m) {
+    return std::pow(2.0 / gp * (1.0 + 0.5 * gm * m * m), 0.5 * gp / gm) / m;
+  };
+  double lo = supersonic ? 1.0 : 1.0e-9, hi = 1.0;
+  if (supersonic) {
+    hi = 2.0;
+    while (area(hi) < eps && hi < 1.0e4) {
+      lo = hi;
+      hi *= 2.0;
+    }
+  }
+  // The area ratio falls with M below 1 and rises above it.
+  for (int i = 0; i < 50; ++i) {
+    const double mid = 0.5 * (lo + hi);
+    if ((area(mid) < eps) == supersonic) lo = mid; else hi = mid;
+  }
+  const double m = 0.5 * (lo + hi);
+  return std::pow((1.0 + 0.5 * gm * m * m) / (0.5 * gp), -gamma / gm);
 }
 
 }  // namespace
@@ -211,29 +237,44 @@ ExpansionState NozzleFlow::atAreaRatio(double area_ratio, bool supersonic) const
                      std::to_string(area_ratio));
   if (std::abs(area_ratio - 1.0) < 1e-12) return throat_;
 
-  const double p_star = throat_.gas.p;
   const double target = throat_.mass_flux / area_ratio;  // required rho u
 
-  auto flux = [&](double p) { return atPressure(p).mass_flux; };
-
-  double lo, hi, f_lo, f_hi;
-  if (supersonic) {
-    // Mass flux falls monotonically as the pressure drops on the supersonic
-    // branch, so the bracket is found by halving from the throat.  Descending
-    // only as far as this particular area ratio needs keeps the search away
-    // from the low-pressure end of the property data, which is both expensive
-    // to probe and irrelevant here.
-    hi = p_star;
-    f_hi = flux(hi) - target;
-    lo = p_star;
-    f_lo = f_hi;
-    bool bracketed = false;
-    for (int i = 0; i < 200; ++i) {
-      lo *= 0.5;
-      try {
-        f_lo = flux(lo) - target;
-      } catch (const IgnisError& e) {
-        computeFloor();
+  // Safeguarded Newton iteration on ln(rho u) against y = ln p.  Along the
+  // isentrope dp = -rho u du and dp = a^2 drho, so
+  //
+  //     d ln(rho u) / d ln p = p/(rho a^2) - p/(rho u^2) = (M^2 - 1) / (gamma_s M^2),
+  //
+  // and every solved state carries its own slope.  The root stays bracketed
+  // in (lo, hi): on the supersonic branch rho u rises with p up to the throat,
+  // and on the subsonic branch it falls from the throat to the chamber.  A
+  // Newton step that would leave the bracket is replaced by a bisection.
+  // Starting from the perfect-gas estimate at the throat's gamma, this takes a
+  // handful of equilibrium solves where a bracketing secant search took ~35.
+  const double y_star = std::log(throat_.gas.p);
+  const double ln_target = std::log(target);
+  double lo = supersonic ? -std::numeric_limits<double>::infinity() : y_star;
+  double hi = supersonic ? y_star : std::log(p0_ * (1.0 - 1.0e-12));
+  const double gamma = (throat_.gas.gamma_s > 1.0 && throat_.gas.gamma_s < 2.0)
+                           ? throat_.gas.gamma_s
+                           : 1.2;
+  auto bisect = [&]() {
+    return std::isfinite(lo) ? 0.5 * (lo + hi) : hi - std::log(2.0);
+  };
+  double y = y_star + std::log(perfectGasPressureRatio(area_ratio, supersonic, gamma));
+  if (!(y > lo && y < hi)) y = bisect();
+  ExpansionState best;
+  double best_error = std::numeric_limits<double>::infinity();
+  for (int iter = 0; iter < 100; ++iter) {
+    ExpansionState st;
+    try {
+      st = atPressure(std::exp(y));
+    } catch (const IgnisError& e) {
+      if (!supersonic) throw;
+      // Below the low-temperature end of the species data.  If the requested
+      // expansion lies beyond it, say so; otherwise the step overshot, and the
+      // root is above this point.
+      computeFloor();
+      if (area_ratio > max_area_ratio_) {
         std::ostringstream os;
         os << "nozzle flow: area ratio " << area_ratio << " exceeds the largest expansion the "
            << "species data supports (" << max_area_ratio_ << ", reached at p = " << p_floor_
@@ -242,30 +283,36 @@ ExpansionState NozzleFlow::atAreaRatio(double area_ratio, bool supersonic) const
            << "limit: " << e.what();
         throw InfeasibleError(os.str());
       }
-      if (f_lo < 0.0) { bracketed = true; break; }
-      hi = lo;
-      f_hi = f_lo;
+      lo = y;
+      y = bisect();
+      continue;
     }
-    if (!bracketed)
-      throw ConvergenceError("nozzle flow: could not bracket the supersonic solution for A/At = " +
-                             std::to_string(area_ratio));
-  } else {
-    lo = p_star;
-    hi = p0_ * (1.0 - 1.0e-12);
-    f_lo = flux(lo) - target;
-    f_hi = flux(hi) - target;
-    if (f_lo * f_hi > 0.0) {
-      std::ostringstream os;
-      os << "nozzle flow: could not bracket the subsonic solution for A/At = " << area_ratio
-         << " (residuals " << f_lo << ", " << f_hi << ")";
-      throw ConvergenceError(os.str());
+    st.area_ratio = area_ratio;  // exact by construction of the search target
+    const double error = std::abs(st.mass_flux - target) / target;
+    if (error <= 1.0e-11) return st;
+    if (error < best_error) {
+      best = st;
+      best_error = error;
     }
+    // rho u above the target means the pressure is too high on the supersonic
+    // branch and too low on the subsonic one.
+    const double g = st.mass_flux > 0.0 ? std::log(st.mass_flux) - ln_target
+                                        : -std::numeric_limits<double>::infinity();
+    if ((g > 0.0) == supersonic) hi = y; else lo = y;
+    const double p = st.gas.p;
+    const double slope = st.u > 0.0 ? p / (st.gas.rho * st.gas.a * st.gas.a) -
+                                          p / (st.gas.rho * st.u * st.u)
+                                    : -std::numeric_limits<double>::infinity();
+    double y_new = y - g / slope;
+    if (!(y_new > lo && y_new < hi)) y_new = bisect();
+    // A step this small is at the resolution of the equilibrium solve itself.
+    if (std::abs(y_new - y) <= 1.0e-14 || (std::isfinite(lo) && hi - lo <= 1.0e-14)) return st;
+    y = y_new;
   }
-  const double p_sol = illinois([&](double p) { return flux(p) - target; }, lo, hi, f_lo, f_hi,
-                                1.0e-13 * p0_, 1.0e-11 * target);
-  ExpansionState st = atPressure(p_sol);
-  st.area_ratio = area_ratio;  // exact by construction of the search target
-  return st;
+  if (best_error <= 1.0e-9) return best;
+  throw ConvergenceError("nozzle flow: the area-ratio search did not converge for A/At = " +
+                         std::to_string(area_ratio) +
+                         (supersonic ? " (supersonic)" : " (subsonic)"));
 }
 
 double NozzleFlow::massFlowResidual(const ExpansionState& st) const {
@@ -612,6 +659,20 @@ NozzlePerformance evaluateNozzle(const NozzleFlow& flow, const NozzleGeometry& g
   perf.cf = perf.thrust / (perf.p_chamber * perf.throat_area);
   perf.isp_vacuum = (lambda_eta * (perf.mdot * exit_sup.u - perf.momentum_deficit) +
                      exit_sup.gas.p * perf.exit_area) / (perf.mdot * constants::g0);
+  // Finite-rate recombination: scale the vacuum thrust; the ambient thrust is
+  // F_vac - p_a A_e, so it gives up exactly the same newtons.
+  if (!(opts.kinetic_efficiency > 0.0 && opts.kinetic_efficiency <= 1.0 + 1e-9))
+    throw ConfigError("nozzle: the kinetic efficiency must lie in (0, 1]");
+  perf.kinetic_efficiency = opts.kinetic_efficiency;
+  if (opts.kinetic_efficiency != 1.0) {
+    const double f_vac = perf.isp_vacuum * perf.mdot * constants::g0;
+    perf.kinetic_loss = (1.0 - opts.kinetic_efficiency) * f_vac;
+    perf.isp_vacuum *= opts.kinetic_efficiency;
+    perf.thrust -= perf.kinetic_loss;
+    perf.c_effective = perf.thrust / perf.mdot;
+    perf.isp = perf.thrust / (perf.mdot * constants::g0);
+    perf.cf = perf.thrust / (perf.p_chamber * perf.throat_area);
+  }
 
   // "Ideal" stays what it always was: inviscid, full-flowing, no losses, at
   // the geometric area ratio -- so it is comparable with CEA whatever else is

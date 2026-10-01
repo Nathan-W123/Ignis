@@ -3,7 +3,7 @@
  "name": "Ignis-H1",
  "description": "LOX/H2, the hydrogen engine",
  "config": "hydrogen_nominal.yaml",
- "solved_by": "v1.0.0-20-ge020523",
+ "solved_by": "v1.0.0-26-g89231c3-dirty",
  "note": "The exit state and performance below were solved by the Ignis binaries and are replayed, not recomputed. The plume is solved live from this exit state every time it is run.",
  "exit": {
   "radius": 0.4647580015,
@@ -16,8 +16,8 @@
   "molar_mass": 0.01310399909
  },
  "performance": {
-  "thrust": 123495.59349337107,
-  "isp": 459.0480127187283,
+  "thrust": 121273.98986982532,
+  "isp": 451.4329683951218,
   "chamber_pressure": 5500000,
   "chamber_temperature": 3382.7746146861655,
   "mixture_ratio": null,

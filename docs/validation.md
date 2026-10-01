@@ -10,7 +10,7 @@ three experiments, and one engine's published operating data:
 | Reference | What it provides | How it was obtained |
 |---|---|---|
 | **NASA CEA** (Gordon & McBride, NASA RP-1311) | Rocket performance: T<sub>c</sub>, M, γ, c\*, I<sub>sp</sub>, exit states, frozen and shifting | Through `rocketcea`, which wraps the actual NASA Glenn FORTRAN — not a reimplementation |
-| **Cantera 3.x** | Species thermodynamics, transport, equilibrium composition | `tools/make_reference_data.py`, using `nasa_gas.yaml` and `gri30.yaml` |
+| **Cantera 3.x** | Species thermodynamics, transport, equilibrium composition, reaction rates and a finite-rate nozzle march | `tools/make_reference_data.py`, using `nasa_gas.yaml` and `gri30.yaml` |
 | **Reference equations of state** (Setzmann & Wagner 1991, Leachman et al. 2009, Schmidt & Wagner 1985) | Coolant ρ, c<sub>p</sub>, μ, k | Through CoolProp, tabulated by `tools/build_coolant_tables.py` |
 | **JPL TR 32-415** (Back, Massier & Gier 1965) | Measured local gas-side heat flux, heated air through a convergent-divergent nozzle | Transcribed by hand from the scanned report ([§5b](#5b-gas-side-heat-transfer-against-measurements)) |
 | **NASA TN D-2832** (Schacht, Quentmeyer & Jones 1965) | Measured gas-side heat-transfer constants, LOX/GH<sub>2</sub> heat-sink rocket | Transcribed by hand from the scanned report ([§5b](#5b-gas-side-heat-transfer-against-measurements)) |
@@ -199,6 +199,33 @@ expression. The nominal LOX/CH<sub>4</sub> chamber mixture gives
 μ = 1.0367e-4 Pa·s against Cantera's 1.03836e-4 (−0.16 %), so the quantity the
 Bartz correlation actually consumes agrees far better than the worst case
 suggests.
+
+### 2.5 Finite-rate nozzle kinetics on identical data
+
+`tests/unit/test_kinetics.cpp`, reference by `tools/make_reference_data.py`.
+Cantera is given Ignis's own species data (NASA TM-4513, 1 bar standard state)
+and the same 39 GRI-Mech 3.0 reactions Ignis keeps for a carbon-hydrogen-oxygen
+gas. The two codes then share the data and nothing else.
+
+| Comparison | Worst relative difference |
+|---|---|
+| Forward rate constants — every reaction (elementary, three-body, Lindemann and Troe fall-off) at 800, 1500, 2500 and 3500 K on a 2 MPa equilibrium mixture, 156 values | **3.4 × 10⁻¹²** |
+| A finite-rate march through a 15° cone from frozen Mach 1.10 to ε = 20 (LOX/CH<sub>4</sub>, O/F 3.4, 5.5 MPa): exit temperature, velocity, pressure | **1.0 × 10⁻⁸** |
+| The same march: exit mole fractions of H<sub>2</sub>O, CO<sub>2</sub>, CO, H<sub>2</sub>, OH, H, O, O<sub>2</sub> | **5.1 × 10⁻⁸** (O) |
+
+Cantera's march is scipy's Radau integrator at a relative tolerance of 10⁻⁹,
+with the same equations implemented separately in Python. Ignis's runs its own
+extrapolated linearly implicit Euler at 10⁻⁸. Both start from a
+shifting-equilibrium expansion of the same chamber, computed independently
+from the start in Cantera, and they agree on where the start is (A/A\* =
+1.01599). Reverse rates are by detailed balance in both codes. Ignis's are
+also checked directly: at its own equilibrium every reaction's forward and
+reverse rates cancel to 10⁻⁷.
+
+This verifies the implementation. It is not a validation of GRI-Mech 3.0's
+rates at rocket-nozzle conditions, which were fitted to combustion
+experiments, mostly at lower pressure. No measured nozzle exit composition or
+kinetic impulse loss has been compared.
 
 ---
 

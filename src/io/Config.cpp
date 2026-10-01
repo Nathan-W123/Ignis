@@ -268,8 +268,21 @@ EngineConfig EngineConfig::load(const std::string& path) {
     const auto p = root["performance"];
     p.requireOnly({"ambient_pressure", "altitude", "auto_divergence", "lambda_divergence",
                    "eta_nozzle", "separation", "resolve_internal_shocks", "ideal_tolerance",
-                   "ascent_profile", "boundary_layer_losses", "uncooled_wall_temperature"});
+                   "ascent_profile", "boundary_layer_losses", "uncooled_wall_temperature",
+                   "kinetics"});
     cfg.boundary_layer_losses = p.optional("boundary_layer_losses").boolean(true);
+    if (p.has("kinetics")) {
+      const auto k = p["kinetics"];
+      k.requireOnly({"enabled", "apply", "mechanism", "start_frozen_mach", "rate_multiplier",
+                     "relative_tolerance"});
+      cfg.kinetics_enabled = k.optional("enabled").boolean(true);
+      cfg.kinetics_apply = k.optional("apply").boolean(true);
+      cfg.kinetics_mechanism = k.optional("mechanism").text("");
+      cfg.kinetics.start_frozen_mach = k.optional("start_frozen_mach").number(1.001, 3.0, 1.10);
+      cfg.kinetics.rate_multiplier = k.optional("rate_multiplier").number(0.0, 1e12, 1.0);
+      cfg.kinetics.relative_tolerance =
+          k.optional("relative_tolerance").number(1e-12, 1e-2, 1.0e-6);
+    }
     cfg.uncooled_wall_temperature =
         p.optional("uncooled_wall_temperature").number(100.0, 3500.0, 1000.0);
     if (p.has("altitude") && p.has("ambient_pressure"))

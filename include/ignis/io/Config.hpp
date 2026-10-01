@@ -21,6 +21,7 @@
 #include "ignis/combustion/Propellant.hpp"
 #include "ignis/cycle/Cycle.hpp"
 #include "ignis/cycle/FeedSystem.hpp"
+#include "ignis/kinetics/NozzleKinetics.hpp"
 #include "ignis/nozzle/NozzleFlow.hpp"
 #include "ignis/nozzle/NozzleGeometry.hpp"
 #include "ignis/thermal/RegenerativeCooling.hpp"
@@ -105,6 +106,13 @@ struct EngineConfig {
   /// Wall temperature the boundary layer assumes where no cooling jacket
   /// supplies one, K.
   double uncooled_wall_temperature = 1000.0;
+  /// Finite-rate recombination through the supersonic nozzle
+  /// (performance.kinetics).  With `kinetics_apply` the delivered thrust
+  /// carries the kinetic efficiency; otherwise it is reported alongside.
+  bool kinetics_enabled = false;
+  bool kinetics_apply = true;
+  std::string kinetics_mechanism;   ///< empty = the shipped GRI-Mech 3.0 subset
+  KineticNozzleOptions kinetics;
   bool use_altitude = false;
   double altitude = 0.0;
   double ambient_pressure = 101325.0;

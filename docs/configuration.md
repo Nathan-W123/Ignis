@@ -168,6 +168,13 @@ performance:
   resolve_internal_shocks: true # search for an internal normal shock when over-expanded
   boundary_layer_losses: true   # march the wall layer and correct C_d, exit and thrust
   uncooled_wall_temperature: 1000.0  # K, the layer's wall where no jacket is solved
+  kinetics:                     # optional: finite-rate recombination in the nozzle
+    enabled: true
+    apply: true                 # scale the delivered thrust by the kinetic efficiency
+    mechanism: ""               # default data/kinetics/gri30_nozzle.yaml (GRI-Mech 3.0 subset)
+    start_frozen_mach: 1.10     # where the march leaves shifting equilibrium
+    rate_multiplier: 1.0        # scales every rate (0 = frozen from the start)
+    relative_tolerance: 1.0e-6
   ascent_profile:               # optional; enables performance.isp_ascent
     altitudes: [0, 5000, 10000, 20000, 40000]   # m, geometric
     weights:   [0.30, 0.25, 0.20, 0.15, 0.10]   # time weights, normalised internally
@@ -181,6 +188,14 @@ section leaves `performance.isp_ascent` at zero.
 
 `altitude` and `ambient_pressure` are mutually exclusive in effect — whichever
 appears last in the parameter registry wins when a study drives them.
+
+`kinetics` integrates the H/O/CO recombination along the divergent nozzle at
+GRI-Mech 3.0's rates ([`theory.md` §9.4](theory.md)). It needs
+`chamber.composition: equilibrium`, since it starts from shifting equilibrium
+just past the throat. Its kinetic efficiency (finite-rate over shifting vacuum
+impulse) scales the delivered thrust unless `apply: false`, and the march is
+written to `<prefix>_kinetics.csv`. A run takes a few tenths of a second more,
+so the sweep, optimisation and Monte Carlo configs leave it off.
 
 ## `cooling`
 
@@ -446,7 +461,7 @@ cooling.roughness               cooling.film_fuel_fraction
 cooling.film_slot_height        feed.injector_stiffness
 cycle.turbine_inlet_temperature cycle.turbine_efficiency
 cycle.pump_efficiency           cycle.turbine_pressure_ratio
-cycle.injector_stiffness
+cycle.injector_stiffness         performance.kinetic_rate_multiplier
 ```
 
 `cooling.bartz_multiplier` is accepted as the older name of
@@ -468,7 +483,7 @@ performance.exit_temperature performance.exit_mach    performance.exit_velocity
 performance.pressure_ratio performance.expansion_ratio
 performance.mass_flow_residual performance.energy_residual
 performance.thrust_sea_level performance.isp_sea_level
-performance.isp_ascent     performance.separation_margin
+performance.isp_ascent     performance.separation_margin performance.kinetic_efficiency
 geometry.l_star            geometry.residence_time    geometry.throat_area
 geometry.exit_area         geometry.exit_radius       geometry.exit_diameter
 geometry.total_length      geometry.divergent_length

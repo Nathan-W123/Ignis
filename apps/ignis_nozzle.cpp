@@ -34,7 +34,19 @@ int main(int argc, char** argv) {
     app::applyCommandLine(cfg, cli);
     cfg.cooling_enabled = false;   // the sweep is a pure nozzle study
     cfg.feed_enabled = false;
-    if (flagPresent(cli, "frozen")) cfg.composition = CompositionModel::kFrozen;
+    cfg.cycle_enabled = false;
+    if (flagPresent(cli, "frozen")) {
+      // Frozen chemistry has no recombination for a finite-rate march to find.
+      cfg.composition = CompositionModel::kFrozen;
+      cfg.kinetics_enabled = false;
+    }
+    if (cfg.kinetics_enabled && cfg.kinetics_apply) {
+      // The kinetic efficiency is a property of the nozzle, not of the ambient
+      // pressure: march once, then carry it as a fixed factor through the sweep.
+      const SteadyEngine once(cfg);
+      cfg.performance.kinetic_efficiency = once.runAt(0.0).performance.kinetic_efficiency;
+      cfg.kinetics_enabled = false;
+    }
 
     const double z0 = flagDouble(cli, "altitude-min", 0.0);
     const double z1 = flagDouble(cli, "altitude-max", 80000.0);

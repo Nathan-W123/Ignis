@@ -351,17 +351,211 @@ def write_coolant(out_dir):
     print(f"wrote {path}: {n} rows")
 
 
+def _plain(o):
+    """Cantera's input_data mappings as plain Python, for yaml.safe_dump."""
+    if hasattr(o, "items"):
+        return {str(k): _plain(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_plain(v) for v in o]
+    if hasattr(o, "item"):          # numpy scalars
+        return o.item()
+    return o
+
+
+def _kinetic_gas(names):
+    """Cantera gas on Ignis's own species data (NASA TM-4513, 1 bar standard
+    state, Ignis's names) with the GRI-Mech 3.0 reactions of Ignis's nozzle
+    mechanism -- identical data, an independent implementation."""
+    import cantera as ct
+    import yaml
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from build_kinetics import SPECIES as REACTING
+    by_nasa = {IGNIS_TO_NASA[n]: n for n in names}
+    species = []
+    for s in ct.Species.list_from_file("nasa_gas.yaml"):
+        if s.name in by_nasa:
+            d = _plain(s.input_data)
+            d["thermo"]["reference-pressure"] = "1 bar"
+            d["name"] = by_nasa[s.name]
+            species.append(d)
+    present = {d["name"] for d in species}
+    gri = ct.Solution("gri30.yaml")
+    reactions, ids = [], []
+    for i, r in enumerate(gri.reactions()):
+        sp = set(r.reactants) | set(r.products)
+        if not (sp <= set(REACTING) and sp <= present):
+            continue
+        tb = r.third_body
+        if tb is not None and tb.name != "M" and tb.name not in present:
+            continue
+        reactions.append(_plain(r.input_data))
+        ids.append(i + 1)
+    doc = {"phases": [{"name": "gas", "thermo": "ideal-gas", "elements": ["O", "H", "C"],
+                       "species": [d["name"] for d in species], "kinetics": "gas",
+                       "reactions": "all", "skip-undeclared-third-bodies": True}],
+           "species": species, "reactions": reactions}
+    return ct.Solution(yaml=yaml.safe_dump(doc)), ids
+
+
+def write_kinetics(out_dir):
+    """Forward rate constants, and a finite-rate nozzle march through a cone,
+    both from Cantera on identical species data."""
+    import cantera as ct
+    import numpy as np
+    from scipy.integrate import solve_ivp
+    gas, ids = _kinetic_gas(CHO_SPECIES)
+    names = gas.species_names
+    src = "Cantera %s on NASA TM-4513 data (1 bar) with GRI-Mech 3.0's rates" % ct.__version__
+
+    # --- the burnt gas: LOX/CH4 at O/F 3.4 and 5.5 MPa, as the equilibrium
+    # reference makes it, then a shifting-equilibrium expansion. -----------
+    O, F = CEA_PROPELLANT["LOX"], CEA_PROPELLANT["LCH4"]
+    mr, pc = 3.4, 5.5e6
+    mo, mf = mr / (1 + mr), 1 / (1 + mr)
+    h0 = (mo / (O["M"] * 1e-3)) * O["h_cal"] * CAL + (mf / (F["M"] * 1e-3)) * F["h_cal"] * CAL
+    gas.TPY = 3000.0, pc, {"CH4": mf, "O2": mo}
+    gas.equilibrate("TP")
+    gas.HP = h0, pc
+    gas.equilibrate("HP")
+    s0 = gas.entropy_mass
+
+    def shifting(p):
+        gas.SP = s0, p
+        gas.equilibrate("SP")
+        u = np.sqrt(max(2.0 * (h0 - gas.enthalpy_mass), 0.0))
+        return u, gas.density * u
+
+    # Rate constants at four temperatures, on this gas's equilibrium mixture.
+    rates_path = os.path.join(out_dir, "kinetics_rates_reference.csv")
+    with open(rates_path, "w") as fh:
+        header(fh, "forward rate constants", [src])
+        fh.write("# units: T[K] p[Pa] M[mol/m^3] kf[(m^3/mol)^(n-1)/s, the third body excluded]\n")
+        fh.write("gri,T,p,M,kf\n")
+        n = 0
+        for T in (800.0, 1500.0, 2500.0, 3500.0):
+            gas.TP = T, 2.0e6
+            gas.equilibrate("TP")
+            kf = gas.forward_rate_constants
+            M = gas.third_body_concentrations
+            for j, r in enumerate(gas.reactions()):
+                order = sum(r.reactants.values())
+                extra = order if r.reaction_type.startswith("three-body") else order - 1
+                m = M[j] * 1e3 if np.isfinite(M[j]) else 0.0
+                fh.write("%d,%.6f,%.6g,%.12g,%.12g\n" % (ids[j], T, 2.0e6, m, kf[j] * 1e-3 ** extra))
+                n += 1
+    print(f"wrote {rates_path}: {n} rows")
+
+    # Throat: the largest mass flux; start: frozen Mach 1.10 downstream.
+    from scipy.optimize import brentq, minimize_scalar
+    res = minimize_scalar(lambda p: -shifting(p)[1], bounds=(0.4 * pc, 0.75 * pc),
+                          method="bounded", options={"xatol": 1e-3})
+    p_star = res.x
+    g_star = shifting(p_star)[1]
+
+    def frozen_mach(p):
+        u, _ = shifting(p)
+        cp, cv = gas.cp_mass, gas.cv_mass
+        return u / np.sqrt(cp / cv * gas.P / gas.density)
+
+    p_start = brentq(lambda p: frozen_mach(p) - 1.10, 0.05 * pc, p_star, xtol=1e-6, rtol=1e-14)
+    u0, g0 = shifting(p_start)
+    eps_start = g_star / g0
+    T0, X0, Y0 = gas.T, gas.X.copy(), gas.Y.copy()
+    rt = 0.070
+    rs = rt * np.sqrt(eps_start)
+    tan = np.tan(np.radians(15.0))
+    x_end = (rt * np.sqrt(20.0) - rs) / tan
+    area = lambda x: np.pi * (rs + x * tan) ** 2
+    darea = lambda x: 2.0 * np.pi * (rs + x * tan) * tan
+    mdot = gas.density * u0 * area(0.0)
+    W = gas.molecular_weights * 1e-3                  # kg/mol
+    react = [names.index(k) for k in names if k in set(["H2", "H", "O", "O2", "OH", "H2O", "HO2",
+                                                         "H2O2", "CO", "CO2", "HCO"])]
+    n_fixed = Y0 / W                                  # mol/kg, every species
+    Ru = ct.gas_constant * 1e-3                       # J/(mol K)
+
+    def unpack(y):
+        n = n_fixed.copy()
+        n[react] = y[:-1]
+        return n, y[-1]
+
+    last_T = [T0]
+
+    def temperature(Y, h):
+        # Newton on h(T) at fixed composition, to round-off: Cantera's own
+        # HP setter stops near 1e-8, and that noise would stall a 1e-10 march.
+        T = last_T[0]
+        for _ in range(50):
+            gas.TPY = T, 1e5, Y
+            dT = (gas.enthalpy_mass - h) / gas.cp_mass
+            T -= dT
+            if abs(dT) < 1e-13 * T:
+                break
+        last_T[0] = T
+        return T
+
+    def rhs(x, y):
+        n, u = unpack(y)
+        Y = n * W
+        T = temperature(Y / Y.sum(), h0 - 0.5 * u * u)
+        rho = mdot / (u * area(x))
+        gas.TDY = T, rho, Y / Y.sum()
+        wdot = gas.net_production_rates * 1e3          # mol/(m^3 s)
+        dn = wdot[react] / (rho * u)
+        H = gas.partial_molar_enthalpies[react] * 1e-3 # J/mol
+        N = n.sum()
+        cp = gas.cp_mass
+        R = Ru * N
+        psi = dn.sum() / N - (H * dn).sum() / (cp * T)
+        m2 = u * u / (cp / (cp - R) * R * T)
+        du = u * (-darea(x) / area(x) + psi) / (1.0 - m2)
+        return np.append(dn, du)
+
+    y0 = np.append(n_fixed[react], u0)
+    stations = [0.0, 0.002, 0.01, 0.05, 0.2, 0.5, 1.0]
+    sol = solve_ivp(rhs, (0.0, x_end), y0, method="Radau", rtol=1e-9,
+                    atol=np.append(np.full(len(react), 1e-16), 1e-8),
+                    t_eval=[f * x_end for f in stations])
+    if not sol.success:
+        sys.exit("kinetic march failed: " + sol.message)
+
+    path = os.path.join(out_dir, "kinetics_nozzle_reference.csv")
+    with open(path, "w") as fh:
+        header(fh, "finite-rate nozzle march through a 15-degree cone",
+               [src, "LOX/CH4 at O/F 3.4 and 5.5 MPa with CEA's propellant enthalpies, "
+                "shifting equilibrium to frozen Mach 1.10, then the march by scipy's Radau "
+                "integrator at rtol 1e-9"])
+        fh.write("# geometry: r(x) = r_start + x tan(15 deg) from x = 0 to x_end; throat radius "
+                 "%.4f m\n" % rt)
+        fh.write("# units: x[m] r[m] T[K] p[Pa] u[m/s] X[-]; row 'start' is the march's input\n")
+        fh.write("kind,x,r,T,p,u," + ",".join("X_" + k for k in names) + "\n")
+        fh.write("start,0,%.12g,%.12g,%.12g,%.12g," % (rs, T0, p_start, u0) +
+                 ",".join("%.12g" % v for v in X0) + "\n")
+        fh.write("end,%.12g,%.12g,0,0,0," % (x_end, rs + x_end * tan) +
+                 ",".join("0" for _ in names) + "\n")
+        for x, y in zip(sol.t, sol.y.T):
+            n, u = unpack(y)
+            Y = n * W
+            T = temperature(Y / Y.sum(), h0 - 0.5 * u * u)
+            rho = mdot / (u * area(x))
+            gas.TDY = T, rho, Y / Y.sum()
+            fh.write("station,%.12g,%.12g,%.12g,%.12g,%.12g," % (x, rs + x * tan, T, gas.P, u) +
+                     ",".join("%.12g" % v for v in gas.X) + "\n")
+    print(f"wrote {path}: start at A/A* {eps_start:.5f}, {len(sol.t)} stations, "
+          f"exit {sol.y[-1, -1]:.3f} m/s")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-o", "--output-dir", default="validation/reference")
     ap.add_argument("--skip", nargs="*", default=[],
-                    help="sections to skip: thermo transport equilibrium cea coolant")
+                    help="sections to skip: thermo transport equilibrium cea coolant kinetics")
     args = ap.parse_args(argv)
     os.makedirs(args.output_dir, exist_ok=True)
     for name, fn in (("thermo", write_thermo), ("transport", write_transport),
                      ("equilibrium", write_equilibrium), ("cea", write_cea),
-                     ("coolant", write_coolant)):
+                     ("coolant", write_coolant), ("kinetics", write_kinetics)):
         if name in args.skip:
             print(f"skipping {name}")
             continue

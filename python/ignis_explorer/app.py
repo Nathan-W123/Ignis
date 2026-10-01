@@ -36,20 +36,25 @@ Engine's published geometry and operating point; what Ignis predicts for it is \
 set against Rocketdyne's own figures above, as a sanity check rather than a \
 validation.
 
-• Gas-phase equilibrium only — no condensed carbon, no finite-rate kinetics. \
-Frozen and shifting expansion bracket the truth; neither is it.
-• Quasi-1D and inviscid. No boundary layer. Separation is predicted by an \
-empirical criterion and flagged, but the inviscid solution is not modified, so \
-a separated nozzle's reported thrust is optimistic.
-• The thermal model is an engineering estimate. Bartz carries ±20–30 % scatter \
-against measured rocket heat flux. 1-D wall, no axial conduction, no thermal \
-stress, no life analysis.
+• Equilibrium chemistry in the chamber; finite-rate recombination through the \
+nozzle at GRI-Mech 3.0's rates, checked against Cantera but never against a \
+measured nozzle. No condensed carbon.
+• A quasi-1D core with the wall boundary layer applied as corrections \
+(discharge coefficient, displaced exit, momentum deficit). Separation is \
+predicted by an empirical criterion and flagged, but the solution is not \
+modified, so a separated nozzle's reported thrust is optimistic.
+• The thermal model is an engineering estimate: an integral turbulent \
+boundary layer that matches high-pressure air-nozzle data, over-predicts where \
+a layer laminarises, and, the source authors warn, can be off by up to a factor \
+of two in an engine. Wall films use a 1959 correlation. 1-D wall, no axial \
+conduction, no thermal stress, no life analysis.
 • η_c* is an assumed input, not a prediction: there is no injector or mixing \
 model. Ideal and corrected values are shown separately so the assumption stays \
 visible.
 • Ideal thermal equation of state (p = ρRT, Z ≡ 1) with fully variable caloric \
 properties. No compressibility factor or fugacity model.
-• The feed panel sizes pressures; it does not close an engine cycle.
+• The feed panel sizes a pressure-fed supply. The Explorer closes no turbopump \
+cycle; the command line's `cycle` block does.
 
 Full detail: docs/limitations.md"""
 

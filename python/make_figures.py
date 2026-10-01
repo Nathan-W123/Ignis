@@ -80,6 +80,9 @@ def main(argv=None) -> int:
         "hydrogen_thermal": lambda: figures.thermal_profiles(
             f"{R}/hydrogen_nominal/h1_thermal.csv", f"{F}/15_hydrogen_thermal.png",
             case="Ignis-H1 (LOX/LH2)"),
+        "finite_rate_nozzle": lambda: figures.finite_rate_nozzle(
+            f"{R}/methane_nominal/m1_kinetics.csv", f"{R}/methane_nominal/m1_profile.csv",
+            f"{R}/methane_nominal/m1_engine.json", f"{F}/19_finite_rate_nozzle.png"),
     }
     if not args.no_animation:
         jobs["startup_animation"] = lambda: animation.startup_animation(

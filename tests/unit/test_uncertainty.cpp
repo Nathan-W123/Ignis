@@ -43,6 +43,12 @@ SteadyEngine cheapEngine() {
   cfg.feed_enabled = false;
   cfg.cycle_enabled = false;
   cfg.sample_profile = false;
+  // The inviscid, shifting-equilibrium engine: these tests check the sampling
+  // and the statistics, and the sensitivity checks rely on its exact scalings
+  // (mdot as p_c r_t^2, Isp independent of throat size at fixed area ratio),
+  // which the wall boundary layer and the finite-rate march both perturb.
+  cfg.boundary_layer_losses = false;
+  cfg.kinetics_enabled = false;
   return SteadyEngine(cfg);
 }
 

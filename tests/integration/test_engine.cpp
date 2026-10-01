@@ -32,8 +32,9 @@ TEST_CASE("the nominal methane engine runs end to end and is self-consistent",
     const auto& p = res.performance;
     REQUIRE(res.has_boundary_layer);
     REQUIRE(p.viscous);
+    // ... and, with finite-rate recombination applied, the kinetic loss.
     REQUIRE(p.thrust == Approx(p.lambda_divergence * p.eta_nozzle * p.thrust_momentum +
-                               p.thrust_pressure).epsilon(1e-12));
+                               p.thrust_pressure - p.kinetic_loss).epsilon(1e-12));
     REQUIRE(p.thrust_momentum == Approx(res.mdot * p.u_exit - p.momentum_deficit).epsilon(1e-12));
     REQUIRE(p.momentum_deficit > 0.0);
     REQUIRE(p.isp_ideal == Approx(p.thrust_ideal / (p.mdot_inviscid * constants::g0)).epsilon(1e-12));
@@ -47,9 +48,33 @@ TEST_CASE("the nominal methane engine runs end to end and is self-consistent",
     REQUIRE(res.mdot == Approx(p.discharge_coefficient * p.mdot_inviscid).epsilon(1e-12));
     REQUIRE(res.l_star == Approx(res.chamber_volume / res.throat_area).epsilon(1e-12));
   }
+  SECTION("finite-rate recombination scales the vacuum thrust, and only that") {
+    REQUIRE(res.has_kinetics);
+    const auto& k = res.kinetics;
+    const auto& p = res.performance;
+    REQUIRE(p.kinetic_efficiency == k.kinetic_efficiency);
+    REQUIRE(k.isp_vacuum_frozen < k.isp_vacuum);
+    REQUIRE(k.isp_vacuum < k.isp_vacuum_shifting);
+    REQUIRE(k.energy_residual < 1e-10);
+    REQUIRE(k.element_residual < 1e-10);
+    auto shifting_cfg = cfg;
+    shifting_cfg.kinetics_enabled = false;
+    const auto shift = engine.runWith(shifting_cfg);
+    REQUIRE(p.isp_vacuum ==
+            Approx(k.kinetic_efficiency * shift.performance.isp_vacuum).epsilon(1e-12));
+    REQUIRE(p.kinetic_loss ==
+            Approx((1.0 - k.kinetic_efficiency) * shift.performance.isp_vacuum * shift.mdot *
+                   constants::g0).epsilon(1e-9));
+    REQUIRE(p.thrust == Approx(shift.performance.thrust - p.kinetic_loss).epsilon(1e-12));
+    REQUIRE(res.mdot == Approx(shift.mdot).epsilon(1e-12));
+    // Ideal stays shifting equilibrium, comparable with CEA.
+    REQUIRE(p.isp_ideal == Approx(shift.performance.isp_ideal).epsilon(1e-12));
+    REQUIRE(res.kineticsTable().rows() == k.x.size());
+  }
   SECTION("switching the boundary layer off recovers the inviscid nozzle exactly") {
     auto inviscid_cfg = cfg;
     inviscid_cfg.boundary_layer_losses = false;
+    inviscid_cfg.kinetics_enabled = false;   // the layer alone
     const auto inv = engine.runWith(inviscid_cfg);
     REQUIRE_FALSE(inv.has_boundary_layer);
     REQUIRE(inv.performance.thrust == Approx(res.performance.thrust_inviscid).epsilon(1e-9));

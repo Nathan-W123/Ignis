@@ -39,6 +39,18 @@ TransportModel::TransportModel(const SpeciesDatabase& db) : db_(&db) {
     t_min_valid_ = std::max(t_min_valid_, 0.3 * tr.well_depth);
     t_max_valid_ = std::min(t_max_valid_, 100.0 * tr.well_depth);
   }
+  // The pair factors of Wilke's rule, computed once rather than per call;
+  // the arithmetic is unchanged, so are the results.
+  const Eigen::Index n = static_cast<Eigen::Index>(db.size());
+  wilke_mass_ratio_.resize(n, n);
+  wilke_denominator_.resize(n, n);
+  for (Eigen::Index k = 0; k < n; ++k)
+    for (Eigen::Index l = 0; l < n; ++l) {
+      const double mk = db[static_cast<std::size_t>(k)].molarMass();
+      const double ml = db[static_cast<std::size_t>(l)].molarMass();
+      wilke_mass_ratio_(k, l) = std::pow(ml / mk, 0.25);
+      wilke_denominator_(k, l) = std::sqrt(8.0 * (1.0 + mk / ml));
+    }
 }
 
 double TransportModel::speciesViscosity(std::size_t j, double T) const {
@@ -54,7 +66,10 @@ double TransportModel::speciesViscosity(std::size_t j, double T) const {
 }
 
 double TransportModel::speciesConductivity(std::size_t j, double T) const {
-  const double mu = speciesViscosity(j, T);
+  return conductivityFrom(j, T, speciesViscosity(j, T));
+}
+
+double TransportModel::conductivityFrom(std::size_t j, double T, double mu) const {
   const double cp_molar = (*db_)[j].cp(T);
   const double cv_molar = cp_molar - constants::R_universal;
   // Modified Eucken; exact monatomic limit when cv = 3R/2.
@@ -79,13 +94,12 @@ TransportResult TransportModel::mixture(const Eigen::VectorXd& X, double T,
   if (idx.empty()) throw RangeError("transport: no species in the mixture have LJ data");
 
   const std::size_t n = idx.size();
-  std::vector<double> x(n), mu(n), lam(n), M(n);
+  std::vector<double> x(n), mu(n), lam(n);
   for (std::size_t k = 0; k < n; ++k) {
     const std::size_t j = static_cast<std::size_t>(idx[k]);
     x[k] = X(idx[k]) / covered;                 // renormalised over covered species
     mu[k] = speciesViscosity(j, T);
-    lam[k] = speciesConductivity(j, T);
-    M[k] = (*db_)[j].molarMass();
+    lam[k] = conductivityFrom(j, T, mu[k]);
   }
 
   TransportResult out;
@@ -93,8 +107,8 @@ TransportResult TransportModel::mixture(const Eigen::VectorXd& X, double T,
   for (std::size_t k = 0; k < n; ++k) {
     double denom = 0.0;
     for (std::size_t l = 0; l < n; ++l) {
-      const double r = std::sqrt(mu[k] / mu[l]) * std::pow(M[l] / M[k], 0.25);
-      const double phi = (1.0 + r) * (1.0 + r) / std::sqrt(8.0 * (1.0 + M[k] / M[l]));
+      const double r = std::sqrt(mu[k] / mu[l]) * wilke_mass_ratio_(idx[k], idx[l]);
+      const double phi = (1.0 + r) * (1.0 + r) / wilke_denominator_(idx[k], idx[l]);
       denom += x[l] * phi;
     }
     mu_mix += x[k] * mu[k] / denom;

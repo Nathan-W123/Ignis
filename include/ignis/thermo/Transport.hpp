@@ -91,11 +91,17 @@ class TransportModel {
   double tMaxValid() const { return t_max_valid_; }
 
  private:
+  /// Eucken conductivity from a viscosity already computed.
+  double conductivityFrom(std::size_t j, double T, double mu) const;
+
   const SpeciesDatabase* db_;
   std::vector<double> delta_star_;  ///< reduced dipole moment, per species
   std::vector<bool> has_data_;
   double t_min_valid_ = 0.0;
   double t_max_valid_ = 0.0;
+  /// Wilke's molar-mass factors, which depend on the species pair alone:
+  /// (M_l/M_k)^(1/4) and sqrt(8 (1 + M_k/M_l)), row k, column l.
+  Eigen::MatrixXd wilke_mass_ratio_, wilke_denominator_;
 };
 
 }  // namespace ignis

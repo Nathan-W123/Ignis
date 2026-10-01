@@ -60,19 +60,20 @@ serialisation; the physics modules never touch it.
 | Module | Lines | Responsibility |
 |---|---:|---|
 | `core/` | 154 | Physical constants, unit and sign conventions, the exception hierarchy. Header-only. |
-| `thermo/` | 1075 | NASA 7-coefficient species polynomials, the species database and its element matrix, per-kilogram gas mixtures with frozen-composition state functions, Chapman–Enskog transport. |
+| `thermo/` | 1095 | NASA 7-coefficient species polynomials, the species database and its element matrix, per-kilogram gas mixtures with frozen-composition state functions, Chapman–Enskog transport. |
 | `equilibrium/` | 813 | Constrained Gibbs-energy minimisation: (T,p), (h,p), (s,p) and (u,v) problems, equilibrium derivative properties (c<sub>p,eff</sub>, γ<sub>s</sub>, sound speed), element and energy residuals. |
-| `combustion/` | 486 | Propellant definitions with liquid-state reference enthalpies, mixture assembly by mixture ratio, chamber stagnation state, characteristic velocity. |
-| `nozzle/` | 1673 | Rao-type bell contour generation, quasi-1D frozen and shifting-equilibrium marching, the throat solve, normal shocks, separation criteria, US Standard Atmosphere 1976. |
-| `thermal/` | 1459 | Bartz hot-gas coefficient, recovery temperature, wall conduction and radiation, tabulated reference-EOS coolant properties, the coupled regenerative-cooling march. |
+| `combustion/` | 493 | Propellant definitions with liquid-state reference enthalpies (including RP-1 as CH<sub>1.95</sub>), mixture assembly by mixture ratio, chamber stagnation state, characteristic velocity. |
+| `nozzle/` | 2142 | Rao-type bell contour generation, quasi-1D frozen and shifting-equilibrium marching, the throat solve, normal shocks, separation criteria, boundary-layer and kinetic corrections to thrust, US Standard Atmosphere 1976. |
+| `thermal/` | 2786 | The integral turbulent boundary layer and Bartz's correlation for the hot-gas side, boundary-layer losses, Hatch & Papell film cooling, recovery temperature, wall conduction and radiation, tabulated reference-EOS coolant properties, the coupled regenerative-cooling march with tapered channels. |
+| `kinetics/` | 915 | A gas-phase reaction mechanism (GRI-Mech 3.0's H/O/CO subset) with reverse rates by detailed balance, and the finite-rate march through the supersonic nozzle with its L-stable linearly implicit integrator. |
 | `transient/` | 1180 | Pre-tabulated equilibrium EOS with tensor-product cubic-Hermite interpolation, 0-D chamber mass/energy ODEs, RK4 and adaptive Cash–Karp integration, conservation integrals. |
-| `cycle/` | 313 | Injector, feed-line, valve and coolant-jacket pressure budget back to the tanks; pump power estimate. |
-| `engine/` | 453 | `SteadyEngine` — the single entry point that turns one configuration into a complete steady-state analysis (chamber, nozzle, performance, thermal, cooling, feed system, altitude sweep). |
-| `optimize/` | 1004 | Named parameter accessors over the configuration, N-dimensional sweeps, augmented-Lagrangian + Nelder–Mead constrained optimisation with Latin-hypercube multi-start. |
+| `cycle/` | 1456 | Pressure-fed supply (injector, lines, tank pressures); real-fluid pumps, gas and expander turbines, generator and preburner combustion; gas-generator, staged-combustion and expander power balances. |
+| `engine/` | 916 | `SteadyEngine` — the single entry point that turns one configuration into a complete steady-state analysis (chamber, nozzle, kinetics, boundary layer, performance, cooling, film, turbopump cycle, feed system). |
+| `optimize/` | 1069 | Named parameter accessors over the configuration, N-dimensional sweeps, augmented-Lagrangian + Nelder–Mead constrained optimisation with Latin-hypercube multi-start. |
 | `uncertainty/` | 639 | Distributions, deterministic per-sample seeding, threaded Monte Carlo, standardised regression coefficients, Spearman rank correlation, local elasticities. |
-| `io/` | 1101 | YAML/JSON configuration loading with path-qualified error messages, JSON writing, CSV tables, the shared CLI parser. |
-| `apps/` | 958 | The six executables. Each is argument parsing plus a call into the library plus output. |
-| `tests/` | 3055 | 75 Catch2 test cases: unit, verification, validation against external references, integration. |
+| `io/` | 1313 | YAML/JSON configuration loading with path-qualified error messages, JSON writing, CSV tables, the shared CLI parser. |
+| `apps/` | 986 | The six executables. Each is argument parsing plus a call into the library plus output. |
+| `tests/` | 6299 | 125 Catch2 test cases: unit, verification, validation against external references, integration. |
 
 ## The central abstraction
 
@@ -109,17 +110,24 @@ EngineConfig ──► Propellant mixture (combustion/)
    │                             │
    │                             ├──► performance: F, Isp, CF, separation
    │                             │
+   │                             ├──► finite-rate march (kinetics/) ──► kinetic efficiency
+   │                             │
    │                             ▼
-   │                     hot-gas h_g, T_aw   (thermal/HeatTransfer)
+   │                     integral boundary layer, film  (thermal/)
    │                             │
    │                             ▼
    └──────────────────► regenerative jacket march (thermal/)
-                                 │
-                                 ▼
+                                 │    ▲ jacket inlet pressure and temperature
+                                 ▼    │ (the fuel pump's discharge)
                          coolant ΔT, Δp, T_wg, T_wc
                                  │
+                                 ├──► boundary-layer losses ──► C_d, displaced exit, deficit
+                                 │
                                  ▼
-                         feed system (cycle/) ──► tank pressures, pump power
+                         turbopump cycle (cycle/) ──► pump discharges, turbine,
+                                 │                     generator flow, delivered Isp
+                                 ▼
+                         feed system (cycle/) ──► tank pressures
                                  │
                                  ▼
                          EngineResult ──► JSON + CSV + human-readable report

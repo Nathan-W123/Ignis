@@ -8,28 +8,42 @@
 **A thermochemical liquid-rocket propulsion simulator in C++17.**
 
 Ignis computes what a liquid rocket engine does, from the propellants up:
-equilibrium combustion composition and flame temperature by constrained Gibbs
-minimisation, quasi-1D nozzle expansion with shifting or frozen chemistry,
-thrust and specific impulse at any altitude, regenerative-cooling heat transfer
-and wall temperatures, chamber start-up and shutdown transients, constrained
-design optimisation, and Monte Carlo uncertainty propagation with sensitivity
-ranking.
+- equilibrium combustion composition and flame temperature, by constrained
+  Gibbs minimisation;
+- quasi-1D nozzle expansion with shifting, frozen or finite-rate chemistry,
+  corrected for the wall boundary layer;
+- thrust and specific impulse at any altitude;
+- regenerative and film cooling, with an integral boundary layer on the
+  hot-gas side;
+- the turbopump power balance of gas-generator, staged-combustion and expander
+  cycles;
+- chamber start-up and shutdown transients;
+- constrained design optimisation, and Monte Carlo uncertainty propagation
+  with sensitivity ranking.
+
+LOX/methane, LOX/hydrogen and LOX/RP-1 are all supported.
 
 It is validated against **NASA CEA** and **Cantera**, agrees with CEA to
 **0.18 % or better** on flame temperature and **0.06 % or better** on
 characteristic velocity across 156 rocket cases, and reports the residual of
 every balance it claims to close.
 
-It is also checked against **measurements**, not just against other codes. The
-gas-side heat-transfer correlation is compared with local heat flux measured in
-a heated-air nozzle at JPL in 1965, where it over-predicts by about 45 % on the
-high-pressure tests and about 150 % on the low-pressure ones; and
-with a LOX/hydrogen heat-sink rocket fired at NASA Lewis the same year, which
-puts its leading constant within 1 % of the measured value in the chamber and
-72 % high at the throat ([details](docs/validation.md)). Two experiments,
-different fluids, different laboratories, agreeing to within 16 % on how wrong
-the correlation is. That is the correlation's error, not a bug — and knowing
-its size, and its shape along the engine, is worth more than assuming it away.
+It is also checked against **measurements**, not just against other codes
+([details](docs/validation.md)). Two experiments supply the gas-side heat
+transfer: local heat flux in a heated-air nozzle at JPL (1965), and a
+LOX/hydrogen heat-sink rocket fired at NASA Lewis the same year.
+- **Bartz's correlation** over-predicts the air nozzle by about 45 % at high
+  pressure and 150 % at low pressure, and the rocket's throat by 72 %.
+- **Ignis's default, an integral turbulent boundary layer** marched from the
+  injector face, lands on the high-pressure air data (median 1.00) and halves
+  Bartz's shape error in the rocket. It is as wrong as Bartz where the layer
+  laminarises, and says so.
+- **The wall-film correlation** reproduces its own 1959 measurements to 4 %.
+- **The pumps, turbines and preburners** reproduce the RS-25's published
+  turbopump horsepower and preburner mixture ratios to 0.1–4.5 %.
+
+Knowing a model's error, and its shape along the engine, is worth more than
+assuming it away.
 
 ![The Ignis-M1 engine firing](results/figures/17_engine_render.png)
 
@@ -85,20 +99,39 @@ reactants at 298.15 K.
 
 **Nozzle.** Rao-type bell contours from six analytic C¹ segments, or conical.
 Quasi-1D marching on static pressure with shifting-equilibrium or frozen
-chemistry; the throat located by M(p) = 1; area ratios by Illinois regula
-falsi. Variable-property equilibrium-gas normal shocks (ideal thermal EOS,
+chemistry; the throat located by M(p) = 1; area ratios by a safeguarded
+Newton iteration on the exact slope of ρu along the isentrope. Finite-rate recombination through the divergent nozzle, the
+one-dimensional-kinetics calculation of the JANNAF methodology. It uses the
+H/O/CO reactions of GRI-Mech 3.0, takes reverse rates by detailed balance on
+Ignis's own thermochemistry, and integrates with an L-stable linearly implicit
+scheme. It matches Cantera's march on identical data to 10⁻⁸. The wall
+boundary layer's discharge coefficient, displaced exit and momentum deficit
+are applied to the thrust. Variable-property equilibrium-gas normal shocks (ideal thermal EOS,
 state-dependent c<sub>p</sub>, γ and molar mass — not a non-ideal
 compressibility model), expansion-regime classification, and the Summerfield
 and Schmucker separation criteria. U.S. Standard Atmosphere 1976 with the
 standard's own constants.
 
 **Thermal.** Chapman–Enskog transport with Neufeld collision integrals, the
-Brokaw polar correction, modified Eucken and Wilke mixing. Bartz hot-gas
-coefficient, recovery temperature, cylindrical wall conduction, optional
-gray-gas radiation. Regenerative cooling as a coupled hot-gas/wall/coolant
-balance with rectangular-fin efficiency, an enthalpy-based coolant march,
-Colebrook friction and reference-EOS coolant properties (Setzmann & Wagner,
-Leachman *et al.*, Schmidt & Wagner).
+Brokaw polar correction, modified Eucken and Wilke mixing. The hot-gas
+coefficient comes from an integral turbulent boundary layer, its momentum and
+energy integrals marched from the injector face and coupled to the wall
+temperature (Elliott, Bartz & Silver); Bartz's closed form is an option.
+Recovery temperature, cylindrical wall conduction, optional gray-gas
+radiation. Wall films from the injector (Hatch & Papell), channels that taper
+along the axis. Regenerative cooling as a coupled hot-gas/wall/coolant balance
+with rectangular-fin efficiency, an enthalpy-based coolant march, Colebrook
+friction and reference-EOS coolant properties (Setzmann & Wagner, Leachman
+*et al.*, Schmidt & Wagner, and n-dodecane as RP-1's surrogate).
+
+**Cycles.** Pumps integrate dp/ρ along each propellant's real-fluid table.
+Turbines expand generator or preburner gas at frozen composition, or an
+expander's heated fuel along its table. Gas generators and preburners burn at
+the mixture ratio their turbine temperature sets, with the pump work and
+jacket heat in their propellants. Gas-generator, fuel- or oxidiser-rich
+staged-combustion and expander balances close for a given chamber pressure,
+or say how far short they fall. The fuel pump's discharge sets the cooling
+jacket's inlet.
 
 **Transient.** A zero-dimensional chamber tracking oxidiser and fuel mass
 separately, closed by a pre-tabulated equilibrium equation of state with
@@ -164,10 +197,11 @@ menu. See [`docs/explorer.md`](docs/explorer.md).
 It opens on a real engine: the **RS-25**, the Space Shuttle Main Engine, solved
 from Rocketdyne's published geometry and operating point and drawn inside
 NASA's public-domain 3-D model of its nozzle. Ignis's numbers are set beside
-Rocketdyne's — vacuum Isp 460.5 s against ≈ 452 s, propellant flow +3.8 %, and
-a chamber heat load 1.85 times the published one, which is the Bartz
-over-prediction this project's own validation finds. Where each number comes
-from, and what accounts for each gap, is in
+Rocketdyne's: vacuum Isp 456.4 s against ≈ 452 s, and propellant flow +3.7 %.
+The chamber heat load is 1.23 times what the published coolant temperatures
+imply, down from 1.85 under Bartz's correlation. The drop came from the
+integral boundary layer and the engine's published fuel film, not from
+tuning. Where each number comes from, and what accounts for each gap, is in
 [`data/engines/rs25/README.md`](data/engines/rs25/README.md). Without a
 compiler the Explorer replays saved solves of its presets, so it runs from a
 plain `pip install`.
@@ -459,15 +493,16 @@ of the system, not the linear solve.
 ## Architecture
 
 ```
-include/ignis/ + src/          the library, 12 modules, no I/O in the physics
+include/ignis/ + src/          the library, 13 modules, no I/O in the physics
   core/         constants, unit conventions, exception hierarchy
   thermo/       NASA-7 polynomials, species database, mixtures, transport
   equilibrium/  constrained Gibbs minimisation and its derivative properties
   combustion/   propellants, mixture assembly, chamber state, c*
   nozzle/       contour generation, quasi-1D flow, shocks, atmosphere
-  thermal/      Bartz, wall conduction, coolant EOS, regenerative jacket
+  thermal/      boundary layer, Bartz, film, wall conduction, coolant EOS, jacket
+  kinetics/     reaction mechanism, finite-rate nozzle march
   transient/    tabulated equilibrium EOS, 0-D chamber, RK4 / RK4(5)
-  cycle/        injector, lines, valves, tank pressures, pump power
+  cycle/        feed pressures, pumps, turbines, gas-generator / staged / expander
   engine/       SteadyEngine: one config in, one complete analysis out
   optimize/     named parameters, sweeps, augmented Lagrangian + Nelder-Mead
   uncertainty/  distributions, deterministic Monte Carlo, sensitivity
@@ -477,12 +512,13 @@ tests/          85 Catch2 cases: unit, verification, validation, integration
 python/         ignis_viz (figures, renders) and ignis_explorer (the desktop UI)
 explorer.py     launcher for the Ignis Engine Explorer
 configs/        12 shipped scenarios
-data/           species, propellants, materials, coolant tables (all cited)
+data/           species, propellants, materials, coolant tables, reaction
+                mechanism (all cited)
 tools/          the generators that build data/ and validation/reference/,
                 contour_from_stl.py for importing CAD geometry,
                 and make_cover.py, which renders the engine
 validation/     externally produced reference data (CEA, Cantera, CoolProp,
-                and two 1965 heat-transfer experiments transcribed by hand)
+                and three 1959-1965 experiments transcribed by hand)
 scripts/        build.sh  test.sh  validate.sh  run_all.sh
 docs/           theory, architecture, configuration, V&V, benchmarks, limits
 ```
@@ -518,17 +554,21 @@ data-flow diagram and the error policy.
 
 The short version — the full list is [`docs/limitations.md`](docs/limitations.md):
 
-* **Ignis-M1 and Ignis-H1 are conceptual engines.** Nothing here has been
-  compared with a test stand, and nothing here is flight-ready.
-* **Gas-phase equilibrium only.** No condensed carbon, no finite-rate kinetics;
-  the frozen and shifting limits bracket the truth but do not give it.
-* **Quasi-1D, inviscid nozzle.** No boundary layer. Separation is *predicted*
-  by an empirical criterion and flagged, but the inviscid solution is not
-  modified — so a separated nozzle's reported thrust is optimistic.
-* **The thermal model is an engineering estimate.** Bartz carries ±20–30 %
-  scatter — measured here as 1 % in the chamber and about 70 % high at the
-  throat ([validation.md §5b](docs/validation.md)) — and the Monte Carlo
-  campaign disperses it explicitly rather than pretending otherwise. No axial
+* **Ignis-M1, Ignis-H1 and Ignis-K1 are conceptual engines.** Nothing here
+  has been compared with a test stand, and nothing here is flight-ready. The
+  RS-25 preset is a real engine's published operating point, used as a sanity
+  check, not a validation.
+* **Gas-phase chemistry.** No condensed carbon. Finite-rate chemistry covers
+  recombination in the divergent nozzle only, with rates fitted to combustion
+  experiments, not to nozzles.
+* **A quasi-1D core with the boundary layer as corrections.** Separation is
+  *predicted* by an empirical criterion and flagged, but the solution is not
+  modified, so a separated nozzle's reported thrust is optimistic.
+* **The thermal model is an engineering estimate.** The boundary layer
+  matches high-pressure air data but not a laminarising layer, gets half the
+  measured throat dip in a rocket, and can be off by up to a factor of two in
+  an engine ([validation.md §5b](docs/validation.md)). The Monte Carlo campaign
+  disperses it explicitly rather than pretending otherwise. No axial
   conduction, no thermal stress, no life analysis.
 * **η<sub>c\*</sub> is an assumed input, not a prediction.** There is no
   injector or mixing model. Ideal and corrected quantities are reported
@@ -536,8 +576,9 @@ The short version — the full list is [`docs/limitations.md`](docs/limitations.
 * **The transient is valid from ignition onward.** It cannot represent the cold
   pre-ignition fill or ignition overpressure, and it says nothing at all about
   combustion stability.
-* **No cycle balance.** The feed model sizes pressures; it does not close a
-  gas-generator, staged-combustion or expander cycle.
+* **Cycle balances are verified, not validated.** Their components reproduce
+  the RS-25's turbopump data; the closures have been checked for consistency
+  only. Efficiencies are inputs, and there are no turbomachinery maps.
 
 Ignis is built so that where it is uncertain, it says so: failed solves throw
 with actionable messages instead of being clamped into plausible-looking
@@ -552,9 +593,10 @@ MIT — see [`LICENSE`](LICENSE).
 
 All shipped data is from published, openly available sources, cited in the file
 that carries it: NASA TM-4513 and NASA RP-1311 (thermochemistry and propellant
-enthalpies), GRI-Mech 3.0 (comparison fit), Setzmann & Wagner 1991, Leachman
-*et al.* 2009 and Schmidt & Wagner 1985 (coolant equations of state, evaluated
-with CoolProp), the U.S. Standard Atmosphere 1976, and the open literature for
-the Bartz, Dittus–Boelter, Gnielinski, Colebrook, Summerfield and Schmucker
-correlations. Reference data for validation was generated with NASA CEA (via
+enthalpies), GRI-Mech 3.0 (reaction rates, and a comparison thermochemistry
+fit), Setzmann & Wagner 1991, Leachman *et al.* 2009, Schmidt & Wagner 1985 and
+Lemmon & Huber 2004 (coolant equations of state, evaluated with CoolProp), the
+U.S. Standard Atmosphere 1976, the SSME Orientation manual (turbopump
+validation), and the open literature for the Bartz, Hatch & Papell,
+Dittus–Boelter, Gnielinski, Colebrook, Summerfield and Schmucker correlations. Reference data for validation was generated with NASA CEA (via
 `rocketcea`), Cantera and CoolProp, all of which are free software.

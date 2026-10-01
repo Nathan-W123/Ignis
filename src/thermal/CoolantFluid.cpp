@@ -7,6 +7,8 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <map>
+#include <mutex>
 #include <sstream>
 
 #include "ignis/core/Constants.hpp"
@@ -139,6 +141,28 @@ CoolantFluid CoolantFluid::loadCsv(const std::string& path) {
   return f;
 }
 
+namespace {
+
+/// A shipped table, parsed once per process.  An engine evaluation asks for
+/// the same two or three tables several times (jacket, film, pumps), and a
+/// sweep or campaign repeats that thousands of times; parsing a table costs
+/// far more than copying it.  Tables are data installed with the build and
+/// are not expected to change while a process runs.
+CoolantFluid loadCached(const std::string& path) {
+  static std::mutex mutex;
+  static std::map<std::string, CoolantFluid> cache;
+  {
+    const std::lock_guard<std::mutex> lock(mutex);
+    const auto it = cache.find(path);
+    if (it != cache.end()) return it->second;
+  }
+  CoolantFluid fluid = CoolantFluid::loadCsv(path);
+  const std::lock_guard<std::mutex> lock(mutex);
+  return cache.emplace(path, std::move(fluid)).first->second;
+}
+
+}  // namespace
+
 CoolantFluid CoolantFluid::load(const std::string& fluid_name) {
   namespace fs = std::filesystem;
   std::vector<std::string> tried;
@@ -150,15 +174,15 @@ CoolantFluid CoolantFluid::load(const std::string& fluid_name) {
   const char* env = std::getenv("IGNIS_DATA_DIR");
   if (env != nullptr) {
     const fs::path p = fs::path(env) / "coolants" / (fluid_name + ".csv");
-    if (probe(p)) return loadCsv(p.string());
+    if (probe(p)) return loadCached(fs::absolute(p).string());
   }
   {
     const fs::path p = fs::path(kDefaultDataDir) / "coolants" / (fluid_name + ".csv");
-    if (probe(p)) return loadCsv(p.string());
+    if (probe(p)) return loadCached(fs::absolute(p).string());
   }
   for (const char* rel : {"data/coolants/", "../data/coolants/", "../../data/coolants/"}) {
     const fs::path p = fs::path(rel) / (fluid_name + ".csv");
-    if (probe(p)) return loadCsv(p.string());
+    if (probe(p)) return loadCached(fs::absolute(p).string());
   }
   std::ostringstream os;
   os << "cannot locate the coolant property table for '" << fluid_name << "'. Tried:";

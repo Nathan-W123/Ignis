@@ -9,6 +9,7 @@
 ///   1. species set  ->  equilibrium solver  ->  transport model
 ///   2. propellants  ->  chamber equilibrium  ->  c* and throat state
 ///   3. contour      ->  quasi-1D expansion   ->  thrust, Isp, Cf, regime
+///                   ->  finite-rate recombination (optional kinetic efficiency)
 ///   4. expansion + contour + chamber -> Bartz -> wall -> coolant channels
 ///   5. mass flows   ->  turbopump cycle (which sets the jacket inlet pressure)
 ///                   ->  feed system
@@ -63,6 +64,10 @@ struct SteadyEngineResult {
   /// The wall boundary layer and what it cost (applied to `performance`).
   bool has_boundary_layer = false;
   BoundaryLayerLossResult boundary_layer;
+  /// Finite-rate recombination through the nozzle (inviscid, geometric
+  /// exit); its kinetic efficiency is in `performance` when applied.
+  bool has_kinetics = false;
+  KineticNozzleResult kinetics;
 
   /// What a wall film costs in specific impulse, as a bracket.  The headline
   /// `performance` assumes the film mixes and burns completely, i.e. the
@@ -100,6 +105,8 @@ struct SteadyEngineResult {
   Table profileTable() const;
   /// Thermal stations as an exportable table (empty when cooling is off).
   Table coolingTable() const;
+  /// The finite-rate march as an exportable table (empty without kinetics).
+  Table kineticsTable() const;
 };
 
 /// Steady engine driver.  Construction is the expensive part (loading the

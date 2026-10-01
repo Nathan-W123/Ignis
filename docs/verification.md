@@ -13,8 +13,10 @@ with:
                            # printing the measured errors
 ```
 
-**Result: 78 test cases, 17,550 assertions, 0 failures** in 60 s (CTest, `-j4`), on GCC 13.3.0 and
-Clang 18.1.3, Release and Debug, with `-Wall -Wextra -Wpedantic -Werror`.
+**Result: 125 test cases, 21,359 assertions, 0 failures** in 96 s (CTest, `-j4`, GCC 13.3.0,
+Release). Clang 18.1.3 in Release with `-Wall -Wextra -Wpedantic -Werror` passes
+all 125 as well. GCC 13.3.0 in Debug with `-Werror` passes the 121 cases that
+are not tagged `[slow]` (13,269 assertions, 614 s at `-O0`).
 
 ---
 
@@ -333,22 +335,49 @@ the entire argument for running your own instructions against a fresh clone.
 |---|---:|---|
 | `tests/unit/test_thermo.cpp` | 10 | NASA polynomials, database, mixtures, range errors |
 | `tests/unit/test_equilibrium.cpp` | 8 | Conservation, stationarity, guess independence, trends, derivatives, error paths |
-| `tests/unit/test_nozzle.cpp` | 7 | Contour validity, analytic nozzle, thrust decomposition, regime classification |
+| `tests/unit/test_nozzle.cpp` | 9 | Contour validity, analytic nozzle, thrust decomposition, regime classification |
 | `tests/unit/test_transport_atmosphere.cpp` | 5 | Collision integrals, Chapman–Enskog, Wilke, USSA-1976 |
-| `tests/unit/test_thermal.cpp` | 8 | Conduction, recovery temperature, Bartz scaling, radiation, coolant tables |
-| `tests/unit/test_cooling.cpp` | 7 | Energy balance, monotonicity, grid convergence, design trends, failures |
+| `tests/unit/test_thermal.cpp` | 8 | Conduction, recovery temperature, Bartz scaling, radiation, coolant tables, Peng–Robinson |
+| `tests/unit/test_boundary_layer.cpp` | 7 | Integral boundary layer: flat-plate and accelerating-stream limits, shape factors, start rule, laminarisation flag |
+| `tests/unit/test_boundary_layer_losses.cpp` | 3 | Discharge coefficient, displaced exit, momentum deficit; exact thrust identities |
+| `tests/unit/test_cooling.cpp` | 8 | Energy balance, monotonicity, grid convergence, design trends, failures |
+| `tests/unit/test_film_cooling.cpp` | 5 | Hatch & Papell film in the coupled solve, its range clamp, tapered channels |
+| `tests/unit/test_cycle.cpp` | 7 | Gas-generator, staged-combustion and expander balances; pump fluid choice; combustor energy balance |
+| `tests/unit/test_kinetics.cpp` | 9 | Mechanism mapping, rate constants against GRI and Cantera, detailed balance, frozen and shifting limits, start and tolerance insensitivity, the march against Cantera |
 | `tests/unit/test_transient.cpp` | 7 | Table accuracy, steady-state agreement, analytic filling, order, adaptivity, shutdown |
-| `tests/unit/test_io.cpp` | 8 | Every shipped config, defaults, error messages, parameter registry, JSON/CSV |
+| `tests/unit/test_io.cpp` | 9 | Every shipped config, defaults, error messages, parameter registry, JSON/CSV |
 | `tests/unit/test_uncertainty.cpp` | 7 | Thread invariance, seeding, distributions, sensitivity, failure accounting |
-| `tests/validation/test_validation.cpp` | 5 | NASA CEA and Cantera comparisons — see [`validation.md`](validation.md) |
-| `tests/integration/test_engine.cpp` | 6 | Both engines end to end, altitude trends, sweep/single-point identity, optimisation feasibility, feed system |
-| **Total** | **78** | **17 550 assertions, 60 s at `-j4`** |
+| `tests/validation/test_validation.cpp` | 6 | NASA CEA and Cantera comparisons — see [`validation.md`](validation.md) |
+| `tests/validation/test_heat_transfer_validation.cpp` | 5 | JPL air nozzle and NASA TN D-2832 rocket, Bartz and the boundary layer |
+| `tests/validation/test_film_cooling_validation.cpp` | 1 | Hatch & Papell against TN D-130's measurements |
+| `tests/validation/test_cycle_validation.cpp` | 4 | Pumps, turbines and preburners against the RS-25's published data |
+| `tests/integration/test_engine.cpp` | 7 | Three engines end to end, kinetics and cycle identities, altitude trends, sweep/single-point identity, optimisation feasibility, feed system |
+| **Total** | **125** | **21,359 assertions** |
 
-Four cases carry a `[slow]` tag — the constrained trade study, the adaptive
+Four cases carry a `[slow]` tag: the constrained trade study, the adaptive
 integrator comparison, the distribution check and the sensitivity ranking.
-Between them they are most of the suite's serial time. Both Release CI jobs
-run everything; the Debug job runs `~[slow]`, because a Debug build is there
-to catch assertions and undefined behaviour that Release optimises away, and
-re-running a 2500-evaluation optimisation at `-O0` costs most of an hour to
-learn nothing new. `./build/bin/ignis_tests "~[slow]"` is also the right
-command for a quick local check: 74 cases in 15 s.
+The trade study alone takes 94 s, nearly all of the suite's 96 s of wall time
+at `-j4`, because it runs 400 complete engine evaluations. Both Release CI jobs run everything. The Debug
+job runs `~[slow]`: a Debug build is there to catch assertions and undefined
+behaviour that Release optimises away, and repeating those evaluations at
+`-O0` would cost far more time and find nothing new.
+`./build/bin/ignis_tests "~[slow]"` is also the right command for a quick
+local check: 121 cases in 39 s.
+
+The suite's time is mostly the engine's own, so it follows the solver's cost.
+The integral boundary layer, the boundary-layer losses and the finite-rate
+march together made an engine evaluation several times more expensive. CI's
+Release test step went from under a minute and a half to 16.5 minutes, and its
+Debug step from 6 to 31. Two changes that leave the answers where they were
+brought it back:
+
+* area ratios are inverted by Newton's method on the analytic slope
+  ([theory §7](theory.md)), at 3-4 Gibbs solves per station instead of about
+  35;
+* each species' Gibbs energy is evaluated once per kinetic rate call instead
+  of once per reaction, and the coolant tables are parsed once per process.
+
+The Ignis-M1's thrust, impulses, kinetic efficiency and wall temperatures
+moved by at most 10⁻⁹ relative, inside the old search's own tolerance. The
+Monte Carlo tests also went back to an inviscid engine, as their checks of
+exact scalings require.

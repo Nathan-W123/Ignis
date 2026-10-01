@@ -8,6 +8,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <cmath>
+#include <functional>
 
 #include "TestHelpers.hpp"
 #include "ignis/combustion/Chamber.hpp"
@@ -95,6 +96,32 @@ TEST_CASE("rate constants are GRI-Mech 3.0's in mol-based SI units", "[kinetics]
   CHECK(kf == Approx(gri).epsilon(1e-9));
   m.rateConstants(find("2 O + M <=> O2 + M"), T, 1.0, kf, kr);
   CHECK(kf == Approx(1.200e17 / T * 1e-12).epsilon(1e-9));
+}
+
+TEST_CASE("forward rate constants agree with Cantera's on GRI-Mech 3.0",
+          "[kinetics][mechanism][verification]") {
+  // validation/reference/kinetics_rates_reference.csv: Cantera's forward rate
+  // constant of every reaction Ignis keeps, at 800-3500 K on an equilibrium
+  // mixture at 2 MPa, with the third-body concentration each reaction sees.
+  // Elementary, three-body, Lindemann and Troe falloff forms all appear.
+  const auto m = Mechanism::loadYaml(mechanismPath(), rocketDatabase());
+  const ReferenceTable ref(referenceDir() + "/kinetics_rates_reference.csv");
+  double worst = 0.0;
+  std::size_t compared = 0;
+  for (std::size_t row = 0; row < ref.rows(); ++row) {
+    const int id = static_cast<int>(ref.num("gri", row));
+    for (std::size_t i = 0; i < m.reactions().size(); ++i) {
+      if (m.reactions()[i].source_id != id) continue;
+      double kf = 0.0, kr = 0.0;
+      m.rateConstants(i, ref.num("T", row), ref.num("M", row), kf, kr);
+      worst = std::max(worst, relativeError(kf, ref.num("kf", row)));
+      ++compared;
+    }
+  }
+  INFO("worst relative difference " << worst << " over " << compared << " rate constants");
+  CHECK(compared == ref.rows());
+  CHECK(compared == 4 * m.reactions().size());
+  CHECK(worst < 1e-10);
 }
 
 TEST_CASE("at chemical equilibrium every reaction is balanced", "[kinetics][mechanism]") {
@@ -226,4 +253,60 @@ TEST_CASE("finite-rate inputs are checked", "[kinetics][errors]") {
   CHECK_THROWS_AS(integrateKineticNozzle(n.flow, n.geom, n.mech, o), ConfigError);
   const auto other = Mechanism::loadYaml(mechanismPath(), hydrogenDatabase());
   CHECK_THROWS_AS(integrateKineticNozzle(n.flow, n.geom, other), ConfigError);
+}
+
+TEST_CASE("the finite-rate march agrees with Cantera's on identical data",
+          "[kinetics][nozzle][verification]") {
+  // validation/reference/kinetics_nozzle_reference.csv: Cantera, given Ignis's
+  // own species data (NASA TM-4513) and the same GRI-Mech 3.0 reactions,
+  // marches the same equations through a 15-degree cone from the same
+  // start (LOX/CH4 shifting equilibrium at frozen Mach 1.10), with scipy's
+  // Radau integrator at rtol 1e-9.  The two codes share only the data.
+  const auto& db = rocketDatabase();
+  const GasMixture mix(db);
+  const auto mech = Mechanism::loadYaml(mechanismPath(), db);
+  const ReferenceTable ref(referenceDir() + "/kinetics_nozzle_reference.csv");
+  std::size_t start = ref.rows(), end = ref.rows(), exit_row = ref.rows();
+  for (std::size_t r = 0; r < ref.rows(); ++r) {
+    if (ref.text("kind", r) == "start") start = r;
+    if (ref.text("kind", r) == "end") end = r;
+    if (ref.text("kind", r) == "station") exit_row = r;   // the last station is the exit
+  }
+  REQUIRE(start < ref.rows());
+  REQUIRE(end < ref.rows());
+  REQUIRE(exit_row < ref.rows());
+  Eigen::VectorXd n0 = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(db.size()));
+  double mass = 0.0;
+  for (std::size_t j = 0; j < db.size(); ++j) {
+    const double X = ref.num("X_" + db[j].name(), start);
+    n0(static_cast<Eigen::Index>(j)) = X;
+    mass += X * db.molarMasses()(static_cast<Eigen::Index>(j));
+  }
+  n0 /= mass;  // mol/kg
+  const double rs = ref.num("r", start);
+  const double tan15 = std::tan(15.0 * constants::pi / 180.0);
+  const std::function<double(double)> area = [&](double x) {
+    const double r = rs + x * tan15;
+    return constants::pi * r * r;
+  };
+  KineticNozzleOptions o;
+  o.relative_tolerance = 1e-8;
+  const auto k = marchKinetic(mix, mech, area, 0.0, ref.num("x", end), n0, ref.num("T", start),
+                              ref.num("p", start), ref.num("u", start), o);
+  INFO("exit: Ignis " << k.t_exit << " K, " << k.u_exit << " m/s, " << k.p_exit
+       << " Pa; Cantera " << ref.num("T", exit_row) << " K, " << ref.num("u", exit_row)
+       << " m/s, " << ref.num("p", exit_row) << " Pa");
+  CHECK(k.t_exit == Approx(ref.num("T", exit_row)).epsilon(1e-6));
+  CHECK(k.u_exit == Approx(ref.num("u", exit_row)).epsilon(1e-6));
+  CHECK(k.p_exit == Approx(ref.num("p", exit_row)).epsilon(1e-6));
+  const double N = k.n_exit.sum();
+  double worst = 0.0;
+  std::string worst_species;
+  for (const char* sp : {"H2O", "CO2", "CO", "H2", "OH", "H", "O", "O2"}) {
+    const double x_ignis = k.n_exit(db.index(sp)) / N;
+    const double e = relativeError(x_ignis, ref.num(std::string("X_") + sp, exit_row));
+    if (e > worst) { worst = e; worst_species = sp; }
+  }
+  INFO("worst exit mole fraction difference " << worst << " (" << worst_species << ")");
+  CHECK(worst < 1e-5);
 }

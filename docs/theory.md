@@ -381,10 +381,21 @@ A/A_t = G* / G ,      G = ρ u
 ```
 
 No ratio of specific heats is ever assumed constant. The throat is located by
-solving `M(p) = 1`; each commanded area ratio is inverted on the appropriate
-branch of `G(p)`, which rises from zero at `p = p⁰` to a maximum at the sonic
-point and falls again. Both searches use bracketed Illinois regula falsi, since
-every function evaluation is a Gibbs minimisation.
+solving `M(p) = 1` with bracketed Illinois regula falsi. Each commanded area
+ratio is inverted on the appropriate branch of `G(p)`, which rises from zero at
+`p = p⁰` to a maximum at the sonic point and falls again. Every function
+evaluation is a Gibbs minimisation, so the inversion uses the slope each solved
+state already carries. Along the isentrope `dp = −ρu du` and `dp = a² dρ`, so
+
+```
+d ln G / d ln p = p/(ρa²) − p/(ρu²) = (M² − 1) / (γ_s M²)
+```
+
+That is a safeguarded Newton iteration in `ln p`. It starts from the
+perfect-gas estimate at the throat's `γ_s`, and any step that would leave the
+bracket is replaced by a bisection. It stops when `G` is within 10⁻¹¹ of the
+target, usually after three or four Gibbs solves. The bracketing secant search
+it replaced needed about 35.
 
 **Range limit.** The expansion cannot proceed past the point where the static
 temperature reaches the 200 K floor of the polynomial fits. Ignis reports the
@@ -551,6 +562,76 @@ experiment measured thrust. The coolant flow of the jacket is set from the
 inviscid mass flow, before the layer moves it by `1 − C_d` (0.13 % on the M1).
 If an internal normal shock is found, the momentum deficit is not applied — the
 layer was marched against the attached flow — but `C_d` still is.
+
+### 9.4 Finite-rate recombination
+
+Shifting equilibrium assumes the recombination of H, O, OH and CO keeps pace
+with the expansion to the exit; frozen flow assumes it stops at the throat. The
+real gas does neither. With `performance.kinetics` enabled, Ignis integrates the
+species along the divergent nozzle at finite rate (`ignis/kinetics/`), the
+one-dimensional kinetics (ODK) calculation of the JANNAF methodology.
+
+**Mechanism.** The reactions of GRI-Mech 3.0 (Smith et al.,
+http://combustion.berkeley.edu/gri-mech/) among H, H<sub>2</sub>, O, O<sub>2</sub>,
+OH, H<sub>2</sub>O, HO<sub>2</sub>, H<sub>2</sub>O<sub>2</sub>, CO, CO<sub>2</sub> and HCO:
+41 reactions, extracted by `tools/build_kinetics.py` into
+`data/kinetics/gri30_nozzle.yaml`. They are elementary, three-body and
+Lindemann/Troe fall-off reactions. Only forward rates are taken. Each reverse
+rate follows by detailed balance from Ignis's own species data,
+
+```
+k_r = k_f / K_c,     K_c = exp(−ΔG°/RT) (p°/RT)^Δν
+```
+
+so the kinetics relax to exactly the equilibrium the solver of §3 computes.
+Reactions naming species the run's database does not carry (CO in a
+hydrogen engine, N<sub>2</sub> or Ar colliders) are left out and listed.
+Species outside the mechanism ride along at their start values.
+
+**Equations.** Steady quasi-1D flow through the prescribed area `A(x)`, with
+the composition `n_k` in mol/kg:
+
+```
+ρ u A = ṁ,     h(T, n) + u²/2 = h₀,     dn_k/dx = ω̇_k / (ρ u)
+du/dx = u (−A′/A + Ψ) / (1 − M_f²),    Ψ = Σ dn_k / Σ n_k − Σ H_k dn_k / (c_p,f T)
+```
+
+`M_f` is the frozen Mach number and `Ψ` the recombination's heat release and
+mole change, which accelerates the gas. `T` is solved from the energy equation
+at every evaluation, so energy is conserved exactly, and `ρ` from mass.
+
+**Start.** The momentum equation is singular at `M_f = 1`, just downstream of
+the equilibrium throat (the frozen sound speed exceeds the equilibrium one). The
+march starts from the shifting-equilibrium solution where `M_f` reaches
+`start_frozen_mach` (1.10). Upstream of that point, at throat temperature and
+pressure, the gas is close to equilibrium. The result moves by 3 × 10⁻⁶ in
+specific impulse between starts at 1.05 and 1.20.
+
+**Integration.** The species equations are stiff: the chemistry relaxes in
+nanoseconds near the throat while the gas crosses the nozzle in a fraction of a
+millisecond. Each step is linearly implicit Euler with one Richardson
+extrapolation, which is second order and L-stable, with a finite-difference
+Jacobian. Linear invariants pass through the implicit solve unchanged, so every
+element is conserved to round-off. The difference between one full step and two
+half steps sets the step size.
+
+**What it changes.** The march gives the inviscid vacuum impulse at finite rate
+and, from the same geometry, the shifting-equilibrium and frozen-from-the-start
+limits. The kinetic efficiency `η_kin = I_sp,vac(finite rate) / I_sp,vac(shifting)`
+is the JANNAF ODK/ODE ratio. With `apply: true` (the default) it scales the
+delivered vacuum thrust, and every ambient figure follows as
+`F = η_kin F_vac − p_a A_e`. The boundary-layer loss of §9.3 is computed on the
+shifting core and reported separately. Ideal values stay shifting equilibrium,
+comparable with CEA. The kinetic efficiency is 0.9953 on the M1 (1.6 s of
+vacuum impulse), 0.9965 on the H1 and 0.9979 on the K1. The march recovers
+89 %, 86 % and 94 % of the impulse between frozen and shifting.
+
+**Limits and checks.** With every rate multiplied by zero the march reproduces a
+frozen isentropic expansion from its start to 2 × 10⁻⁶. With the rates
+multiplied by a thousand it comes within 10⁻⁵ of shifting equilibrium, and the
+gap closes roughly tenfold per decade of rate. Forward rate constants agree
+with Cantera's to 3 × 10⁻¹². The whole march is compared with Cantera on
+identical data in [`validation.md` §2.5](validation.md).
 
 ---
 

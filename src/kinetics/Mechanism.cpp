@@ -81,6 +81,7 @@ Mechanism Mechanism::loadYaml(const std::string& path, const SpeciesDatabase& db
   for (const auto& node : reactions) {
     Reaction r;
     r.equation = node["equation"].as<std::string>("?");
+    r.source_id = node["gri"].as<int>(0);
     const std::string where = "'" + r.equation + "'";
     const std::string type = node["type"].as<std::string>("elementary");
     if (type == "elementary") r.type = ReactionType::kElementary;
@@ -163,8 +164,11 @@ Mechanism Mechanism::loadYaml(const std::string& path, const SpeciesDatabase& db
 namespace {
 
 /// k_f and K_c of one reaction at T, with the third-body concentration M.
-void forwardAndEquilibrium(const Reaction& r, const SpeciesDatabase& db, double T, double M,
-                           double& kf, double& kc) {
+/// g0 holds the standard Gibbs energies at T in database order (only the
+/// reaction's own species are read), and ln_p0_rt is ln(p0 / R T): both are
+/// the same for every reaction, so the caller evaluates them once.
+void forwardAndEquilibrium(const Reaction& r, const std::vector<double>& g0, double T,
+                           double ln_p0_rt, double M, double& kf, double& kc) {
   if (r.type == ReactionType::kFalloff) {
     const double k_inf = r.rate(T);
     const double k_0 = r.low(T);
@@ -192,11 +196,15 @@ void forwardAndEquilibrium(const Reaction& r, const SpeciesDatabase& db, double 
   // Detailed balance on the species data: K_c = exp(-dG0/RT) (p0/RT)^dnu.
   double dg = 0.0;
   for (std::size_t i = 0; i < r.products.size(); ++i)
-    dg += r.product_nu[i] * db[static_cast<std::size_t>(r.products[i])].g0(T);
+    dg += r.product_nu[i] * g0[static_cast<std::size_t>(r.products[i])];
   for (std::size_t i = 0; i < r.reactants.size(); ++i)
-    dg -= r.reactant_nu[i] * db[static_cast<std::size_t>(r.reactants[i])].g0(T);
+    dg -= r.reactant_nu[i] * g0[static_cast<std::size_t>(r.reactants[i])];
   const double RT = constants::R_universal * T;
-  kc = std::exp(-dg / RT + r.delta_nu * std::log(constants::p_reference / RT));
+  kc = std::exp(-dg / RT + r.delta_nu * ln_p0_rt);
+}
+
+double lnReferenceConcentration(double T) {
+  return std::log(constants::p_reference / (constants::R_universal * T));
 }
 
 double thirdBody(const Reaction& r, const Eigen::VectorXd& C, double total) {
@@ -210,8 +218,11 @@ double thirdBody(const Reaction& r, const Eigen::VectorXd& C, double total) {
 
 void Mechanism::rateConstants(std::size_t idx, double T, double M, double& kf, double& kr) const {
   const auto& r = reactions_.at(idx);
+  std::vector<double> g0(db_->size(), 0.0);
+  for (const int j : r.reactants) g0[static_cast<std::size_t>(j)] = (*db_)[static_cast<std::size_t>(j)].g0(T);
+  for (const int j : r.products) g0[static_cast<std::size_t>(j)] = (*db_)[static_cast<std::size_t>(j)].g0(T);
   double kc = 0.0;
-  forwardAndEquilibrium(r, *db_, T, M, kf, kc);
+  forwardAndEquilibrium(r, g0, T, lnReferenceConcentration(T), M, kf, kc);
   kr = kf / kc;
 }
 
@@ -222,10 +233,15 @@ void Mechanism::productionRates(double T, const Eigen::VectorXd& C, Eigen::Vecto
   if (rate_multiplier == 0.0) return;
   double total = 0.0;
   for (Eigen::Index j = 0; j < C.size(); ++j) total += std::max(C(j), 0.0);
+  // Each species' Gibbs energy is needed by every reaction it takes part in;
+  // evaluate it once.
+  std::vector<double> g0(db.size(), 0.0);
+  for (const int j : active_) g0[static_cast<std::size_t>(j)] = db[static_cast<std::size_t>(j)].g0(T);
+  const double ln_p0_rt = lnReferenceConcentration(T);
   for (const auto& r : reactions_) {
     const double M = (r.type == ReactionType::kElementary) ? 1.0 : thirdBody(r, C, total);
     double kf = 0.0, kc = 1.0;
-    forwardAndEquilibrium(r, db, T, M, kf, kc);
+    forwardAndEquilibrium(r, g0, T, ln_p0_rt, M, kf, kc);
     if (kf == 0.0) continue;
     double fwd = kf, rev = kf / kc;
     for (std::size_t i = 0; i < r.reactants.size(); ++i)

@@ -51,6 +51,7 @@ int main(int argc, char** argv) {
 
     res.profileTable().writeCsv(app::outputPath(cfg, "profile.csv"));
     if (res.has_cooling) res.coolingTable().writeCsv(app::outputPath(cfg, "thermal.csv"));
+    if (res.has_kinetics) res.kineticsTable().writeCsv(app::outputPath(cfg, "kinetics.csv"));
     if (flagPresent(cli, "contour")) {
       Table c("contour");
       std::vector<double> x, r, a;

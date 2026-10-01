@@ -48,6 +48,11 @@ performance:
   eta_nozzle: 1.0
   separation: summerfield
   resolve_internal_shocks: true
+  # Finite-rate recombination through the nozzle at GRI-Mech 3.0's rates
+  # (docs/theory.md 9.4): the delivered thrust carries its kinetic efficiency.
+  kinetics:
+    enabled: true
+    apply: true
 
 cooling:
   enabled: true

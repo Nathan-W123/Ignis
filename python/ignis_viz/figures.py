@@ -633,3 +633,45 @@ def monte_carlo_scatter(samples_csv: str, out: str) -> str:
                        "CuCrZr limit. At most three categorical hues are used in scatter form, "
                        "where every pair of colours is on screen at once.")
     return _save(fig, out)
+
+
+def finite_rate_nozzle(kinetics_csv: str, profile_csv: str, engine_json: str, out: str,
+                       case: str = "Ignis-M1") -> str:
+    """Finite-rate recombination through the nozzle against shifting equilibrium."""
+    k = read_table(require(kinetics_csv))
+    prof = read_table(require(profile_csv))
+    doc = read_json(require(engine_json))
+    kin = doc["result"]["performance"]["kinetics"]
+    sup = prof[(prof["supersonic"] > 0.5) & (prof["area_ratio"] >= k["area_ratio"].iloc[0])]
+
+    fig, axes = plt.subplots(2, 1, figsize=(7.2, 7.4), sharex=True)
+    ax = axes[0]
+    ax.plot(sup["area_ratio"], sup["temperature"], color=style.INK_MUTED, linewidth=1.3,
+            label="shifting equilibrium")
+    ax.plot(k["area_ratio"], k["temperature"], color=style.CATEGORICAL[0],
+            label="finite rate (GRI-Mech 3.0)")
+    ax.set_xscale("log")
+    ax.set_ylabel("temperature [K]")
+    ax.set_title("Static temperature")
+    ax.legend(loc="upper right")
+
+    ax = axes[1]
+    for i, sp in enumerate(("H", "OH", "O", "CO")):
+        col = "X_" + sp
+        if col in k.columns and k[col].max() > 0:
+            ax.plot(k["area_ratio"], k[col], color=style.CATEGORICAL[i], label=sp)
+    ax.set_yscale("log")
+    ax.set_xscale("log")
+    ax.set_ylabel("mole fraction")
+    ax.set_xlabel("area ratio A/A* [-]")
+    ax.set_title("Species that recombine, at finite rate")
+    ax.legend(ncols=4, loc="lower left")
+
+    style.suptitle(fig, f"{case}: recombination through the nozzle")
+    style.caption(fig, f"Vacuum Isp {kin['isp_vacuum']:.2f} s at finite rate, "
+                       f"{kin['isp_vacuum_shifting']:.2f} s shifting, "
+                       f"{kin['isp_vacuum_frozen']:.2f} s frozen from A/A* "
+                       f"{kin['start_area_ratio']:.3f}; kinetic efficiency "
+                       f"{kin['kinetic_efficiency']:.4f}. Inviscid core; the march starts "
+                       "from shifting equilibrium at frozen Mach 1.10.")
+    return _save(fig, out)

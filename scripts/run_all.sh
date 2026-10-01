@@ -5,8 +5,8 @@
 #   ./scripts/run_all.sh --quick         smaller Monte Carlo and optimisation
 #   ./scripts/run_all.sh --stage build   run a single stage
 #
-# Stages: build tests methane hydrogen nozzle sweeps transient optimize mc
-#         bench figures
+# Stages: build tests methane hydrogen kerosene nozzle sweeps transient
+#         optimize mc bench figures
 #
 # Every stage is independent; each prints what it produced.  The script exits
 # non-zero on the first failure.
@@ -20,7 +20,7 @@ BIN="$BUILD_DIR/bin"
 RESULTS="${RESULTS:-results}"
 JOBS="${JOBS:-$( (command -v nproc >/dev/null && nproc) || echo 4)}"
 QUICK=0
-STAGES="build tests methane hydrogen nozzle sweeps transient optimize mc bench figures"
+STAGES="build tests methane hydrogen kerosene nozzle sweeps transient optimize mc bench figures"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -77,6 +77,12 @@ if has hydrogen; then
   "$BIN/ignis_engine"      --config configs/hydrogen_nominal.yaml \
                            | tee "$RESULTS/hydrogen_nominal_report.txt"
   "$BIN/ignis_equilibrium" --config configs/hydrogen_nominal.yaml --mr-sweep 3.0:8.0:26
+fi
+
+if has kerosene; then
+  banner "nominal LOX/RP-1 engine"
+  "$BIN/ignis_engine"      --config configs/kerosene_nominal.yaml \
+                           | tee "$RESULTS/kerosene_nominal_report.txt"
 fi
 
 if has nozzle; then

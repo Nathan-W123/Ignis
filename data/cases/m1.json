@@ -3,7 +3,7 @@
  "name": "Ignis-M1",
  "description": "LOX/CH4, 5.5 MPa, O/F 3.4, expansion 20 - the reference engine",
  "config": "methane_nominal.yaml",
- "solved_by": "v1.0.0-20-ge020523",
+ "solved_by": "v1.0.0-26-g89231c3-dirty",
  "note": "The exit state and performance below were solved by the Ignis binaries and are replayed, not recomputed. The plume is solved live from this exit state every time it is run.",
  "exit": {
   "radius": 0.3130495168,
@@ -16,8 +16,8 @@
   "molar_mass": 0.02349457576
  },
  "performance": {
-  "thrust": 134113.97922800746,
-  "isp": 284.6892680176311,
+  "thrust": 131030.04115963311,
+  "isp": 278.51892054825714,
   "chamber_pressure": 5500000,
   "chamber_temperature": 3523.9227174885787,
   "mixture_ratio": null,

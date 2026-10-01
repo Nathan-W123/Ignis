@@ -3,7 +3,7 @@
  "name": "Ignis-M1 vacuum",
  "description": "The same chamber with a vacuum-optimised bell",
  "config": "methane_vacuum.yaml",
- "solved_by": "v1.0.0-20-ge020523",
+ "solved_by": "v1.0.0-26-g89231c3-dirty",
  "note": "The exit state and performance below were solved by the Ignis binaries and are replayed, not recomputed. The plume is solved live from this exit state every time it is run.",
  "exit": {
   "radius": 0.4695742753,
@@ -16,8 +16,8 @@
   "molar_mass": 0.02352535034
  },
  "performance": {
-  "thrust": 173339.53104859215,
-  "isp": 367.9549626131565,
+  "thrust": 169660.30265446226,
+  "isp": 360.61769135245225,
   "chamber_pressure": 5500000,
   "chamber_temperature": 3523.9227174885787,
   "mixture_ratio": null,
