@@ -25,6 +25,7 @@
 #include "ignis/io/Json.hpp"
 #include "ignis/io/Table.hpp"
 #include "ignis/nozzle/Atmosphere.hpp"
+#include "ignis/thermal/BoundaryLayerLosses.hpp"
 #include "ignis/thermal/RegenerativeCooling.hpp"
 
 namespace ignis {
@@ -57,6 +58,28 @@ struct SteadyEngineResult {
 
   bool has_cooling = false;
   CoolingResult cooling;
+  /// The wall boundary layer and what it cost (applied to `performance`).
+  bool has_boundary_layer = false;
+  BoundaryLayerLossResult boundary_layer;
+
+  /// What a wall film costs in specific impulse, as a bracket.  The headline
+  /// `performance` assumes the film mixes and burns completely, i.e. the
+  /// engine at its overall mixture ratio.  The other limit keeps the film as a
+  /// separate unburnt stream: the core burns at the mixture ratio the film
+  /// leaves it, the film expands as a calorically perfect gas from its
+  /// injection state to the core's exit pressure, and the two are
+  /// mass-weighted in vacuum.  A real film partly mixes and burns, so the
+  /// truth lies between; neither limit predicts where.
+  struct FilmPerformance {
+    bool present = false;
+    double film_mass_flow = 0.0;          ///< kg/s
+    double film_fraction_of_total = 0.0;  ///< of the engine's mass flow
+    double core_mixture_ratio = 0.0;      ///< O/F of the core without the film
+    double film_exhaust_velocity = 0.0;   ///< m/s, the unburnt film expanded alone
+    double isp_vacuum_mixed = 0.0;        ///< s, the headline (fully mixed) value
+    double isp_vacuum_unmixed = 0.0;      ///< s, the two-stream limit
+    double isp_vacuum_penalty = 0.0;      ///< 1 - unmixed / mixed
+  } film;
   bool has_feed = false;
   FeedSystemResult feed;
 

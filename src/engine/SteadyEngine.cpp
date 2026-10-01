@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "ignis/engine/SteadyEngine.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
@@ -79,23 +80,95 @@ SteadyEngineResult SteadyEngine::analyse(const EngineConfig& cfg, double p_ambie
   const auto flow = chamber.makeFlow(res.chamber);
   auto perf_opts = cfg.performance;
   perf_opts.eta_c_star = cfg.eta_c_star;
+  perf_opts.viscous = {};
   res.performance = evaluateNozzle(flow, geom, p_ambient, perf_opts);
 
-  res.mdot = res.performance.mdot;
-  res.mdot_oxidizer = res.mdot * mix.oxidizerMassFraction();
-  res.mdot_fuel = res.mdot * mix.fuelMassFraction();
+  // Mass flows.  The cooling solve below takes its coolant from these
+  // inviscid flows; the boundary layer then moves the engine's flow by
+  // (1 - C_d), a fraction of a percent, which the jacket does not see.
+  auto setFlows = [&]() {
+    res.mdot = res.performance.mdot;
+    res.mdot_oxidizer = res.mdot * mix.oxidizerMassFraction();
+    res.mdot_fuel = res.mdot * mix.fuelMassFraction();
+  };
+  setFlows();
   res.residence_time = res.chamber.residenceTime(res.chamber_volume, res.mdot);
   if (cfg.sample_profile) res.profile = sampleAxialProfile(flow, geom);
 
+  CoolingSpec cs = cfg.cooling;
   if (cfg.cooling_enabled) {
-    CoolingSpec cs = cfg.cooling;
     if (!(cs.coolant_mass_flow > 0.0))
       cs.coolant_mass_flow = cfg.coolant_fuel_fraction * res.mdot_fuel;
     if (!(cs.inlet_temperature > 0.0))
       cs.inlet_temperature = propellants_->at(cfg.fuel).reference_temperature;
     if (!(cs.inlet_pressure > 0.0)) cs.inlet_pressure = 1.6 * cfg.chamber_pressure;
+    if (cfg.film_fuel_fraction > 0.0) cs.film_mass_flow = cfg.film_fuel_fraction * res.mdot_fuel;
     res.cooling = solveRegenerativeCooling(flow, geom, res.chamber, cs, *transport_);
     res.has_cooling = true;
+  }
+
+  // --- boundary-layer losses ---------------------------------------------
+  if (cfg.boundary_layer_losses) {
+    // The jacket's hot-wall temperature where there is a jacket.
+    std::vector<double> wx, wt;
+    if (res.has_cooling)
+      for (const auto& st : res.cooling.stations) { wx.push_back(st.x); wt.push_back(st.t_wall_hot); }
+    auto wall = [&](double x) {
+      if (wx.empty() || x < wx.front() || x > wx.back()) return 0.0;
+      const auto it = std::upper_bound(wx.begin(), wx.end(), x);
+      if (it == wx.begin()) return wt.front();
+      if (it == wx.end()) return wt.back();
+      const std::size_t i = static_cast<std::size_t>(it - wx.begin());
+      const double t = (x - wx[i - 1]) / (wx[i] - wx[i - 1]);
+      return wt[i - 1] + t * (wt[i] - wt[i - 1]);
+    };
+    BoundaryLayerLossOptions bo;
+    bo.uncooled_wall_temperature = cfg.uncooled_wall_temperature;
+    res.boundary_layer = computeBoundaryLayerLosses(flow, geom, res.chamber, *transport_, wall, bo);
+    res.has_boundary_layer = true;
+    perf_opts.viscous.apply = true;
+    perf_opts.viscous.throat_displacement_thickness = res.boundary_layer.throat_displacement_thickness;
+    perf_opts.viscous.exit_displacement_thickness = res.boundary_layer.exit_displacement_thickness;
+    perf_opts.viscous.exit_momentum_thickness = res.boundary_layer.exit_momentum_thickness;
+    res.performance = evaluateNozzle(flow, geom, p_ambient, perf_opts);
+    setFlows();
+    res.residence_time = res.chamber.residenceTime(res.chamber_volume, res.mdot);
+  }
+
+  // --- film-cooling performance bracket ----------------------------------
+  if (res.has_cooling && res.cooling.has_film) {
+    // The unmixed limit of the film's cost (see FilmPerformance).  The core
+    // carries the same boundary-layer correction as the engine.
+    auto& fp = res.film;
+    fp.present = true;
+    fp.film_mass_flow = res.cooling.film_mass_flow;
+    if (!(fp.film_mass_flow < res.mdot_fuel))
+      throw ConfigError("film cooling: the film cannot take the whole fuel flow");
+    fp.film_fraction_of_total = fp.film_mass_flow / res.mdot;
+    fp.core_mixture_ratio = res.mdot_oxidizer / (res.mdot_fuel - fp.film_mass_flow);
+    EngineConfig core_cfg = cfg;
+    core_cfg.mixture_ratio = fp.core_mixture_ratio;
+    const auto core_chamber = chamber.solve(mixture(core_cfg), cfg.chamber_pressure, cfg.eta_c_star);
+    const auto core_flow = chamber.makeFlow(core_chamber);
+    const auto core_perf = evaluateNozzle(core_flow, geom, p_ambient, perf_opts);
+
+    const CoolantFluid fluid =
+        CoolantFluid::load(cs.film_coolant.empty() ? cs.coolant : cs.film_coolant);
+    const double t_film = res.cooling.film_temperature;
+    // cp at the table's lowest pressure: the nearest it has to the ideal gas.
+    const double cp = fluid.at(t_film, fluid.pMin()).cp;
+    const double r_gas = constants::R_universal / fluid.molarMass();
+    const double p_exit = core_perf.p_exit;
+    const double t_exit = t_film * std::pow(p_exit / cfg.chamber_pressure, r_gas / cp);
+    fp.film_exhaust_velocity = std::sqrt(std::max(2.0 * cp * (t_film - t_exit), 0.0));
+    const double rho_exit = p_exit / (r_gas * t_exit);
+    const double film_isp_vac = (fp.film_exhaust_velocity +
+                                 p_exit / (rho_exit * std::max(fp.film_exhaust_velocity, 1e-9))) /
+                                constants::g0;
+    const double f = fp.film_fraction_of_total;
+    fp.isp_vacuum_mixed = res.performance.isp_vacuum;
+    fp.isp_vacuum_unmixed = (1.0 - f) * core_perf.isp_vacuum + f * film_isp_vac;
+    fp.isp_vacuum_penalty = 1.0 - fp.isp_vacuum_unmixed / fp.isp_vacuum_mixed;
   }
 
   if (cfg.feed_enabled) {
@@ -143,6 +216,19 @@ std::string SteadyEngineResult::summary() const {
      << "  loss factors          eta_c* " << performance.eta_c_star << ", lambda_div "
      << performance.lambda_divergence << ", eta_nozzle " << performance.eta_nozzle << "\n"
      << "  regime                " << toString(performance.regime) << "\n";
+  if (has_boundary_layer) {
+    const auto& bl = boundary_layer;
+    os << "  boundary layer        C_d " << std::setprecision(5) << performance.discharge_coefficient
+       << ";  delta* throat " << std::setprecision(3) << bl.throat_displacement_thickness * 1e3
+       << " mm, exit " << bl.exit_displacement_thickness * 1e3 << " mm;  theta exit "
+       << bl.exit_momentum_thickness * 1e3 << " mm\n"
+       << "                        core expands to A/A* " << std::setprecision(3)
+       << performance.effective_area_ratio << " (geometric " << bl.geometric_area_ratio << ")\n"
+       << "  boundary-layer loss   " << std::setprecision(2)
+       << (performance.thrust_inviscid - performance.thrust) * 1e-3 << " kN, "
+       << performance.isp_vacuum_inviscid - performance.isp_vacuum << " s vacuum Isp ("
+       << 100.0 * (1.0 - performance.isp_vacuum / performance.isp_vacuum_inviscid) << " %)\n";
+  }
   if (performance.shock_in_nozzle)
     os << "  internal shock        at A/At = " << std::setprecision(3)
        << performance.shock_area_ratio << " (x = " << std::setprecision(1)
@@ -160,6 +246,14 @@ std::string SteadyEngineResult::summary() const {
      << "  mass-flow residual    " << performance.mass_flow_residual << "\n"
      << "  energy residual       " << performance.energy_residual << "\n";
   if (has_cooling) os << "\n" << cooling.summary() << "\n";
+  if (film.present) {
+    os << "\nfilm-cooling performance bracket (vacuum Isp)\n" << std::fixed
+       << "  film                  " << std::setprecision(2) << 100.0 * film.film_fraction_of_total
+       << " % of the total flow; core O/F " << std::setprecision(3) << film.core_mixture_ratio << "\n"
+       << "  fully mixed and burnt " << std::setprecision(2) << film.isp_vacuum_mixed << " s\n"
+       << "  unmixed (two-stream)  " << film.isp_vacuum_unmixed << " s  (at most "
+       << 100.0 * film.isp_vacuum_penalty << " % lower)\n";
+  }
   if (has_feed) os << "\n" << feed.summary() << "\n";
   return os.str();
 }
@@ -220,6 +314,13 @@ Table SteadyEngineResult::coolingTable() const {
   col("channel_width", &ThermalStation::channel_width, "m");
   col("land_width", &ThermalStation::land_width, "m");
   col("hydraulic_diameter", &ThermalStation::hydraulic_diameter, "m");
+  col("channel_height", &ThermalStation::channel_height, "m");
+  col("t_drive", &ThermalStation::t_drive, "K");
+  col("film_effectiveness", &ThermalStation::film_effectiveness, "-");
+  // Zero throughout when the hot-gas model is Bartz, which has no layer.
+  col("bl_momentum_thickness", &ThermalStation::bl_momentum_thickness, "m");
+  col("bl_enthalpy_thickness", &ThermalStation::bl_enthalpy_thickness, "m");
+  col("bl_re_theta", &ThermalStation::bl_re_theta, "-");
   return t;
 }
 
@@ -306,6 +407,26 @@ Json SteadyEngineResult::toJson() const {
   }
   p["mass_flow_residual"] = Json(performance.mass_flow_residual);
   p["energy_residual"] = Json(performance.energy_residual);
+  if (has_boundary_layer) {
+    Json b = Json::object();
+    b["discharge_coefficient"] = Json(performance.discharge_coefficient);
+    b["throat_displacement_thickness"] = Json(boundary_layer.throat_displacement_thickness);
+    b["throat_momentum_thickness"] = Json(boundary_layer.throat_momentum_thickness);
+    b["exit_displacement_thickness"] = Json(boundary_layer.exit_displacement_thickness);
+    b["exit_momentum_thickness"] = Json(boundary_layer.exit_momentum_thickness);
+    b["exit_re_theta"] = Json(boundary_layer.exit_re_theta);
+    b["effective_area_ratio"] = Json(performance.effective_area_ratio);
+    b["geometric_area_ratio"] = Json(boundary_layer.geometric_area_ratio);
+    b["momentum_deficit"] = Json(performance.momentum_deficit);
+    b["mdot_inviscid"] = Json(performance.mdot_inviscid);
+    b["thrust_inviscid"] = Json(performance.thrust_inviscid);
+    b["isp_vacuum_inviscid"] = Json(performance.isp_vacuum_inviscid);
+    b["thrust_loss"] = Json(performance.thrust_inviscid - performance.thrust);
+    b["isp_vacuum_loss"] = Json(performance.isp_vacuum_inviscid - performance.isp_vacuum);
+    b["cooled_fraction"] = Json(boundary_layer.cooled_fraction);
+    b["warnings"] = Json::of(boundary_layer.warnings);
+    p["boundary_layer"] = b;
+  }
   j["performance"] = p;
 
   Json g = Json::object();
@@ -320,6 +441,8 @@ Json SteadyEngineResult::toJson() const {
 
   if (has_cooling) {
     Json t = Json::object();
+    t["hot_gas_model"] = Json(cooling.hot_gas_model);
+    t["wall_iterations"] = Json(cooling.wall_iterations);
     t["max_wall_temperature"] = Json(cooling.max_wall_temperature);
     t["max_wall_temperature_x"] = Json(cooling.max_wall_temperature_x);
     t["max_heat_flux"] = Json(cooling.max_heat_flux);
@@ -337,7 +460,28 @@ Json SteadyEngineResult::toJson() const {
     t["wall_limit_exceeded"] = Json(cooling.wall_limit_exceeded);
     t["wall_limit_temperature"] = Json(cooling.wall_limit_temperature);
     t["wall_material"] = Json(cooling.wall_material);
+    t["max_coolant_side_wall_temperature"] = Json(cooling.max_coolant_side_wall_temperature);
+    t["max_coolant_side_wall_temperature_x"] = Json(cooling.max_coolant_side_wall_temperature_x);
+    t["coolant_wall_limit_exceeded"] = Json(cooling.coolant_wall_limit_exceeded);
     t["warnings"] = Json::of(cooling.warnings);
+    if (cooling.has_film) {
+      Json fj = Json::object();
+      fj["mass_flow"] = Json(cooling.film_mass_flow);
+      fj["temperature"] = Json(cooling.film_temperature);
+      fj["coolant_velocity"] = Json(cooling.film_coolant_velocity);
+      fj["velocity_ratio"] = Json(cooling.film_velocity_ratio);
+      fj["length_to_half"] = Json(cooling.film_length_half);
+      fj["length_to_fifth"] = Json(cooling.film_length_fifth);
+      if (film.present) {
+        fj["fraction_of_total_flow"] = Json(film.film_fraction_of_total);
+        fj["core_mixture_ratio"] = Json(film.core_mixture_ratio);
+        fj["film_exhaust_velocity"] = Json(film.film_exhaust_velocity);
+        fj["isp_vacuum_mixed"] = Json(film.isp_vacuum_mixed);
+        fj["isp_vacuum_unmixed"] = Json(film.isp_vacuum_unmixed);
+        fj["isp_vacuum_penalty_max"] = Json(film.isp_vacuum_penalty);
+      }
+      t["film"] = fj;
+    }
     j["cooling"] = t;
   }
   if (has_feed) {

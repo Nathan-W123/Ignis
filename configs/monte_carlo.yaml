@@ -68,9 +68,18 @@ cooling:
   counterflow: true               # coolant enters at the nozzle exit
   nusselt_correlation: dittus-boelter
   nusselt_multiplier: 1.0
-  bartz_multiplier: 1.0
+  hot_gas_model: boundary_layer  # integral turbulent boundary layer; "bartz" for the closed form
+  hot_gas_multiplier: 1.0
   gas_emissivity: 0.0             # radiation term disabled by default
   segments: 240
+  # Wall film from the injector's outer row (Hatch & Papell, NASA TN D-130).
+  # The turbulent boundary layer starts at the injector face, and without a
+  # film the first ~3 cm of the jacket run near 1000 K; 3 % of the fuel as a
+  # film holds them below the CuCrZr limit.  The RS-25 injects ~3 % of its
+  # hydrogen the same way (Wang & Luong, J. Thermophys. 8(3), 1994).
+  film:
+    fuel_fraction: 0.03           # of the fuel flow
+    slot_height: 0.5e-3           # m, equivalent slot of the film orifices
 
 monte_carlo:
   samples: 2000
@@ -122,10 +131,10 @@ monte_carlo:
       mean: 5.0e-3
       sigma: 1.0e-4
       min: 3.0e-3
-    - parameter: cooling.bartz_multiplier
+    - parameter: cooling.hot_gas_multiplier
       distribution: lognormal
       median: 1.0
-      sigma_log: 0.15             # Bartz correlation uncertainty
+      sigma_log: 0.15             # hot-gas film coefficient; see docs/validation.md 5b
       min: 0.5
       max: 2.0
   outputs:

@@ -268,7 +268,10 @@ EngineConfig EngineConfig::load(const std::string& path) {
     const auto p = root["performance"];
     p.requireOnly({"ambient_pressure", "altitude", "auto_divergence", "lambda_divergence",
                    "eta_nozzle", "separation", "resolve_internal_shocks", "ideal_tolerance",
-                   "ascent_profile"});
+                   "ascent_profile", "boundary_layer_losses", "uncooled_wall_temperature"});
+    cfg.boundary_layer_losses = p.optional("boundary_layer_losses").boolean(true);
+    cfg.uncooled_wall_temperature =
+        p.optional("uncooled_wall_temperature").number(100.0, 3500.0, 1000.0);
     if (p.has("altitude") && p.has("ambient_pressure"))
       throw ConfigError(path + ": performance: give either 'altitude' or 'ambient_pressure'");
     if (p.has("altitude")) {
@@ -318,8 +321,9 @@ EngineConfig EngineConfig::load(const std::string& path) {
                    "channel_width", "channel_height", "min_land_width", "wall_thickness",
                    "roughness", "coolant_fuel_fraction", "inlet_temperature", "inlet_pressure",
                    "counterflow", "x_start", "x_end", "x_end_area_ratio", "nusselt_correlation",
-                   "nusselt_multiplier", "bartz_multiplier", "gas_emissivity", "material",
-                   "segments"});
+                   "nusselt_multiplier", "hot_gas_model", "hot_gas_multiplier", "bartz_multiplier",
+                   "upstream_wall_temperature", "gas_emissivity", "material", "segments", "taper",
+                   "film", "coolant_wall_limit"});
     cfg.cooling_enabled = c.optional("enabled").boolean(true);
     auto& s = cfg.cooling;
     s.coolant = c.optional("coolant").text("methane");
@@ -339,12 +343,60 @@ EngineConfig EngineConfig::load(const std::string& path) {
     s.x_end_area_ratio = c.optional("x_end_area_ratio").number(0.0, 1000.0, 0.0);
     s.nusselt_correlation = c.optional("nusselt_correlation").text("dittus-boelter");
     s.nusselt_multiplier = c.optional("nusselt_multiplier").number(0.1, 10.0, 1.0);
-    s.bartz_multiplier = c.optional("bartz_multiplier").number(0.1, 10.0, 1.0);
+    s.hot_gas_model = hotGasModelFromString(c.optional("hot_gas_model").text("boundary_layer"));
+    // `bartz_multiplier` is the name this knob had while Bartz was the only
+    // model; it is still read, as the same multiplier, so older files run.
+    if (c.has("hot_gas_multiplier") && c.has("bartz_multiplier"))
+      throw ConfigError(c.path() + ": give 'hot_gas_multiplier' or its older name "
+                                   "'bartz_multiplier', not both");
+    s.hot_gas_multiplier =
+        c.has("bartz_multiplier") ? c["bartz_multiplier"].number(0.1, 10.0, 1.0)
+                                  : c.optional("hot_gas_multiplier").number(0.1, 10.0, 1.0);
+    s.upstream_wall_temperature =
+        c.optional("upstream_wall_temperature").number(0.0, 4000.0, 0.0);
     s.gas_emissivity = c.optional("gas_emissivity").number(0.0, 1.0, 0.0);
+    s.coolant_wall_limit = c.optional("coolant_wall_limit").number(0.0, 3000.0, 0.0);
     s.num_segments = c.optional("segments").integer(200);
     cfg.wall_material = c.optional("material").text("CuCrZr");
     cfg.coolant_fuel_fraction = c.optional("coolant_fuel_fraction").number(0.01, 1.0, 1.0);
     s.wall = MaterialLibrary::loadDefault().at(cfg.wall_material);
+
+    // Tapered channels: parallel lists, x in metres along the axis.
+    if (c.has("taper")) {
+      const auto t = c["taper"];
+      t.requireOnly({"x", "height", "width"});
+      const auto xs = t["x"].numbers();
+      auto table = [&](const char* key) {
+        std::vector<std::array<double, 2>> out;
+        if (!t.has(key)) return out;
+        const auto v = t[key].numbers();
+        if (v.size() != xs.size())
+          throw ConfigError(t.path() + ": '" + key + "' needs one value per x (" +
+                            std::to_string(v.size()) + " vs " + std::to_string(xs.size()) + ")");
+        for (std::size_t i = 0; i < xs.size(); ++i) out.push_back({xs[i], v[i]});
+        return out;
+      };
+      s.channel_height_profile = table("height");
+      s.channel_width_profile = table("width");
+      if (s.channel_height_profile.empty() && s.channel_width_profile.empty())
+        throw ConfigError(t.path() + ": a taper needs 'height', 'width' or both");
+    }
+
+    // Wall film from the injector (Hatch & Papell).
+    if (c.has("film")) {
+      const auto f = c["film"];
+      f.requireOnly({"fuel_fraction", "mass_flow", "slot_height", "x", "temperature", "coolant",
+                     "pressure"});
+      if (f.has("fuel_fraction") && f.has("mass_flow"))
+        throw ConfigError(f.path() + ": give 'fuel_fraction' or 'mass_flow', not both");
+      cfg.film_fuel_fraction = f.optional("fuel_fraction").number(0.0, 0.5, 0.0);
+      s.film_mass_flow = f.optional("mass_flow").number(0.0, 1.0e4, 0.0);
+      s.film_slot_height = f.optional("slot_height").number(1.0e-5, 0.05, 0.5e-3);
+      s.film_x = f.optional("x").number(0.0);
+      s.film_temperature = f.optional("temperature").number(0.0, 3000.0, 0.0);
+      s.film_coolant = f.optional("coolant").text("");
+      s.film_pressure = f.optional("pressure").number(0.0, 1e9, 0.0);
+    }
   }
 
   // --- feed system -----------------------------------------------------

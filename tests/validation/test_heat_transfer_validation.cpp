@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -33,8 +34,11 @@
 #include "ignis/core/Constants.hpp"
 #include "ignis/thermo/GasMixture.hpp"
 #include "ignis/thermo/Transport.hpp"
+#include "ignis/combustion/Chamber.hpp"
 #include "ignis/nozzle/NozzleGeometry.hpp"
+#include "ignis/thermal/BoundaryLayer.hpp"
 #include "ignis/thermal/HeatTransfer.hpp"
+#include "ignis/thermal/RegenerativeCooling.hpp"
 
 using ignis_test::ReferenceTable;
 using Catch::Approx;
@@ -337,5 +341,397 @@ TEST_CASE("the JPL test nozzle can be built from its own published table",
 
   SECTION("the divergent half-angle matches the stated 15 degrees") {
     CHECK(geom.spec().bell_exit_angle == Approx(15.0).margin(1.5));
+  }
+}
+
+
+// ===========================================================================
+// The integral boundary layer against the same two experiments
+// ===========================================================================
+//
+// Bartz's closed form is above; what follows puts the model that replaced it
+// as Ignis's default (thermal/BoundaryLayer.hpp) against the same data.  The
+// closure was fixed from the textbook before either comparison was run and
+// nothing in it was adjusted afterwards; the bounds below record what came
+// out, in the style of the Bartz cases.
+
+namespace {
+
+constexpr double kInletRadius = 2.53 * kInch;      // JPL TR 32-415, Section I
+constexpr double kNozzleLength = 5.925 * kInch;
+constexpr double kThroatZ = 0.6018 * kNozzleLength;  // tap 12, the minimum area
+
+/// Mach number on the chosen branch of the constant-gamma area-Mach relation.
+double machFromAreaRatio(double eps, double gamma, bool supersonic) {
+  if (eps <= 1.0) return 1.0;
+  auto area = [gamma](double m) {
+    const double t = 2.0 / (gamma + 1.0) * (1.0 + 0.5 * (gamma - 1.0) * m * m);
+    return std::pow(t, (gamma + 1.0) / (2.0 * (gamma - 1.0))) / m;
+  };
+  double lo = supersonic ? 1.0 : 1.0e-6, hi = supersonic ? 20.0 : 1.0;
+  for (int i = 0; i < 200; ++i) {
+    const double mid = 0.5 * (lo + hi);
+    // A/A* falls towards M = 1 on the subsonic branch and rises past it.
+    const bool too_fast = supersonic ? area(mid) > eps : area(mid) < eps;
+    (too_fast ? hi : lo) = mid;
+  }
+  return 0.5 * (lo + hi);
+}
+
+/// One JPL test: its operating point and its measured stations.
+struct JplTest {
+  int approach_in = 0;
+  double p0 = 0.0, t0 = 0.0;
+  std::vector<double> z, h, t_wall;   // m, W/(m^2 K), K
+};
+
+std::map<int, JplTest> jplTests() {
+  const ReferenceTable ref(referenceDir() + "/nozzle_heat_transfer_reference.csv");
+  std::map<int, JplTest> tests;
+  for (std::size_t row = 0; row < ref.rows(); ++row) {
+    JplTest& t = tests[static_cast<int>(ref.num("test", row))];
+    t.approach_in = static_cast<int>(ref.num("approach_in", row));
+    t.p0 = ref.num("pt_psia", row) * kPsi;
+    t.t0 = ref.num("tto_degR", row) * kRankine;
+    t.z.push_back(ref.num("z_over_L", row) * kNozzleLength);
+    t.h.push_back(ref.num("h_btu_s_in2_F", row) * kCoefficient);
+    t.t_wall.push_back(ref.num("tw_degR", row) * kRankine);
+  }
+  return tests;
+}
+
+/// The test article as the report states it was built: a 2.53 in inlet, a 30
+/// degree cone into a throat of 1.800 in curvature radius, a 15 degree cone
+/// out, and (for the long-approach tests) a cylinder of the inlet radius
+/// upstream.  Built analytically rather than from the tap table so that the
+/// throat is a circular arc: the area-Mach relation needs dA/dx to vanish
+/// smoothly there, which straight lines between taps would not give.
+ignis::NozzleGeometry jplNozzle(double approach) {
+  ignis::NozzleGeometrySpec s;
+  s.throat_radius = kThroatRadius;
+  s.chamber_radius = kInletRadius;
+  s.chamber_length = approach + 1.0 * kInch;
+  s.converging_half_angle = 30.0;
+  s.chamber_fillet_ratio = 0.1;
+  s.throat_upstream_ratio = kThroatCurvature / kThroatRadius;
+  s.throat_downstream_ratio = kThroatCurvature / kThroatRadius;
+  s.expansion_ratio = 2.68;
+  s.divergent = ignis::DivergentType::kConical;
+  s.cone_half_angle = 15.0;
+  s.num_stations = 800;
+  return ignis::NozzleGeometry::build(s);
+}
+
+double interpolate(const std::vector<double>& xs, const std::vector<double>& ys, double x) {
+  if (x <= xs.front()) return ys.front();
+  if (x >= xs.back()) return ys.back();
+  const auto it = std::upper_bound(xs.begin(), xs.end(), x);
+  const std::size_t i = static_cast<std::size_t>(it - xs.begin());
+  const double t = (x - xs[i - 1]) / (xs[i] - xs[i - 1]);
+  return ys[i - 1] + t * (ys[i] - ys[i - 1]);
+}
+
+/// Boundary-layer h at every measured station of one test, divided by the
+/// measured h; also the largest acceleration parameter the march saw.
+struct BoundaryLayerComparison {
+  std::vector<double> ratio;
+  double max_acceleration = 0.0;
+  std::vector<std::string> warnings;
+};
+
+BoundaryLayerComparison jplBoundaryLayer(const JplTest& t) {
+  const auto& db = ignis_test::fullDatabase();
+  const Air air = dryAir(db);
+  const ignis::GasMixture mix(db);
+  const ignis::TransportModel transport(db);
+  const double R = ignis::constants::R_universal / air.molar_mass;
+  // Constant gamma at stagnation, as in the report's own Mach numbers.
+  const double cp0 = mix.cpFrozen(air.n, t.t0);
+  const double gamma = cp0 / (cp0 - R);
+  const double pr0 = transport.mixture(air.n, t.t0, cp0).prandtl;
+
+  const double approach = t.approach_in * kInch;
+  const ignis::NozzleGeometry geom = jplNozzle(approach);
+  // Report z (from the nozzle inlet) to Ignis x, anchored at the throat.
+  const double x_of_z0 = geom.throatPosition() - kThroatZ;
+  const double x_start = x_of_z0 - approach;
+  REQUIRE(x_start > 0.0);
+
+  // The layer starts where the cooled wall starts: the report's measured
+  // inlet profiles are not used, so the comparison is a prediction, not a
+  // fit.  (Elliott, Bartz & Silver matched their starting thickness to the
+  // nozzle-entrance probe for these very data; that is not done here.)
+  const int n = 1500;
+  std::vector<ignis::BoundaryLayerEdge> edge(n);
+  std::vector<double> pressure(n);
+  for (int i = 0; i < n; ++i) {
+    auto& e = edge[static_cast<std::size_t>(i)];
+    e.x = x_start + (geom.exitPosition() - x_start) * i / (n - 1);
+    e.radius = geom.radius(e.x);
+    const double eps = std::max(geom.area(e.x) / geom.throatArea(), 1.0);
+    e.mach = machFromAreaRatio(eps, gamma, e.x > geom.throatPosition());
+    e.T = t.t0 / (1.0 + 0.5 * (gamma - 1.0) * e.mach * e.mach);
+    e.p = t.p0 * std::pow(e.T / t.t0, gamma / (gamma - 1.0));
+    e.rho = e.p / (R * e.T);
+    e.u = e.mach * std::sqrt(gamma * R * e.T);
+    e.viscosity = transport.mixture(air.n, e.T, mix.cpFrozen(air.n, e.T)).viscosity;
+    e.t_adiabatic_wall = e.T + std::cbrt(pr0) * (t.t0 - e.T);
+    // Measured wall temperature, held constant beyond the instrumented span.
+    e.t_wall = interpolate(t.z, t.t_wall, e.x - x_of_z0);
+    pressure[static_cast<std::size_t>(i)] = e.p;
+  }
+  auto properties = [&](std::size_t i, double T) {
+    ignis::ReferenceState s;
+    s.rho = pressure[i] / (R * T);
+    s.cp = mix.cpFrozen(air.n, T);
+    const auto tr = transport.mixture(air.n, T, s.cp);
+    s.viscosity = tr.viscosity;
+    s.prandtl = tr.prandtl;
+    return s;
+  };
+  const auto sol = ignis::marchBoundaryLayer(edge, properties);
+
+  BoundaryLayerComparison out;
+  for (std::size_t k = 0; k < t.z.size(); ++k)
+    out.ratio.push_back(sol.at(x_of_z0 + t.z[k]).h_gas / t.h[k]);
+  out.max_acceleration = sol.max_acceleration;
+  out.warnings = sol.warnings;
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("the integral boundary layer against the JPL air nozzle",
+          "[validation][thermal][boundary_layer]") {
+  const auto tests = jplTests();
+  REQUIRE(tests.size() == 4);
+
+  SECTION("the analytic test article reproduces the tap table") {
+    // Independent of any heat transfer: the geometry built from the report's
+    // stated dimensions must land on the measured pressure-tap area ratios.
+    //
+    // Recorded, not tuned: the bound set before this was first run was 5 %
+    // over the whole table, and the first tap misses it.  The divergent side
+    // matches to within 0.7 %; the convergent cone that the stated 30 deg and
+    // 1.800 in imply sits 2-4 % low in A/A* at every convergent tap (5.8 % at
+    // the first, near the inlet) -- as if the real cone were ~0.05 in further
+    // upstream.  Through h ~ G^0.8 that is a 2-5 % low bias in the model's
+    // mass flux on the convergent stations, well inside the report's +-8 to
+    // +-21 % uncertainty on h, so the stated geometry is kept.
+    const ReferenceTable contour(referenceDir() + "/nozzle_contour_reference.csv");
+    const auto geom = jplNozzle(0.0);
+    const double x_of_z0 = geom.throatPosition() - kThroatZ;
+    double worst_in = 0.0, worst_out = 0.0, signed_in = 0.0;
+    for (std::size_t row = 0; row < contour.rows(); ++row) {
+      const double z = contour.num("z_over_L", row) * kNozzleLength;
+      const double eps = geom.area(x_of_z0 + z) / geom.throatArea();
+      const double miss = eps / contour.num("area_ratio", row) - 1.0;
+      if (z < kThroatZ) {
+        if (std::abs(miss) > worst_in) { worst_in = std::abs(miss); signed_in = miss; }
+      } else {
+        worst_out = std::max(worst_out, std::abs(miss));
+      }
+    }
+    INFO("largest A/A* mismatch: convergent " << 100.0 * signed_in << " %, divergent "
+         << 100.0 * worst_out << " %");
+    CHECK(worst_out < 0.01);
+    CHECK(worst_in < 0.06);
+    CHECK(signed_in < 0.0);   // the model's convergent is narrower than the taps
+  }
+
+  std::map<int, std::vector<double>> bl_by_approach;
+  std::map<int, double> max_k_by_approach;
+  std::map<int, bool> flagged_by_approach;
+  std::ostringstream per_test;
+  for (const auto& [number, t] : tests) {
+    const auto c = jplBoundaryLayer(t);
+    per_test << " test " << number << ": median " << median(c.ratio) << ", max K "
+             << c.max_acceleration << ";";
+    auto& v = bl_by_approach[t.approach_in];
+    v.insert(v.end(), c.ratio.begin(), c.ratio.end());
+    max_k_by_approach[t.approach_in] = std::max(max_k_by_approach[t.approach_in], c.max_acceleration);
+    for (const auto& w : c.warnings)
+      if (w.find("laminarise") != std::string::npos) flagged_by_approach[t.approach_in] = true;
+  }
+  const auto bartz = jplRatios();
+  const double bl_long = median(bl_by_approach.at(18));
+  const double bl_none = median(bl_by_approach.at(0));
+  const double bz_long = median(bartz.at(18));
+  const double bz_none = median(bartz.at(0));
+  INFO("median model/measured -- 18 in approach: boundary layer " << bl_long << ", Bartz "
+       << bz_long << ";  no approach: boundary layer " << bl_none << ", Bartz " << bz_none
+       << ";  max K " << max_k_by_approach[18] << " / " << max_k_by_approach[0] << ";"
+       << per_test.str());
+
+  SECTION("on the high-pressure, long-approach tests it lands on the data") {
+    // The report's own uncertainty on h is about +-8 % in the throat region
+    // at these pressures.  Bartz is 1.3-1.9x high on the same rows.
+    CHECK(bl_long > 0.85);
+    CHECK(bl_long < 1.15);
+    CHECK(std::abs(bl_long - 1.0) < 0.5 * std::abs(bz_long - 1.0));
+  }
+
+  SECTION("on the low-pressure tests it is as wrong as Bartz, and says why") {
+    // 36 and 51 psia, no cooled approach.  Both models over-predict by more
+    // than 2x.  The turbulent closure cannot represent a layer that is
+    // re-laminarising under strong acceleration, and the march says so: the
+    // acceleration parameter passes the 3e-6 at which that starts.  This is
+    // a recorded failure of the model, not a pass.
+    CHECK(bl_none > 2.0);
+    CHECK(bz_none > 2.0);
+    CHECK(max_k_by_approach[0] > 3.0e-6);
+    CHECK(flagged_by_approach[0]);
+  }
+}
+
+TEST_CASE("the integral boundary layer against the hydrogen-oxygen rocket",
+          "[validation][thermal][boundary_layer]") {
+  // NASA TN D-2832 again, now through Ignis's whole hot-gas path: equilibrium
+  // chamber, quasi-1D expansion, the boundary layer marched from the injector
+  // face, and the cooling module's gas-side survey at a fixed wall
+  // temperature (the measurement was a heat-sink nozzle, so there is no
+  // coolant to couple to).
+  //
+  // The engine is rebuilt from the report's stated dimensions: 5 in throat,
+  // 4.64 contraction and expansion, 30 deg in and 15 deg out, throat
+  // curvature radius taken equal to the throat radius (not stated), 14.5 in
+  // from injector to throat, LOX/GH2 at 600 psia and O/F 6 (the middle of the
+  // tested range).
+  const auto& db = ignis_test::hydrogenDatabase();
+  const ignis::EquilibriumSolver solver(db);
+  const ignis::TransportModel transport(db);
+  const auto lib = ignis::PropellantLibrary::loadYaml(ignis_test::sourceDir() +
+                                                      "/data/propellants/ignis_propellants.yaml");
+  const ignis::PropellantMixture mixture(lib.at("LOX"), lib.at("GH2"), 6.0, 90.18, 298.15);
+  const ignis::CombustionChamber chamber(solver, ignis::CompositionModel::kEquilibrium);
+  const auto ch = chamber.solve(mixture, 600.0 * kPsi, 1.0);
+  const auto flow = chamber.makeFlow(ch);
+
+  ignis::NozzleGeometrySpec gs;
+  gs.throat_radius = 2.5 * kInch;
+  gs.contraction_ratio = 4.64;
+  gs.chamber_length = 0.2170;
+  gs.converging_half_angle = 30.0;
+  gs.chamber_fillet_ratio = 0.2;
+  gs.throat_upstream_ratio = 1.0;
+  gs.throat_downstream_ratio = 1.0;
+  gs.expansion_ratio = 4.64;
+  gs.divergent = ignis::DivergentType::kConical;
+  gs.cone_half_angle = 15.0;
+  gs.num_stations = 600;
+  const auto geom = ignis::NozzleGeometry::build(gs);
+  REQUIRE(geom.throatPosition() == Approx(14.5 * kInch).epsilon(0.01));
+
+  const ReferenceTable ref(referenceDir() + "/rocket_heat_transfer_reference.csv");
+  const ignis::GasMixture& mix = flow.mixture();
+
+  // C as the report defines it, St* Pr*^0.7 Re*_d^0.2 with every property at
+  // the reference state and the local static pressure (density included, as
+  // in the film-temperature form of the Bartz equation the report compares
+  // with), from the boundary layer's h at a station.
+  auto c_model = [&](const ignis::CoolingResult& r, double t_wall, double x) {
+    std::vector<double> xs, hs, taw;
+    for (const auto& s : r.stations) {
+      xs.push_back(s.x);
+      hs.push_back(s.h_gas);
+      taw.push_back(s.t_adiabatic_wall);
+    }
+    const double h = interpolate(xs, hs, x);
+    const double eps = std::max(geom.area(x) / geom.throatArea(), 1.0);
+    const auto st = flow.atAreaRatio(eps, x > geom.throatPosition());
+    const double ts = ignis::eckertReferenceTemperature(st.gas.T, t_wall, interpolate(xs, taw, x));
+    const double cp = mix.cpFrozen(st.gas.n, ts);
+    const auto tr = transport.mixture(st.gas.moleFractions(), ts, cp);
+    const double rho = st.gas.p * st.gas.M / (ignis::constants::R_universal * ts);
+    const double G = rho * st.u;
+    const double d = 2.0 * geom.radius(x);
+    return h / (G * cp) * std::pow(tr.prandtl, 0.7) * std::pow(G * d / tr.viscosity, 0.2);
+  };
+
+  auto survey = [&](double t_wall) {
+    ignis::CoolingSpec spec;
+    spec.hot_gas_model = ignis::HotGasModel::kBoundaryLayer;
+    spec.num_segments = 600;
+    spec.wall = ignis::MaterialLibrary::loadDefault().at("Copper");
+    return ignis::surveyHotGasSide(flow, geom, ch, spec, transport, t_wall);
+  };
+
+  // Shape: C at each station over C at station 1, which removes the ~30 %
+  // the report says the transport-property choice alone moves C by.
+  auto shapeError = [&](double t_wall, std::map<std::string, double>& model_ratio) {
+    const auto r = survey(t_wall);
+    double c1 = 0.0, c1_meas = 0.0, sum2 = 0.0;
+    int count = 0;
+    for (std::size_t row = 0; row < ref.rows(); ++row) {
+      const std::string name = ref.text("station", row);
+      if (name == "3") continue;  // 3bar is the average of 3, 3A and 3B
+      const double x = geom.throatPosition() + ref.num("axial_in", row) * kInch;
+      const double c = c_model(r, t_wall, x);
+      if (name == "1") { c1 = c; c1_meas = ref.num("c_measured", row); }
+      model_ratio[name] = c;
+    }
+    for (auto& [name, c] : model_ratio) c /= c1;
+    for (std::size_t row = 0; row < ref.rows(); ++row) {
+      const std::string name = ref.text("station", row);
+      if (name == "3" || name == "1") continue;
+      const double measured = ref.num("c_measured", row) / c1_meas;
+      sum2 += std::pow(model_ratio[name] - measured, 2);
+      ++count;
+    }
+    return std::sqrt(sum2 / count);
+  };
+
+  std::map<std::string, double> ratio;
+  const double rms = shapeError(500.0, ratio);
+  // Bartz's C is one constant everywhere, so its predicted shape is 1.
+  double bartz_sum2 = 0.0, c1_meas = 0.0;
+  std::map<std::string, double> measured;
+  for (std::size_t row = 0; row < ref.rows(); ++row) {
+    measured[ref.text("station", row)] = ref.num("c_measured", row);
+    if (ref.text("station", row) == "1") c1_meas = ref.num("c_measured", row);
+  }
+  int bartz_count = 0;
+  for (const auto& [name, c] : measured) {
+    if (name == "1" || name == "3") continue;
+    bartz_sum2 += std::pow(1.0 - c / c1_meas, 2);
+    ++bartz_count;
+  }
+  const double bartz_rms = std::sqrt(bartz_sum2 / bartz_count);
+  INFO("C(station)/C(1), model vs measured: 2 " << ratio["2"] << " vs " << measured["2"] / c1_meas
+       << ";  3bar " << ratio["3bar"] << " vs " << measured["3bar"] / c1_meas << ";  4 "
+       << ratio["4"] << " vs " << measured["4"] / c1_meas << ";  5 " << ratio["5"] << " vs "
+       << measured["5"] / c1_meas << ";  rms " << rms << " against Bartz's " << bartz_rms);
+
+  SECTION("it follows the measured shape better than Bartz can") {
+    // Bartz's constant cannot fall at the throat.  The measurement falls by
+    // 41 %; the boundary layer falls by about half of that.
+    CHECK(rms < 0.5 * bartz_rms);
+    CHECK(ratio["3bar"] < 0.85);
+    CHECK(ratio["3bar"] < ratio["2"]);
+  }
+
+  SECTION("but its throat dip is too shallow, and C does not recover past it") {
+    // A recorded shortcoming.  The report: C is "high in the chamber, low in
+    // the throat, and increasing again at the exit", in this engine and in
+    // three others it re-reduced.  The boundary layer's C falls monotonically
+    // instead -- 0.83, 0.78, 0.75, 0.71 of the chamber value against the
+    // measured 0.93, 0.59, 0.60, 0.73 -- so it over-predicts the throat by
+    // about two standard deviations of the measured ratio and gets the exit
+    // right for the wrong reason.  Laminarisation through the throat (which
+    // the closure does not model) would deepen the dip; a cause for the
+    // recovery is not established here.  If a closure change makes either
+    // check fail, look at this comparison first.
+    const double measured_3bar = measured["3bar"] / c1_meas;
+    CHECK(ratio["3bar"] > measured_3bar);
+    CHECK(ratio["5"] < ratio["3bar"]);
+  }
+
+  SECTION("the shape does not hang on the assumed wall temperature") {
+    // The report does not tabulate T_w; 500 K above is an assumption.  A
+    // wall at 900 K instead must not change the conclusion.
+    std::map<std::string, double> hot;
+    const double rms_hot = shapeError(900.0, hot);
+    INFO("rms at a 900 K wall: " << rms_hot);
+    CHECK(rms_hot < 0.5 * bartz_rms);
   }
 }

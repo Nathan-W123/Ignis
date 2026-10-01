@@ -280,6 +280,13 @@ def expansion_trade(sweep_csv: str, out: str) -> str:
 # Thermal
 # ---------------------------------------------------------------------------
 
+def _hot_gas_model(t: Table) -> str:
+    """Which hot-gas model wrote a thermal table: only the boundary layer has thicknesses."""
+    if "bl_enthalpy_thickness" in t.frame.columns and float(t["bl_enthalpy_thickness"].max()) > 0.0:
+        return "Integral turbulent boundary layer"
+    return "Bartz hot-gas correlation"
+
+
 def thermal_profiles(thermal_csv: str, out: str, case: str = "Ignis-M1") -> str:
     """Film coefficient, heat flux, wall and coolant conditions along the jacket."""
     t = read_table(require(thermal_csv))
@@ -337,7 +344,7 @@ def thermal_profiles(thermal_csv: str, out: str, case: str = "Ignis-M1") -> str:
     for ax in axes:
         ax.axvline(xq, color=style.INK_MUTED, linewidth=0.9)
     style.suptitle(fig, f"{case}: regenerative cooling along the chamber and nozzle")
-    style.caption(fig, "Bartz hot-gas correlation with a coupled wall and coolant balance. "
+    style.caption(fig, f"{_hot_gas_model(t)} with a coupled wall and coolant balance. "
                        "Engineering estimate, not a conjugate CFD solution.")
     return _save(fig, out)
 
@@ -597,20 +604,24 @@ def monte_carlo_scatter(samples_csv: str, out: str) -> str:
     ok = t.frame["status"] == "ok"
     fig, axes = plt.subplots(1, 2, figsize=(9.4, 4.2))
 
+    # The parameter was "cooling.bartz_multiplier" before the hot-gas model
+    # became selectable; older sample tables still carry that name.
+    mult = ("cooling.hot_gas_multiplier" if "cooling.hot_gas_multiplier" in t.frame.columns
+            else "cooling.bartz_multiplier")
     ax = axes[0]
-    ax.scatter(t.frame.loc[ok, "cooling.bartz_multiplier"],
+    ax.scatter(t.frame.loc[ok, mult],
                t.frame.loc[ok, "cooling.max_wall_temperature"],
                s=7, linewidths=0, alpha=0.55, color=style.CATEGORICAL[0])
     hot = ok & (t.frame["wall_limit_exceeded"] > 0.5)
     if hot.any():
-        ax.scatter(t.frame.loc[hot, "cooling.bartz_multiplier"],
+        ax.scatter(t.frame.loc[hot, mult],
                    t.frame.loc[hot, "cooling.max_wall_temperature"],
                    s=9, linewidths=0, color=style.STATUS["critical"],
                    label=f"above the material limit ({int(hot.sum())} of {int(ok.sum())})")
         ax.legend(loc="upper left")
-    ax.set_xlabel("Bartz correlation multiplier [-]")
+    ax.set_xlabel("hot-gas film-coefficient multiplier [-]")
     ax.set_ylabel("peak hot-wall temperature [K]")
-    ax.set_title("The correlation drives the wall temperature")
+    ax.set_title("The hot-gas coefficient drives the wall temperature")
 
     ax = axes[1]
     ax.scatter(t.frame.loc[ok, "performance.isp"], t.frame.loc[ok, "performance.thrust"] * KN,

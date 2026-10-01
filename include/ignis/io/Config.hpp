@@ -98,6 +98,12 @@ struct EngineConfig {
   // geometry and performance
   NozzleGeometrySpec nozzle;
   NozzlePerformanceOptions performance;
+  /// March the wall boundary layer and correct the nozzle for it (discharge
+  /// coefficient, displaced exit, momentum deficit).  On by default.
+  bool boundary_layer_losses = true;
+  /// Wall temperature the boundary layer assumes where no cooling jacket
+  /// supplies one, K.
+  double uncooled_wall_temperature = 1000.0;
   bool use_altitude = false;
   double altitude = 0.0;
   double ambient_pressure = 101325.0;
@@ -107,6 +113,10 @@ struct EngineConfig {
   CoolingSpec cooling;
   std::string wall_material = "CuCrZr";
   double coolant_fuel_fraction = 1.0;       ///< fraction of the fuel flow used
+  /// Wall film as a fraction of the fuel flow (cooling.film.fuel_fraction);
+  /// the engine turns it into cooling.film_mass_flow.  0 = no film unless
+  /// cooling.film.mass_flow is given directly.
+  double film_fuel_fraction = 0.0;
 
   // feed system
   bool feed_enabled = false;

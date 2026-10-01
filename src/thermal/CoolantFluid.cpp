@@ -283,9 +283,12 @@ double CoolantFluid::temperatureFromEnthalpy(double h, double p, double T_guess)
     throw RangeError(os.str());
   }
   double T = std::min(std::max(T_guess, lo), hi);
+  // The tolerance is relative to |h|, whose zero is the table's arbitrary
+  // reference, so it has to sit well below the 1e-8 to which the cooling march
+  // closes its energy balance on the enthalpy *rise*.
   for (int i = 0; i < 200; ++i) {
     const double f = interp(h_, T, p) - h;
-    if (std::abs(f) < 1.0e-8 * std::max(1.0, std::abs(h))) return T;
+    if (std::abs(f) < 1.0e-12 * std::max(1.0, std::abs(h))) return T;
     if (f > 0.0) hi = T; else lo = T;
     const double cp = interp(cp_, T, p);
     double T_new = (cp > 0.0) ? T - f / cp : 0.5 * (lo + hi);

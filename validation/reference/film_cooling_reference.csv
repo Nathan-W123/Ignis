@@ -1,0 +1,57 @@
+# Ignis reference data: measured film-cooling effectiveness, helium films
+# source: J. E. Hatch and S. S. Papell, "Use of a Theoretical Flow Model to
+#   Correlate Data for Film Cooling or Heating an Adiabatic Wall by Tangential
+#   Injection of Gases of Different Fluid Properties", NASA Technical Note
+#   D-130, Lewis Research Center (1959).  NASA NTRS accession 19890068390.
+#
+# Transcribed by hand from Table I ("Helium-coolant data", report page 14, PDF
+# page 15), read from 300 dpi renders of the page image, not from the OCR.
+# Included: every run at the 1/8 in and 1/2 in slot heights (27 runs).  The
+# 1/4 in group is not transcribed.  Values are verbatim in the report's units.
+#
+# APPARATUS (report text).  Helium injected tangentially through a slot of
+# height S and length L = 0.667 ft along one wall of the NASA film-cooling
+# facility's 8 in square duct (hydraulic diameter 8 in) carrying heated air.
+# Wall temperatures at twelve stations x downstream of the slot.
+#
+# COLUMNS
+#   slot_in     S, slot height, in
+#   wc_lb_s     W_c, coolant (helium) flow, lb/s
+#   wg_lb_s     W_g, main gas (air) flow, lb/s
+#   vc_ft_s     V_c, coolant velocity at the slot exit, ft/s
+#   vg_ft_s     V_g, main gas velocity, ft/s
+#   tad_R       T_ad, main gas adiabatic-wall (recovery) temperature, deg R
+#   tc_R        t_c, coolant static temperature at the slot exit, deg R
+#   tw_<x>      t_w, film-cooled wall temperature at x feet from the slot, deg R
+#
+# The report's correlation (its eq. 12) is stated to give the wall
+# temperature within about +-5 % for effectiveness 0.2-1.0, over velocity
+# ratios V_g/V_c of 0.45-33.3.
+slot_in,wc_lb_s,wg_lb_s,vc_ft_s,vg_ft_s,tad_R,tc_R,tw_0.132,tw_0.209,tw_0.376,tw_0.543,tw_0.710,tw_0.876,tw_1.042,tw_1.293,tw_1.501,tw_1.751,tw_2.000,tw_2.822
+0.125,0.0102,11.91,294,992,1475,950,1048,1115,1248,1303,1328,1342,1342,1347,1368,1373,1377,1372
+0.125,0.0146,11.93,325,993,1475,800,928,1010,1177,1250,1283,1303,1312,1317,1338,1348,1353,1355
+0.125,0.0207,11.94,429,990,1470,690,800,885,1068,1165,1210,1245,1257,1272,1293,1305,1317,1327
+0.125,0.0293,11.92,582,985,1470,665,698,740,925,1035,1100,1150,1173,1195,1223,1238,1258,1282
+0.125,0.0422,11.90,846,986,1470,645,643,640,757,870,942,1000,1037,1068,1098,1125,1158,1203
+0.125,0.0587,11.92,1081,985,1473,620,625,618,658,727,785,845,890,932,955,998,1042,1105
+0.125,0.0826,11.88,1458,982,1470,597,600,593,622,657,683,722,757,792,810,875,908,980
+0.125,0.1339,11.91,2224,975,1475,555,555,555,585,622,648,688,725,748,783,808,838,888
+0.125,0.2013,11.90,3260,967,1470,525,525,525,560,608,648,693,735,762,795,810,847,893
+0.125,0.2909,11.83,3683,961,1470,505,505,505,533,583,627,675,717,748,785,790,835,885
+0.5,0.0142,11.96,99,1037,1475,890,975,1045,1197,1277,1313,1335,1342,1352,1375,1375,1377,1375
+0.5,0.0198,11.93,125,1032,1475,840,897,963,1128,1227,1277,1305,1317,1332,1355,1355,1360,1362
+0.5,0.0280,11.89,166,1028,1475,785,825,873,1030,1153,1223,1262,1282,1300,1325,1332,1338,1343
+0.5,0.0438,11.87,228,1034,1485,690,700,723,867,992,1108,1172,1203,1235,1268,1283,1297,1315
+0.5,0.0785,11.76,376,1014,1483,640,640,640,640,755,872,953,1008,1063,1113,1148,1170,1218
+0.5,0.1231,11.74,553,1002,1483,605,605,605,602,605,650,730,795,862,923,973,1005,1087
+0.5,0.2098,11.69,885,990,1480,580,580,580,580,577,567,570,587,603,630,673,710,837
+0.5,0.2978,11.67,1195,982,1480,558,558,558,557,553,543,547,558,558,558,573,588,653
+0.5,0.4206,11.71,1572,975,1485,530,530,530,532,530,522,525,533,533,535,555,572,632
+0.5,0.0156,14.87,85,863,1003,720,768,803,882,920,935,942,945,947,957,963,963,958
+0.5,0.0217,14.85,110,861,1003,680,720,750,845,893,915,928,933,933,945,950,953,952
+0.5,0.0363,14.88,166,859,1000,605,640,670,755,823,865,892,902,910,922,930,932,937
+0.5,0.0542,14.91,236,856,1000,580,580,580,658,743,800,835,857,868,887,898,903,915
+0.5,0.1125,14.86,475,848,1000,570,570,570,562,568,612,667,702,735,765,793,808,838
+0.5,0.1652,14.34,678,821,1015,570,570,570,560,557,550,562,587,618,655,693,718,783
+0.5,0.2346,14.31,908,820,1020,540,540,540,540,532,523,530,542,550,555,575,593,657
+0.5,0.1192,14.38,476,832,1020,545,545,545,545,545,577,628,672,712,743,772,783,823

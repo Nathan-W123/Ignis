@@ -223,6 +223,17 @@ struct NozzlePerformance {
   double lambda_divergence = 1.0;     ///< divergence (geometric) efficiency
   double eta_nozzle = 1.0;            ///< additional nozzle efficiency
 
+  /// Boundary-layer correction, when one was applied (see
+  /// thermal/BoundaryLayerLosses.hpp).  The fields above are then the viscous
+  /// ones; these say what the layer changed.
+  bool viscous = false;
+  double discharge_coefficient = 1.0;   ///< A*_eff / A*
+  double effective_area_ratio = 0.0;    ///< the core's exit area ratio
+  double mdot_inviscid = 0.0;           ///< kg/s at C_d = 1
+  double thrust_inviscid = 0.0;         ///< N, same loss factors, no layer
+  double isp_vacuum_inviscid = 0.0;     ///< s
+  double momentum_deficit = 0.0;        ///< N, 2 pi r_e rho_e u_e^2 theta_e
+
   ExpansionRegime regime = ExpansionRegime::kIdeallyExpanded;
   bool shock_in_nozzle = false;
   double shock_area_ratio = 0.0;
@@ -263,6 +274,15 @@ struct NozzlePerformanceOptions {
   /// not sum to one.
   std::vector<double> ascent_altitudes;  ///< m, geometric
   std::vector<double> ascent_weights;    ///< dimensionless
+
+  /// Boundary-layer correction to apply (from computeBoundaryLayerLosses).
+  /// Off by default: evaluateNozzle on its own is the inviscid nozzle.
+  struct Viscous {
+    bool apply = false;
+    double throat_displacement_thickness = 0.0;  ///< m
+    double exit_displacement_thickness = 0.0;    ///< m
+    double exit_momentum_thickness = 0.0;        ///< m
+  } viscous;
 };
 
 /// Evaluate one steady operating point of a nozzle.

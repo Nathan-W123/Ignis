@@ -159,6 +159,8 @@ performance:
   eta_nozzle: 1.0               # extra multiplicative nozzle efficiency
   separation: summerfield       # summerfield | schmucker | none
   resolve_internal_shocks: true # search for an internal normal shock when over-expanded
+  boundary_layer_losses: true   # march the wall layer and correct C_d, exit and thrust
+  uncooled_wall_temperature: 1000.0  # K, the layer's wall where no jacket is solved
   ascent_profile:               # optional; enables performance.isp_ascent
     altitudes: [0, 5000, 10000, 20000, 40000]   # m, geometric
     weights:   [0.30, 0.25, 0.20, 0.15, 0.10]   # time weights, normalised internally
@@ -194,17 +196,45 @@ cooling:
   x_end_area_ratio: 10.0        # jacket ends where A/At falls to this value
   nusselt_correlation: dittus-boelter  # dittus-boelter | gnielinski
   nusselt_multiplier: 1.0       # correlation uncertainty knob
-  bartz_multiplier: 1.0         # correlation uncertainty knob
+  hot_gas_model: boundary_layer # boundary_layer (default) | bartz
+  hot_gas_multiplier: 1.0       # hot-gas coefficient uncertainty knob
+                                # (older name bartz_multiplier still read)
+  upstream_wall_temperature: 0  # K, wall upstream of a jacket that starts
+                                # downstream of the injector; 0 => first station's
   gas_emissivity: 0.0           # 0 disables the radiation term
-  wall_conductivity: 0.0        # W/(m K); 0 => the material's k(T) fit
   segments: 240                 # jacket march segments
+  taper:                        # optional: channel size along the jacket
+    x:      [0.00, 0.30, 0.36, 0.45]        # m from the injector face
+    height: [5.0e-3, 3.0e-3, 3.0e-3, 5.0e-3] # m; linear between, constant beyond
+    width:  [0.50, 0.40, 0.40, 0.50]         # fraction of pitch (m if width_mode: fixed)
+  film:                         # optional: wall film from the injector
+    fuel_fraction: 0.03         # of the fuel flow (or mass_flow: kg/s)
+    slot_height: 0.5e-3         # m, equivalent slot of the film orifices
+    x: 0.0                      # m, injection station
+    temperature: 0.0            # K; 0 => the jacket's coolant outlet temperature
+    coolant: ""                 # property table; empty => the jacket coolant
 ```
 
 `x_end_area_ratio` matters whenever ε is swept or optimised: without it the
 jacket would either stop short of, or run past, the end of the contour when the
-nozzle changes length. `nusselt_multiplier` and `bartz_multiplier` exist so
+nozzle changes length. `nusselt_multiplier` and `hot_gas_multiplier` exist so
 that the Monte Carlo campaign can disperse the **correlation** uncertainty
 explicitly rather than pretending the correlations are exact.
+
+The wall's conductivity is the material's k(T) fit; there is no YAML key to
+override it, but studies can scale its reference value through the
+`cooling.wall_conductivity` parameter below.
+
+`hot_gas_model` chooses where the hot-gas film coefficient comes from: the
+integral turbulent boundary layer marched from the injector face (the default),
+or Bartz's closed form ([`theory.md` §12](theory.md)). Under the boundary layer
+the coupled solve takes a few passes, reported in the summary.
+
+`film` injects part of the fuel along the wall (Hatch & Papell, [`theory.md`
+§12.4](theory.md)). Its cost in specific impulse is reported as a bracket
+between the fully mixed engine (the headline numbers) and an unmixed two-stream
+limit. `taper` makes the channel height and/or width vary along the axis; give
+`height`, `width` or both, one value per `x`.
 
 ## `feed`
 
@@ -311,7 +341,7 @@ monte_carlo:
     - { parameter: chamber.pressure, distribution: normal, mean: 5.5e6, sigma: 1.1e5 }
     - { parameter: chamber.eta_c_star, distribution: triangular,
         low: 0.930, mode: 0.960, high: 0.980 }
-    - { parameter: cooling.bartz_multiplier, distribution: lognormal,
+    - { parameter: cooling.hot_gas_multiplier, distribution: lognormal,
         median: 1.0, sigma_log: 0.15, min: 0.5, max: 2.0 }
     - { parameter: propellants.fuel_temperature, distribution: uniform,
         low: 108.0, high: 115.0 }
@@ -357,10 +387,14 @@ performance.ambient_pressure    performance.altitude
 cooling.channel_height          cooling.width_fraction
 cooling.num_channels            cooling.wall_thickness
 cooling.wall_conductivity       cooling.nusselt_multiplier
-cooling.bartz_multiplier        cooling.inlet_temperature
+cooling.hot_gas_multiplier      cooling.inlet_temperature
 cooling.inlet_pressure          cooling.coolant_fuel_fraction
-cooling.roughness               feed.injector_stiffness
+cooling.roughness               cooling.film_fuel_fraction
+cooling.film_slot_height        feed.injector_stiffness
 ```
+
+`cooling.bartz_multiplier` is accepted as the older name of
+`cooling.hot_gas_multiplier`.
 
 **Outputs** (`metric:` / `metrics:` / `outputs:`)
 

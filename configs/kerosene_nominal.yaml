@@ -1,0 +1,88 @@
+# Ignis-K1: a generic 500 kN-class LOX/RP-1 booster engine.
+#
+# This is a CONCEPTUAL engine invented for this project.  It is not a model of
+# any real hardware, and nothing here should be read as a flight design.  It
+# exists to exercise the kerosene path end to end: RP-1 thermochemistry (NASA
+# CEA's own RP-1, validated in docs/validation.md section 1.4), an RP-1-cooled
+# jacket on the n-dodecane surrogate, and the gas-generator cycle balance.
+name: kerosene_nominal
+description: >-
+  Generic LOX/RP-1 booster engine, sea-level nozzle.  Chamber pressure
+  6.0 MPa, mixture ratio 2.4, 120 mm throat radius, expansion ratio 16,
+  regeneratively cooled with the full fuel flow through tapered channels,
+  with a 5 % fuel film from the injector.
+
+species:
+  elements: [C, H, O]
+
+propellants:
+  oxidizer: LOX
+  fuel: RP1
+  oxidizer_temperature: 90.18     # K, normal boiling point
+  fuel_temperature: 298.15        # K, storage
+  mixture_ratio: 2.4              # O/F by mass
+
+chamber:
+  pressure: 6.0e6                 # Pa
+  eta_c_star: 0.96                # empirical combustion efficiency
+  composition: equilibrium
+
+nozzle:
+  throat_radius: 0.120            # m
+  contraction_ratio: 2.5
+  chamber_length: 0.25            # m, cylindrical section
+  converging_half_angle: 30.0
+  chamber_fillet_ratio: 0.5
+  throat_upstream_ratio: 1.5
+  throat_downstream_ratio: 0.382
+  expansion_ratio: 16.0
+  type: bell
+  bell_length_fraction: 0.8
+  bell_initial_angle: 32.0
+  bell_exit_angle: 9.0
+  stations: 400
+
+performance:
+  altitude: 0.0
+  auto_divergence: true
+  eta_nozzle: 1.0
+  separation: summerfield
+  resolve_internal_shocks: true
+
+cooling:
+  # RP-1 is a poor coolant next to methane or hydrogen: a heavy, viscous liquid
+  # with a fraction of hydrogen's heat capacity.  The jacket closes only because
+  # the channels are tapered -- 4 mm in the chamber narrowing through the
+  # convergent to 1.9 mm at the throat, 6 mm down the nozzle -- and a 5 % fuel
+  # film protects the injector end.  Even so the hot wall peaks about 10 K under
+  # the CuCrZr limit, and the wetted wall runs hotter than the 728 K at which
+  # NASA measured RP-2 begin to deposit carbon in copper (NASA TM-2010-216917),
+  # and the same report's preliminary data favour RP-2 over RP-1 on deposits,
+  # so RP-1 would be expected to coke here.  The warning that follows is the
+  # point of this example, not a defect in it: a kerosene engine at this heat
+  # flux is coking-limited.
+  enabled: true
+  coolant: dodecane               # n-dodecane, the RP-1 surrogate (see data/propellants)
+  material: CuCrZr
+  num_channels: 300
+  width_mode: fraction_of_pitch
+  width_fraction: 0.50
+  channel_height: 4.0e-3          # m, outside the taper's span
+  wall_thickness: 0.6e-3          # m
+  roughness: 5.0e-6               # m
+  coolant_fuel_fraction: 1.0      # all of the fuel passes through the jacket
+  inlet_temperature: 298.15       # K
+  inlet_pressure: 16.0e6          # Pa
+  counterflow: true
+  nusselt_correlation: dittus-boelter
+  nusselt_multiplier: 1.0
+  hot_gas_model: boundary_layer
+  hot_gas_multiplier: 1.0
+  coolant_wall_limit: 728.0       # K: RP-2's measured deposit onset (850 F), not an RP-1 figure
+  segments: 240
+  taper:
+    x:      [0.22, 0.38, 0.444, 0.52, 0.87]            # m from the injector face; throat at 0.444
+    height: [4.0e-3, 2.4e-3, 1.9e-3, 2.6e-3, 6.0e-3]  # m
+  film:
+    fuel_fraction: 0.05           # of the fuel flow
+    slot_height: 0.2e-3           # m; keeps V_g/V_c inside Hatch & Papell's fitted range

@@ -147,6 +147,14 @@ class ThermalChart(Chart):
 
     def draw_chart(self, results, labels):
         have = [(r, lab) for r, lab in zip(results, labels) if r.thermal]
+        # Name the model that actually produced the curves: only the boundary
+        # layer writes its thicknesses.
+        models = {"integral turbulent boundary layer"
+                  if max(r.thermal.get("bl_enthalpy_thickness") or [0.0]) > 0.0
+                  else "Bartz hot-gas correlation" for r, _ in have}
+        model = " / ".join(sorted(models)) if models else "Hot-gas model"
+        self.caption = (f"{model[0].upper()}{model[1:]} with a coupled wall and coolant "
+                        "balance. Engineering estimate, not a conjugate CFD solution.")
         if not have:
             ax = self.figure.add_subplot(111)
             ax.text(0.5, 0.5, "cooling is switched off for this design",

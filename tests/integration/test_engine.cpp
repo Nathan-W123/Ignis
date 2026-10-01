@@ -26,24 +26,43 @@ TEST_CASE("the nominal methane engine runs end to end and is self-consistent",
   const auto res = engine.run();
 
   SECTION("identities between the reported performance quantities") {
-    REQUIRE(res.performance.thrust_ideal ==
-            Approx(res.performance.thrust_momentum + res.performance.thrust_pressure)
-                .epsilon(1e-12));
-    REQUIRE(res.performance.isp_ideal ==
-            Approx(res.performance.thrust_ideal / (res.mdot * constants::g0)).epsilon(1e-12));
-    REQUIRE(res.performance.c_effective ==
-            Approx(res.performance.thrust / res.mdot).epsilon(1e-12));
-    REQUIRE(res.performance.cf ==
-            Approx(res.performance.thrust / (cfg.chamber_pressure * res.throat_area))
-                .epsilon(1e-12));
-    REQUIRE(res.performance.thrust_momentum ==
-            Approx(res.mdot * res.performance.u_exit).epsilon(1e-12));
+    // The shipped engine carries its boundary layer: the mass flow is the
+    // inviscid one times C_d, and the momentum thrust gives up the layer's
+    // momentum deficit.  "Ideal" stays inviscid.
+    const auto& p = res.performance;
+    REQUIRE(res.has_boundary_layer);
+    REQUIRE(p.viscous);
+    REQUIRE(p.thrust == Approx(p.lambda_divergence * p.eta_nozzle * p.thrust_momentum +
+                               p.thrust_pressure).epsilon(1e-12));
+    REQUIRE(p.thrust_momentum == Approx(res.mdot * p.u_exit - p.momentum_deficit).epsilon(1e-12));
+    REQUIRE(p.momentum_deficit > 0.0);
+    REQUIRE(p.isp_ideal == Approx(p.thrust_ideal / (p.mdot_inviscid * constants::g0)).epsilon(1e-12));
+    REQUIRE(p.c_effective == Approx(p.thrust / res.mdot).epsilon(1e-12));
+    REQUIRE(p.cf == Approx(p.thrust / (cfg.chamber_pressure * res.throat_area)).epsilon(1e-12));
     REQUIRE(res.mdot == Approx(res.mdot_oxidizer + res.mdot_fuel).epsilon(1e-12));
     REQUIRE(res.mdot_oxidizer / res.mdot_fuel == Approx(cfg.mixture_ratio).epsilon(1e-12));
     REQUIRE(res.chamber.c_star == Approx(cfg.eta_c_star * res.chamber.c_star_ideal).epsilon(1e-12));
-    REQUIRE(res.mdot == Approx(cfg.chamber_pressure * res.throat_area / res.chamber.c_star)
-                            .epsilon(1e-12));
+    REQUIRE(p.mdot_inviscid == Approx(cfg.chamber_pressure * res.throat_area / res.chamber.c_star)
+                                   .epsilon(1e-12));
+    REQUIRE(res.mdot == Approx(p.discharge_coefficient * p.mdot_inviscid).epsilon(1e-12));
     REQUIRE(res.l_star == Approx(res.chamber_volume / res.throat_area).epsilon(1e-12));
+  }
+  SECTION("switching the boundary layer off recovers the inviscid nozzle exactly") {
+    auto inviscid_cfg = cfg;
+    inviscid_cfg.boundary_layer_losses = false;
+    const auto inv = engine.runWith(inviscid_cfg);
+    REQUIRE_FALSE(inv.has_boundary_layer);
+    REQUIRE(inv.performance.thrust == Approx(res.performance.thrust_inviscid).epsilon(1e-9));
+    REQUIRE(inv.performance.isp_vacuum == Approx(res.performance.isp_vacuum_inviscid).epsilon(1e-9));
+    REQUIRE(inv.mdot == Approx(res.performance.mdot_inviscid).epsilon(1e-12));
+    REQUIRE(inv.performance.thrust_ideal == Approx(res.performance.thrust_ideal).epsilon(1e-12));
+    REQUIRE(inv.performance.thrust_ideal ==
+            Approx(inv.performance.thrust_momentum + inv.performance.thrust_pressure).epsilon(1e-12));
+    REQUIRE(inv.performance.thrust_momentum == Approx(inv.mdot * inv.performance.u_exit).epsilon(1e-12));
+    // The layer costs a percent or so, not nothing and not ten.
+    const double loss = 1.0 - res.performance.isp_vacuum / inv.performance.isp_vacuum;
+    REQUIRE(loss > 0.002);
+    REQUIRE(loss < 0.03);
   }
   SECTION("solver residuals are small") {
     REQUIRE(res.chamber.diagnostics.element_residual_rel < 1.0e-10);

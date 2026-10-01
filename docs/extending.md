@@ -112,15 +112,22 @@ polyline, and keep the same validation. Nothing downstream needs to change —
 
 ## Add a heat-transfer correlation
 
-`src/thermal/HeatTransfer.cpp` holds the gas-side model and
-`src/thermal/RegenerativeCooling.cpp` the coolant-side Nusselt selection
-(`nusselt_correlation: dittus-boelter | gnielinski`). Adding a third is a new
-enum value, a new branch and a new test.
+The gas side has two models, selected by `HotGasModel` in
+`include/ignis/thermal/RegenerativeCooling.hpp`: Bartz's closed form
+(`src/thermal/HeatTransfer.cpp`) and the integral boundary layer
+(`src/thermal/BoundaryLayer.cpp`). A third gas-side model is a new enum value
+and a new branch in the pass loop of `solveCoolingImpl`; if it depends on the
+wall temperature non-locally, as the boundary layer does, it belongs inside
+that loop's passes. Wall films are `src/thermal/FilmCooling.cpp`, entering the
+march only through each segment's driving temperature. The coolant-side Nusselt
+selection (`nusselt_correlation: dittus-boelter | gnielinski`) is in
+`src/thermal/RegenerativeCooling.cpp`; adding a third is a new enum value, a new
+branch and a new test.
 
 **Please also add an uncertainty knob.** Every empirical correlation in Ignis
-has a multiplier (`bartz_multiplier`, `nusselt_multiplier`) whose whole purpose
-is to let the Monte Carlo campaign carry the correlation's own uncertainty.
-A correlation without one implicitly claims to be exact.
+has a multiplier (`hot_gas_multiplier`, `nusselt_multiplier`) whose whole
+purpose is to let the Monte Carlo campaign carry the correlation's own
+uncertainty. A correlation without one implicitly claims to be exact.
 
 ## Add a distribution
 

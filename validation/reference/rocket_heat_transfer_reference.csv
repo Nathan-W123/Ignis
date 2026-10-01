@@ -36,15 +36,20 @@
 #
 #   station      report station label; "3bar" is the average of the three
 #                circumferential measuring stations at the throat (3, 3A, 3B)
+#   axial_in     axial distance from the throat, in (negative upstream), from
+#                the instrumentation-station table beside Fig. 3 (report page
+#                4, PDF page 8), read from the page image.  The same table
+#                repeats the area ratios below, which agree.  Station 1 is
+#                therefore 14.5 - 8.774 = 5.726 in from the injector face.
 #   area_ratio   local A/A*, from the Fig. 10 sub-captions
 #   region       where it sits in the engine
 #   c_measured   fitted constant C
 #   c_sigma      its standard deviation
 #   sigma_pct    100 sigma / C
-station,area_ratio,region,c_measured,c_sigma,sigma_pct
-1,4.64,chamber,0.0257,0.0028,10.9
-2,1.78,convergent,0.0240,0.0039,16.3
-3,1.00,throat,0.0148,0.0020,13.5
-3bar,1.00,throat,0.0151,0.0020,13.2
-4,1.27,divergent,0.0153,0.0016,10.4
-5,3.33,divergent,0.0188,0.0015,7.9
+station,axial_in,area_ratio,region,c_measured,c_sigma,sigma_pct
+1,-8.774,4.64,chamber,0.0257,0.0028,10.9
+2,-2.125,1.78,convergent,0.0240,0.0039,16.3
+3,0,1.00,throat,0.0148,0.0020,13.5
+3bar,0,1.00,throat,0.0151,0.0020,13.2
+4,1.5,1.27,divergent,0.0153,0.0016,10.4
+5,8.026,3.33,divergent,0.0188,0.0015,7.9

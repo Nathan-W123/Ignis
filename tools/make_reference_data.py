@@ -250,8 +250,11 @@ def write_cea(out_dir):
     path = os.path.join(out_dir, "cea_reference.csv")
     PSIA = 1.0 / 6894.757293168361
     FT_S = 0.3048
+    # RP1_NASA is rocketcea's card for CEA's own library RP-1 (CH1.95,
+    # h = -5907.672 cal/mol at 298.15 K), which is what Ignis's RP1 entry holds.
     cases = [("LOX", "CH4", "LCH4", [2.4, 2.8, 3.2, 3.4, 3.6, 4.0, 4.4]),
-             ("LOX", "LH2", "LH2", [3.5, 4.5, 5.5, 6.0, 7.0, 8.0])]
+             ("LOX", "LH2", "LH2", [3.5, 4.5, 5.5, 6.0, 7.0, 8.0]),
+             ("LOX", "RP1_NASA", "RP1", [2.0, 2.2, 2.4, 2.6, 2.8, 3.0])]
     rows = []
     for ox, cea_fuel, ignis_fuel, ratios in cases:
         for frozen in (0, 1):
@@ -311,13 +314,19 @@ def write_coolant(out_dir):
         "hydrogen": [(30.0, 1.2e7), (60.0, 1.2e7), (100.0, 1.2e7), (200.0, 1.0e7),
                      (400.0, 1.0e7), (700.0, 1.5e7)],
         "oxygen": [(100.0, 1.0e7), (150.0, 1.0e7), (300.0, 1.0e7), (500.0, 1.5e7)],
+        # The RP-1 surrogate: a cold inlet, the jacket's working range, and
+        # near the critical temperature at a jacket pressure.
+        "dodecane": [(300.0, 1.0e7), (400.0, 1.0e7), (500.0, 1.5e7), (600.0, 1.0e7),
+                     (650.0, 2.0e7)],
     }
-    names = {"methane": "Methane", "hydrogen": "Hydrogen", "oxygen": "Oxygen"}
+    names = {"methane": "Methane", "hydrogen": "Hydrogen", "oxygen": "Oxygen",
+             "dodecane": "n-Dodecane"}
     with open(path, "w") as fh:
         header(fh, "coolant real-fluid properties",
                ["CoolProp %s reference equations of state (Setzmann & Wagner 1991 for "
                 "methane, Leachman et al. 2009 for hydrogen, Schmidt & Wagner 1985 for "
-                "oxygen)" % CP.get_global_param_string("version")])
+                "oxygen, Lemmon & Huber 2004 for n-dodecane)"
+                % CP.get_global_param_string("version")])
         fh.write("# units: T[K] p[Pa] rho[kg/m^3] cp[J/(kg K)] mu[Pa s] k[W/(m K)]\n")
         fh.write("fluid,T,p,rho,cp,mu,k,Tcrit,pcrit,acentric,molar_mass\n")
         n = 0

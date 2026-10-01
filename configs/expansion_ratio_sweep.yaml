@@ -66,7 +66,8 @@ cooling:
   counterflow: true               # coolant enters at the nozzle exit
   nusselt_correlation: dittus-boelter
   nusselt_multiplier: 1.0
-  bartz_multiplier: 1.0
+  hot_gas_model: boundary_layer  # integral turbulent boundary layer; "bartz" for the closed form
+  hot_gas_multiplier: 1.0
   gas_emissivity: 0.0             # radiation term disabled by default
   segments: 240
 

@@ -21,6 +21,12 @@
 #       2009 for H2, Schmidt & Wagner 1985 for O2), evaluated with CoolProp.
 #   Gaseous entries take their enthalpy directly from the NASA-7 polynomial of
 #   the corresponding species, so no tabulated value is stored.
+#   RP-1 is a kerosene, not a species: CEA writes it per carbon atom, CH1.95,
+#   with the enthalpy of its own thermo library (Mehta et al., AIAA 95-2962,
+#   1995).  Its density is NIST's measurement (Outcalt, Laesecke & Brumback,
+#   J. Propul. Power 25(5), 2009); its coolant properties and liquid heat
+#   capacity are those of n-dodecane, a single-component SURROGATE whose liquid
+#   density is 7 % below RP-1's.
 #
 # The liquid heat capacity is used only for the small sensible correction when
 # the commanded inlet temperature differs from the reference temperature:
@@ -73,6 +79,20 @@ propellants:
   coolant-table: hydrogen
   max-temperature-offset: 8.0
   source: "NASA CEA propellant library H2(L); rho, cp from Leachman et al. (2009) via CoolProp"
+
+- name: "RP1"
+  description: "RP-1 kerosene at 298.15 K, written per carbon atom as CEA does (CH1.95)"
+  role: fuel
+  phase: liquid
+  composition: {C: 1, H: 1.95}
+  molar-mass: 13.9766                 # CH1.95 on the database's IUPAC 2021 weights (CEA's own: 13.976183)
+  reference-temperature: 298.15
+  reference-enthalpy: -24717.700      # NASA CEA thermo library "RP-1" (Mehta et al., AIAA 95-2962)
+  cp-liquid: 30.92                    # 2212 J/(kg K) of the n-dodecane surrogate (CoolProp), x M
+  density: 800.96                     # Outcalt, Laesecke & Brumback (2009), 298.15 K, interpolated
+  coolant-table: dodecane
+  max-temperature-offset: 30.0
+  source: "NASA CEA thermo library RP-1 (C 1.00 H 1.95, h = -24717.7 J/mol at 298.15 K, from Mehta et al., AIAA 95-2962, 1995); density measured by Outcalt, Laesecke & Brumback, J. Propul. Power 25(5), 2009, Table 1 (804.59 kg/m^3 at 293.15 K, 797.33 at 303.15 K); cp of the n-dodecane surrogate"
 
 - name: "GOX"
   description: "Gaseous oxygen; enthalpy taken from the NASA-7 polynomial for O2"

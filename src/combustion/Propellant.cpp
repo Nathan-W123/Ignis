@@ -51,8 +51,13 @@ PropellantLibrary PropellantLibrary::loadYaml(const std::string& path) {
     if (phase != "liquid" && phase != "gas")
       throw ConfigError("propellant " + p.name + ": phase must be 'liquid' or 'gas'");
     p.liquid = (phase == "liquid");
-    for (const auto& kv : node["composition"])
-      p.composition[kv.first.as<std::string>()] = kv.second.as<int>();
+    for (const auto& kv : node["composition"]) {
+      const double atoms = kv.second.as<double>();
+      if (!(atoms > 0.0))
+        throw ConfigError("propellant " + node["name"].as<std::string>() +
+                          ": element counts must be positive");
+      p.composition[kv.first.as<std::string>()] = atoms;
+    }
     p.molar_mass = node["molar-mass"].as<double>() * 1.0e-3;
     p.reference_temperature = node["reference-temperature"].as<double>();
     p.reference_enthalpy = node["reference-enthalpy"].as<double>(0.0);
@@ -158,22 +163,22 @@ double PropellantMixture::enthalpy(const SpeciesDatabase& db) const {
 double PropellantMixture::stoichiometricMixtureRatio() const {
   // Oxygen atoms required to take all C to CO2 and all H to H2O, minus the
   // oxygen the fuel already carries.
-  auto count = [](const std::map<std::string, int>& c, const char* e) {
+  auto count = [](const std::map<std::string, double>& c, const char* e) {
     auto it = c.find(e);
-    return it == c.end() ? 0 : it->second;
+    return it == c.end() ? 0.0 : it->second;
   };
-  const int nC = count(fuel_.composition, "C");
-  const int nH = count(fuel_.composition, "H");
-  const int nO_fuel = count(fuel_.composition, "O");
+  const double nC = count(fuel_.composition, "C");
+  const double nH = count(fuel_.composition, "H");
+  const double nO_fuel = count(fuel_.composition, "O");
   const double o_atoms_needed = 2.0 * nC + 0.5 * nH - nO_fuel;
   if (!(o_atoms_needed > 0.0))
     throw ConfigError("propellant " + fuel_.name + " carries enough oxygen to burn itself; "
                       "the stoichiometric mixture ratio is undefined");
-  const int nO_ox = count(ox_.composition, "O");
-  if (nO_ox <= 0)
+  const double nO_ox = count(ox_.composition, "O");
+  if (!(nO_ox > 0.0))
     throw ConfigError("oxidiser " + ox_.name + " contains no oxygen");
   // moles of oxidiser per mole of fuel, converted to a mass ratio
-  const double mol_ox_per_mol_fuel = o_atoms_needed / static_cast<double>(nO_ox);
+  const double mol_ox_per_mol_fuel = o_atoms_needed / nO_ox;
   return mol_ox_per_mol_fuel * ox_.molar_mass / fuel_.molar_mass;
 }
 

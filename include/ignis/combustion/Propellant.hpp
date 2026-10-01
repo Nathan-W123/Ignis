@@ -25,7 +25,9 @@ struct Propellant {
   std::string description;
   std::string role;                 ///< "oxidizer", "fuel" or "diluent"
   bool liquid = true;
-  std::map<std::string, int> composition;
+  /// Atoms per formula unit.  Real, not integer: a kerosene like RP-1 is a
+  /// mixture written per carbon atom (NASA CEA: CH1.95).
+  std::map<std::string, double> composition;
   double molar_mass = 0.0;          ///< kg/mol
   double reference_temperature = 0.0;  ///< K
   /// Absolute molar enthalpy at reference_temperature, J/mol.  Only used for

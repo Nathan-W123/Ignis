@@ -45,8 +45,42 @@
 ///     C. F. Colebrook, J. Inst. Civ. Eng. 11, 133-156 (1939).
 ///   Laminar          f = 64/Re,  Nu = 4.36 (constant heat flux, circular)
 ///
-/// `nusselt_multiplier` and `bartz_multiplier` make the empirical uncertainty
+/// `nusselt_multiplier` and `hot_gas_multiplier` make the empirical uncertainty
 /// explicit and are dispersed in the Monte Carlo campaign.
+///
+/// HOT-GAS SIDE
+/// ------------
+/// The film coefficient comes from the integral boundary layer by default
+/// (BoundaryLayer.hpp), or from Bartz on request.  The boundary layer depends
+/// on the wall temperature (through its reference state and driving enthalpy)
+/// and the wall temperature depends on the film coefficient, so under that
+/// model the coupled solve is repeated: march the layer with the current wall
+/// temperatures, solve the jacket, update the wall, until the hot-wall
+/// temperature stops moving (0.5 K).  Within each pass the local balance still
+/// uses the trial wall temperature in the closure, so each station is exactly
+/// balanced; only the layer's thickness lags by one pass.
+///
+/// FILM COOLING
+/// ------------
+/// A wall film injected at `film_x` (FilmCooling.hpp, Hatch & Papell) lowers
+/// the temperature the gas drives the wall towards:
+///
+///   T_drive = T_aw - eta (T_aw - t_film)
+///
+/// while h_g is left as the hot-gas model gives it for the unfilmed wall -- the
+/// usual superposition, which treats the film as changing the driving
+/// temperature and not the layer's conductance.  The film temperature is an
+/// input, or by default the jacket's coolant outlet temperature (a fuel film
+/// drawn from the injector manifold after the jacket), which couples back
+/// through the passes like the boundary layer's wall temperature does.
+///
+/// TAPERED CHANNELS
+/// ----------------
+/// `channel_height_profile` and `channel_width_profile` make the channel
+/// height and width (fraction of pitch, or absolute in fixed-width mode)
+/// tables in x, linear between points and constant beyond them.  The coolant
+/// momentum term is then -G du with u = G/rho, which reduces to the
+/// constant-area -G^2 d(1/rho) above when the channel does not change.
 ///
 /// FAILURE MODES REPORTED
 /// ----------------------
@@ -59,17 +93,32 @@
 /// None of these are silently absorbed: each sets a flag, records a message,
 /// and (for the hard ones) throws.
 
+#include <array>
 #include <string>
 #include <vector>
 
 #include "ignis/combustion/Chamber.hpp"
 #include "ignis/nozzle/NozzleFlow.hpp"
 #include "ignis/nozzle/NozzleGeometry.hpp"
+#include "ignis/thermal/BoundaryLayer.hpp"
 #include "ignis/thermal/CoolantFluid.hpp"
+#include "ignis/thermal/FilmCooling.hpp"
 #include "ignis/thermal/HeatTransfer.hpp"
 #include "ignis/thermo/Transport.hpp"
 
 namespace ignis {
+
+/// Which model supplies the hot-gas film coefficient.
+enum class HotGasModel {
+  /// Integral turbulent boundary layer marched from the injector face
+  /// (BoundaryLayer.hpp).  The default: it carries the layer's history, and it
+  /// is closer than Bartz to both measured datasets in validation.md.
+  kBoundaryLayer,
+  /// Bartz's 1957 closed-form correlation (HeatTransfer.hpp).
+  kBartz,
+};
+std::string toString(HotGasModel m);
+HotGasModel hotGasModelFromString(const std::string& s);
 
 /// How the channel width is derived from the local circumference.
 enum class ChannelWidthMode {
@@ -107,11 +156,43 @@ struct CoolingSpec {
   double x_end_area_ratio = 0.0;
   std::string nusselt_correlation = "dittus-boelter";
   double nusselt_multiplier = 1.0;
-  double bartz_multiplier = 1.0;
+  HotGasModel hot_gas_model = HotGasModel::kBoundaryLayer;
+  /// Explicit scaling of the hot-gas film coefficient, whichever model supplies
+  /// it.  The Monte Carlo campaign disperses it; 1 means the model as published.
+  double hot_gas_multiplier = 1.0;
+  /// Wall temperature assumed upstream of the jacket when the cooled extent
+  /// does not start at the injector face (the boundary layer still starts
+  /// there).  0 means "the first cooled station's temperature".
+  double upstream_wall_temperature = 0.0;
   double gas_emissivity = 0.0;      ///< 0 disables the radiation term
   WallMaterial wall;
   int num_segments = 200;
   double wall_tolerance = 1.0e-6;   ///< K, on the T_wg balance
+
+  /// Channel taper: (x [m], value) tables, linear between points, constant
+  /// beyond the ends.  Empty keeps the constant channel_height / width above.
+  /// The width table holds the fraction of pitch or, in fixed mode, metres.
+  std::vector<std::array<double, 2>> channel_height_profile;
+  std::vector<std::array<double, 2>> channel_width_profile;
+
+  /// Wall film (Hatch & Papell).  Off when film_mass_flow is zero.
+  double film_mass_flow = 0.0;      ///< kg/s injected along the wall
+  /// Slot height, m.  For a ring of film-coolant orifices, the equivalent
+  /// slot: total orifice area over the circumference.
+  double film_slot_height = 0.5e-3;
+  double film_x = 0.0;              ///< m, injection station
+  /// Film temperature at injection, K.  0: the jacket's coolant outlet
+  /// temperature (fuel film drawn from the manifold after the jacket).
+  double film_temperature = 0.0;
+  /// Fluid table for the film's properties; empty means the jacket coolant.
+  std::string film_coolant;
+  double film_pressure = 0.0;       ///< Pa at the slot; 0 = the chamber pressure
+
+  /// Limit on the wetted (coolant-side) wall temperature, K; 0 = no check.
+  /// For a hydrocarbon fuel this is its coking limit -- the temperature above
+  /// which it deposits carbon on the channel wall.  Ignis ships no default:
+  /// see docs/configuration.md for the one figure that could be sourced.
+  double coolant_wall_limit = 0.0;
 };
 
 /// Converged state of one axial segment.
@@ -138,8 +219,16 @@ struct ThermalStation {
   double friction_factor = 0.0, fin_efficiency = 0.0;
   double channel_width = 0.0, land_width = 0.0, hydraulic_diameter = 0.0;
   double segment_heat = 0.0;  ///< W absorbed by the coolant in this segment
+  double channel_height = 0.0;   ///< m (varies only with a taper)
+  // film (eta = 0 and T_drive = T_aw without one)
+  double film_effectiveness = 0.0;
+  double t_drive = 0.0;          ///< K, the temperature h_g drives the wall towards
+  // boundary layer (zero under the Bartz model)
+  double bl_momentum_thickness = 0.0;   ///< m
+  double bl_enthalpy_thickness = 0.0;   ///< m
+  double bl_re_theta = 0.0;
   int iterations = 0;
-  double flux_residual = 0.0; ///< |q_gas - q_cool| / q_gas at convergence
+  double flux_residual = 0.0; ///< |q_gas - q_cool| / max(|q_gas|, 1 kW/m^2) at convergence
 };
 
 /// Result of a cooling analysis.
@@ -166,8 +255,26 @@ struct CoolingResult {
   /// Largest per-station |q_gas - q_cool| / q_gas.  Convergence of the coupled
   /// wall balance.
   double max_flux_residual = 0.0;
+  /// The model that supplied h_g, and for the boundary layer the number of
+  /// wall-temperature passes the coupled solve took to settle.
+  std::string hot_gas_model;
+  int wall_iterations = 0;
+  /// Film, when there is one: what was injected, how fast relative to the gas,
+  /// and how far it protects the wall (where eta falls below 0.5 and 0.2; the
+  /// jacket end if it does not).
+  bool has_film = false;
+  double film_mass_flow = 0.0;          ///< kg/s
+  double film_temperature = 0.0;        ///< K at injection
+  double film_coolant_velocity = 0.0;   ///< m/s
+  double film_velocity_ratio = 0.0;     ///< V_g / V_c at the slot
+  double film_length_half = 0.0;        ///< m from the slot to eta = 0.5
+  double film_length_fifth = 0.0;       ///< m from the slot to eta = 0.2
   bool boiling_detected = false;
   bool wall_limit_exceeded = false;
+  /// The hottest wetted wall, and whether it passed `coolant_wall_limit`.
+  double max_coolant_side_wall_temperature = 0.0;   ///< K
+  double max_coolant_side_wall_temperature_x = 0.0; ///< m
+  bool coolant_wall_limit_exceeded = false;
   /// Set only when a *converged* station needed k(T) outside the material's
   /// fitted range.  Root-finder trial evaluations sweep the whole bracket and
   /// are deliberately not recorded here: they would report temperatures the

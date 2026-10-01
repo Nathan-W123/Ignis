@@ -180,9 +180,9 @@ TEST_CASE("cooling responds to design changes in the expected direction", "[cool
     REQUIRE(r.coolant_pressure_drop < base.coolant_pressure_drop);
     REQUIRE(r.max_wall_temperature > base.max_wall_temperature);
   }
-  SECTION("the Bartz multiplier scales the heat load nearly linearly") {
+  SECTION("the hot-gas multiplier scales the heat load nearly linearly") {
     auto s = f.spec();
-    s.bartz_multiplier = 1.25;
+    s.hot_gas_multiplier = 1.25;
     const auto r = solveRegenerativeCooling(f.flow, f.geom, f.ch, s, f.transport);
     const double ratio = r.total_heat_load / base.total_heat_load;
     REQUIRE(ratio > 1.10);
@@ -308,8 +308,12 @@ TEST_CASE("the conductivity warning describes converged states, not solver trial
   SECTION("a genuinely cold wall does raise the warning") {
     // Narrow the fitted range so that converged states fall outside it; the
     // physics is untouched, only the material's declared validity window.
+    // The top of the window is opened up so that only the cold side is out:
+    // under the boundary-layer model this fixture's injector end runs above
+    // the shipped 900 K fit, and that is the next section's case.
     auto cold = spec;
     cold.wall.valid_min = converged_min + 0.25 * (converged_max - converged_min);
+    cold.wall.valid_max = converged_max + 1.0;
     const auto r = solveRegenerativeCooling(f.flow, f.geom, f.ch, cold, f.transport);
     REQUIRE(r.conductivity_extrapolated);
     REQUIRE(r.conductivity_extrapolation_min >= converged_min - 1e-6);
@@ -318,7 +322,32 @@ TEST_CASE("the conductivity warning describes converged states, not solver trial
     REQUIRE(r.conductivity_extrapolation_x_max >= r.conductivity_extrapolation_x_min);
     bool mentioned = false;
     for (const auto& w : r.warnings)
-      if (w.find("wall conductivity was extrapolated") != std::string::npos) mentioned = true;
+      if (w.find("wall conductivity was extrapolated") != std::string::npos) {
+        mentioned = true;
+        CHECK(w.find("below the fit") != std::string::npos);
+        CHECK(w.find("ABOVE the fit") == std::string::npos);
+      }
+    REQUIRE(mentioned);
+  }
+
+  SECTION("a wall hotter than the fit is reported as hot, not as a cold inlet") {
+    // The message used to say "the cold inlet end of a cryogenic jacket"
+    // whatever side of the fit the wall left, which is wrong in the case that
+    // matters.
+    auto hot = spec;
+    hot.wall.valid_min = converged_min - 1.0;
+    hot.wall.valid_max = converged_max - 0.25 * (converged_max - converged_min);
+    const auto r = solveRegenerativeCooling(f.flow, f.geom, f.ch, hot, f.transport);
+    REQUIRE(r.conductivity_extrapolated);
+    REQUIRE(r.conductivity_extrapolation_min >= hot.wall.valid_max);
+    REQUIRE(r.conductivity_extrapolation_max <= converged_max + 1e-6);
+    bool mentioned = false;
+    for (const auto& w : r.warnings)
+      if (w.find("wall conductivity was extrapolated") != std::string::npos) {
+        mentioned = true;
+        CHECK(w.find("ABOVE the fit") != std::string::npos);
+        CHECK(w.find("cold end is affected") == std::string::npos);
+      }
     REQUIRE(mentioned);
   }
 }
@@ -330,11 +359,20 @@ TEST_CASE("the gas-side survey agrees with the coupled solve at its own wall tem
   // That is the form a calorimetric experiment reports, and it is what the
   // heat-transfer validation case needs; this ties it to the coupled solver so
   // the two cannot drift apart.
+  //
+  // Under Bartz, which is local: the film coefficient at a station depends on
+  // that station's wall temperature and nothing else, so the survey at the
+  // coupled wall temperature must reproduce the coupled flux exactly.  A
+  // boundary layer remembers the wall upstream, so a survey at one uniform
+  // temperature is a different layer from the coupled solve's and agreement
+  // would be wrong to expect; the boundary-layer model has its own tests.
   Fixture f;
-  const auto coupled = solveRegenerativeCooling(f.flow, f.geom, f.ch, f.spec(), f.transport);
+  auto spec = f.spec();
+  spec.hot_gas_model = HotGasModel::kBartz;
+  const auto coupled = solveRegenerativeCooling(f.flow, f.geom, f.ch, spec, f.transport);
   const auto& hot = coupled.stations[coupled.stations.size() / 2];
 
-  const auto survey = surveyHotGasSide(f.flow, f.geom, f.ch, f.spec(), f.transport,
+  const auto survey = surveyHotGasSide(f.flow, f.geom, f.ch, spec, f.transport,
                                        hot.t_wall_hot);
   REQUIRE(survey.stations.size() == coupled.stations.size());
   const auto& probe = survey.stations[coupled.stations.size() / 2];
@@ -352,7 +390,7 @@ TEST_CASE("the gas-side survey agrees with the coupled solve at its own wall tem
     }
   }
   SECTION("a colder wall draws more heat, everywhere") {
-    const auto colder = surveyHotGasSide(f.flow, f.geom, f.ch, f.spec(), f.transport,
+    const auto colder = surveyHotGasSide(f.flow, f.geom, f.ch, spec, f.transport,
                                          hot.t_wall_hot - 200.0);
     for (std::size_t i = 0; i < survey.stations.size(); ++i) {
       INFO("station at x = " << survey.stations[i].x);

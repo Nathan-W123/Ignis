@@ -202,6 +202,56 @@ TEST_CASE("LOX/hydrogen performance is validated against NASA CEA",
   REQUIRE(wi.value < 0.02);
 }
 
+TEST_CASE("LOX/RP-1 performance is validated against NASA CEA", "[validation][cea][rp1]") {
+  // RP-1 is a kerosene, not a species: both CEA and Ignis carry it as the
+  // reactant CH1.95 with CEA's library enthalpy and burn it into the C/H/O
+  // product set.  This checks the fractional-formula path end to end.
+  const ReferenceTable ref(referenceDir() + "/cea_reference.csv");
+  const auto lib = library();
+  const auto& db = rocketDatabase();
+  const EquilibriumSolver solver(db);
+
+  for (const char* model : {"equilibrium", "frozen"}) {
+    const bool frozen = std::string(model) == "frozen";
+    Worst wt, wm, wc, wi;
+    int checked = 0;
+    for (std::size_t r = 0; r < ref.rows(); ++r) {
+      if (ref.text("fuel", r) != "RP1" || ref.text("composition", r) != model) continue;
+      const double mr = ref.num("mixture_ratio", r);
+      const double pc = ref.num("pressure", r);
+      const double eps = ref.num("expansion_ratio", r);
+      if (pc < (frozen ? 2.0e6 : 1.0e6)) continue;   // as for the other propellants
+      const PropellantMixture mix(lib.at("LOX"), lib.at("RP1"), mr, 90.18, 298.15);
+      const CombustionChamber chamber(
+          solver, frozen ? CompositionModel::kFrozen : CompositionModel::kEquilibrium);
+      const auto ch = chamber.solve(mix, pc, 1.0);
+      const auto flow = chamber.makeFlow(ch);
+      const auto exit_state = flow.atAreaRatio(eps, true);
+      const std::string tag = "O/F " + std::to_string(mr) + ", " + std::to_string(pc * 1e-6) +
+                              " MPa, eps " + std::to_string(eps);
+      wt.update(relativeError(ch.state.T, ref.num("chamber_temperature", r)), tag);
+      wm.update(relativeError(ch.state.M, ref.num("molar_mass", r)), tag);
+      wc.update(relativeError(ch.c_star_ideal, ref.num("c_star", r)), tag);
+      const double mdot_per_at = pc / ch.c_star_ideal;
+      const double isp_vac = (mdot_per_at * exit_state.u + exit_state.gas.p * eps) /
+                             (mdot_per_at * constants::g0);
+      wi.update(relativeError(isp_vac, ref.num("isp_vacuum", r)), tag);
+      ++checked;
+    }
+    INFO(model << ": checked " << checked << " LOX/RP-1 CEA cases\n"
+         << "  chamber temperature : " << wt.value << " at " << wt.where << "\n"
+         << "  molar mass          : " << wm.value << "\n"
+         << "  c*                  : " << wc.value << " at " << wc.where << "\n"
+         << "  vacuum Isp          : " << wi.value << " at " << wi.where);
+    CHECK(checked >= (frozen ? 50 : 70));
+    // The same tolerances as LOX/methane: same product species, same data.
+    CHECK(wt.value < 0.01);
+    CHECK(wm.value < 0.005);
+    CHECK(wc.value < 0.01);
+    CHECK(wi.value < (frozen ? 0.02 : 0.015));
+  }
+}
+
 TEST_CASE("frozen expansion is validated against NASA CEA", "[validation][cea][frozen]") {
   const ReferenceTable ref(referenceDir() + "/cea_reference.csv");
   const auto lib = library();

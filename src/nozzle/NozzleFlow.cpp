@@ -469,9 +469,29 @@ NozzlePerformance evaluateNozzle(const NozzleFlow& flow, const NozzleGeometry& g
   perf.c_star = perf.eta_c_star * perf.c_star_ideal;
   perf.mdot = perf.p_chamber * perf.throat_area / perf.c_star;
 
+  // Boundary layer: the core sees the passage narrowed by the displacement
+  // thickness, A_eff = pi (r - delta*)^2, at the throat and at the exit.
+  const auto& visc = opts.viscous;
+  double core_area_ratio = perf.area_ratio;
+  if (visc.apply) {
+    const double rt = geom.throatRadius(), re = geom.exitRadius();
+    if (!(visc.throat_displacement_thickness < rt && visc.exit_displacement_thickness < re))
+      throw ConfigError("nozzle: a boundary-layer displacement thickness reaches the axis");
+    perf.viscous = true;
+    perf.discharge_coefficient = std::pow(1.0 - visc.throat_displacement_thickness / rt, 2);
+    perf.mdot_inviscid = perf.mdot;
+    perf.mdot *= perf.discharge_coefficient;
+    core_area_ratio = std::pow((re - visc.exit_displacement_thickness) /
+                               (rt - visc.throat_displacement_thickness), 2);
+    if (!(core_area_ratio > 1.0))
+      throw ConvergenceError("nozzle: the boundary layer leaves the core no supersonic expansion");
+    perf.effective_area_ratio = core_area_ratio;
+  }
+
   // Shock-free supersonic exit state -- always computed, since the vacuum
-  // performance and the regime classification are defined from it.
-  const ExpansionState exit_sup = flow.atAreaRatio(perf.area_ratio, true);
+  // performance and the regime classification are defined from it.  With a
+  // boundary layer it is the core's, at the effective area ratio.
+  const ExpansionState exit_sup = flow.atAreaRatio(core_area_ratio, true);
   perf.mass_flow_residual = flow.massFlowResidual(exit_sup);
   perf.energy_residual = flow.energyResidual(exit_sup);
 
@@ -576,18 +596,43 @@ NozzlePerformance evaluateNozzle(const NozzleFlow& flow, const NozzleGeometry& g
   perf.eta_nozzle = opts.eta_nozzle;
 
   // --- thrust -----------------------------------------------------------
-  perf.thrust_momentum = perf.mdot * perf.u_exit;
+  // The layer's momentum deficit, thin-layer form, at the core's exit state.
+  // A shock inside the nozzle replaces the attached exit state the layer was
+  // marched against, so the deficit is only applied to an attached exit.
+  const double lambda_eta = perf.lambda_divergence * perf.eta_nozzle;
+  if (perf.viscous && !perf.shock_in_nozzle) {
+    perf.momentum_deficit = 2.0 * constants::pi * geom.exitRadius() * exit_sup.gas.rho *
+                            exit_sup.u * exit_sup.u * visc.exit_momentum_thickness;
+  }
+  perf.thrust_momentum = perf.mdot * perf.u_exit - perf.momentum_deficit;
   perf.thrust_pressure = (perf.p_exit - p_ambient) * perf.exit_area;
-  perf.thrust_ideal = perf.thrust_momentum + perf.thrust_pressure;
-  perf.thrust = perf.lambda_divergence * perf.eta_nozzle * perf.thrust_momentum +
-                perf.thrust_pressure;
+  perf.thrust = lambda_eta * perf.thrust_momentum + perf.thrust_pressure;
   perf.c_effective = perf.thrust / perf.mdot;
-  perf.isp_ideal = perf.thrust_ideal / (perf.mdot * constants::g0);
   perf.isp = perf.thrust / (perf.mdot * constants::g0);
-  perf.cf_ideal = perf.thrust_ideal / (perf.p_chamber * perf.throat_area);
   perf.cf = perf.thrust / (perf.p_chamber * perf.throat_area);
-  perf.isp_vacuum = (perf.lambda_divergence * perf.eta_nozzle * perf.mdot * exit_sup.u +
+  perf.isp_vacuum = (lambda_eta * (perf.mdot * exit_sup.u - perf.momentum_deficit) +
                      exit_sup.gas.p * perf.exit_area) / (perf.mdot * constants::g0);
+
+  // "Ideal" stays what it always was: inviscid, full-flowing, no losses, at
+  // the geometric area ratio -- so it is comparable with CEA whatever else is
+  // switched on.
+  if (perf.viscous) {
+    const ExpansionState inviscid =
+        perf.shock_in_nozzle ? exit_sup : flow.atAreaRatio(perf.area_ratio, true);
+    const double u_inv = perf.shock_in_nozzle ? perf.u_exit : inviscid.u;
+    const double p_inv = perf.shock_in_nozzle ? perf.p_exit : inviscid.gas.p;
+    perf.thrust_ideal = perf.mdot_inviscid * u_inv + (p_inv - p_ambient) * perf.exit_area;
+    perf.isp_ideal = perf.thrust_ideal / (perf.mdot_inviscid * constants::g0);
+    perf.cf_ideal = perf.thrust_ideal / (perf.p_chamber * perf.throat_area);
+    perf.thrust_inviscid = lambda_eta * perf.mdot_inviscid * u_inv + (p_inv - p_ambient) * perf.exit_area;
+    perf.isp_vacuum_inviscid = (lambda_eta * perf.mdot_inviscid * inviscid.u +
+                                inviscid.gas.p * perf.exit_area) /
+                               (perf.mdot_inviscid * constants::g0);
+  } else {
+    perf.thrust_ideal = perf.mdot * perf.u_exit + perf.thrust_pressure;
+    perf.isp_ideal = perf.thrust_ideal / (perf.mdot * constants::g0);
+    perf.cf_ideal = perf.thrust_ideal / (perf.p_chamber * perf.throat_area);
+  }
 
   // --- ambient-pressure family -------------------------------------------
   // F(p_a) = F_vac - p_a A_e exactly, for a full-flowing nozzle, so every

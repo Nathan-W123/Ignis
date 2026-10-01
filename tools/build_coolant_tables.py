@@ -77,6 +77,13 @@ FLUIDS = {
     "methane":  dict(cp_name="Methane",  t_min=95.0, t_max=1100.0, p=(0.5e6, 40.0e6, 41)),
     "hydrogen": dict(cp_name="Hydrogen", t_min=22.0, t_max=1100.0, p=(0.5e6, 40.0e6, 41)),
     "oxygen":   dict(cp_name="Oxygen",   t_min=60.0, t_max=1000.0, p=(0.5e6, 40.0e6, 41)),
+    # RP-1 has no reference equation of state of its own in CoolProp; NIST's
+    # RP-1 surrogates (Huber et al., Energy & Fuels 2009) need four components
+    # CoolProp does not carry.  n-dodecane is the single-component SURROGATE:
+    # T_c 658 K, p_c 1.82 MPa, liquid density 7 % below RP-1's measured
+    # 801 kg/m^3 at 298 K (Outcalt, Laesecke & Brumback 2009).  Its EOS
+    # (Lemmon & Huber 2004) is valid to 700 K, which is where the table stops.
+    "dodecane": dict(cp_name="n-Dodecane", t_min=270.0, t_max=700.0, p=(0.5e6, 40.0e6, 41)),
 }
 
 
@@ -99,12 +106,18 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-o", "--output-dir", default="data/coolants")
+    ap.add_argument("--fluids", nargs="*", default=list(FLUIDS),
+                    help="tables to (re)generate; default all: " + " ".join(FLUIDS))
     args = ap.parse_args(argv)
+    unknown = [f for f in args.fluids if f not in FLUIDS]
+    if unknown:
+        sys.exit(f"unknown fluid(s) {unknown}; known: {list(FLUIDS)}")
     CP = _coolprop()          # only now is the heavy dependency actually needed
     os.makedirs(args.output_dir, exist_ok=True)
     stamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    for name, spec in FLUIDS.items():
+    for name in args.fluids:
+        spec = FLUIDS[name]
         cpn = spec["cp_name"]
         Tc = CP.PropsSI("Tcrit", cpn)
         T = temperature_axis(spec["t_min"], spec["t_max"], Tc)
