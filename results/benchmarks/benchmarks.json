@@ -1,23 +1,23 @@
 {
   "ignis_version": "1.0.0",
-  "git": "v1.0.0",
+  "git": "v1.0.0-28-gfa97611",
   "build_type": "Release",
   "compiler": "GNU 13.3.0",
-  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz",
   "hardware_threads": 4,
   "eigen": "3.4.0",
-  "suite_wall_seconds": 155.00846256,
+  "suite_wall_seconds": 244.60712239,
   "benchmarks": {
     "name": "benchmarks",
     "columns": {
-      "benchmark": ["adiabatic (HP) solve, 26 species", "isentropic (SP) solve, 26 species", "  8 species", "  12 species", "  18 species", "  26 species", "chamber + throat + exit (no profile, no cooling)", "  50 stations", "  100 stations", "  200 stations", "  400 stations", "  800 stations", "  1600 stations", "chamber + nozzle + profile + cooling + feed", "chamber + nozzle + profile (no cooling)", "equilibrium table build", "adaptive RK4(5), 0.8 s of physical time", "fixed-step RK4 at 2 us, 0.8 s of physical time", "  1 thread(s)", "  2 thread(s)", "  4 thread(s)"],
-      "unit_of_work": ["solve", "solve", "solve", "solve", "solve", "solve", "analysis", "profile", "profile", "profile", "profile", "profile", "profile", "analysis", "analysis", "table", "run", "run", "campaign", "campaign", "campaign"],
-      "mean_time": [0.052837114000000046, 0.12740094200000002, 0.010243252000000007, 0.023672631999999999, 0.028531727999999989, 0.051010644000000036, 7.3445135800000001, 30.613618166666665, 46.567504000000007, 80.582685833333343, 155.59287983333331, 290.88251299999996, 570.04322333333323, 241.47381700000003, 151.08949583333333, 1142.4455090000001, 1080.8165900000001, 58103.667229000006, 43990.860992000002, 23234.199669999998, 12917.689897],
-      "min_time": [0.047648000000000003, 0.110777, 0.0096450000000000008, 0.020364999999999998, 0.025989000000000002, 0.047719000000000004, 6.9191749999999992, 30.283808000000001, 45.272532999999996, 78.281897000000001, 147.94372899999999, 287.49743599999999, 565.83914000000004, 237.111963, 147.30368099999998, 1142.4455090000001, 1074.4386029999998, 58103.667229000006, 43990.860992000002, 23234.199669999998, 12917.689897],
-      "max_time": [0.20183000000000001, 0.35725200000000001, 0.028764999999999999, 0.051638000000000003, 0.075939999999999994, 0.087648000000000004, 8.8468330000000002, 31.11279, 47.892131999999997, 82.19068, 171.71078, 293.35342199999997, 574.83157799999992, 253.050501, 157.53576100000001, 1142.4455090000001, 1085.135552, 58103.667229000006, 43990.860992000002, 23234.199669999998, 12917.689897],
-      "repeats": [500, 500, 250, 250, 250, 250, 50, 6, 6, 6, 6, 6, 6, 12, 12, 1, 3, 1, 1, 1, 1],
-      "secondary_value": [24, 0, 8, 12, 18, 26, 0, 50, 100, 200, 400, 800, 1600, 0, 0, 51701, 4624, 400155, 9.0927977079771729, 17.216000795434329, 30.965288932419398],
-      "secondary_label": ["mean Newton iterations", "", "species", "species", "species", "species", "", "stations", "stations", "stations", "stations", "stations", "stations", "", "", "equilibrium solves", "accepted steps", "steps", "samples/s", "samples/s", "samples/s"]
+      "benchmark": ["adiabatic (HP) solve, 26 species", "isentropic (SP) solve, 26 species", "  8 species", "  12 species", "  18 species", "  26 species", "chamber + throat + exit (inviscid, no profile)", "  50 stations", "  100 stations", "  200 stations", "  400 stations", "  800 stations", "  1600 stations", "everything in methane_nominal.yaml", "  without the finite-rate march", "  without the boundary-layer losses", "  without cooling, cycle and feed", "equilibrium table build", "adaptive RK4(5), 0.8 s of physical time", "fixed-step RK4 at 2 us, 0.8 s of physical time", "  1 thread(s)", "  2 thread(s)", "  4 thread(s)"],
+      "unit_of_work": ["solve", "solve", "solve", "solve", "solve", "solve", "analysis", "profile", "profile", "profile", "profile", "profile", "profile", "analysis", "analysis", "analysis", "analysis", "table", "run", "run", "campaign", "campaign", "campaign"],
+      "mean_time": [0.058814829999999964, 0.14326256600000012, 0.011469740000000008, 0.026603275999999981, 0.031146448000000011, 0.061087031999999999, 1.49796142, 5.027365500000001, 7.616035666666666, 11.352040333333335, 20.7381855, 37.758480166666665, 68.046346333333346, 351.28010833333337, 218.07411983333336, 331.18827275000001, 190.16916016666667, 1439.239703, 1452.2783206666666, 72494.873309999995, 83447.388326, 43583.644855999999, 24919.879161000001],
+      "min_time": [0.053078, 0.121906, 0.010697999999999999, 0.022592999999999999, 0.028646999999999999, 0.052757000000000005, 1.3876580000000001, 4.0721590000000001, 6.5151289999999999, 10.115308000000001, 16.917391000000002, 33.76726, 65.057264000000004, 325.454655, 199.22168300000001, 296.57082600000001, 173.28696199999999, 1439.239703, 1344.7321850000001, 72494.873309999995, 83447.388326, 43583.644855999999, 24919.879161000001],
+      "max_time": [0.42369000000000001, 0.85122699999999996, 0.047035, 0.21987600000000002, 0.128328, 0.62604299999999991, 1.9697590000000003, 6.1040160000000006, 9.2469439999999992, 12.044844000000001, 26.441953000000002, 41.096187999999998, 71.792182999999994, 395.51075400000002, 231.839506, 377.20585299999999, 239.353171, 1439.239703, 1548.5678460000001, 72494.873309999995, 83447.388326, 43583.644855999999, 24919.879161000001],
+      "repeats": [500, 500, 250, 250, 250, 250, 50, 6, 6, 6, 6, 6, 6, 12, 12, 12, 12, 1, 3, 1, 1, 1, 1],
+      "secondary_value": [24, 0, 8, 12, 18, 26, 0, 50, 100, 200, 400, 800, 1600, 0, 0, 0, 0, 51701, 4624, 400155, 4.7934394116366921, 9.1777546674124366, 16.051442200651046],
+      "secondary_label": ["mean Newton iterations", "", "species", "species", "species", "species", "", "stations", "stations", "stations", "stations", "stations", "stations", "", "", "", "", "equilibrium solves", "accepted steps", "steps", "samples/s", "samples/s", "samples/s"]
     },
     "units": {
       "benchmark": "",
@@ -29,6 +29,6 @@
       "secondary_value": "-",
       "secondary_label": ""
     },
-    "rows": 21
+    "rows": 23
   }
 }

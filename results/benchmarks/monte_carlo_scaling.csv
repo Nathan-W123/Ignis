@@ -1,5 +1,5 @@
 # units: threads[-] throughput[samples/s]
 threads,throughput
-1,9.092797708
-2,17.2160008
-4,30.96528893
+1,4.793439412
+2,9.177754667
+4,16.0514422

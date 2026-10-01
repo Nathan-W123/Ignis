@@ -171,7 +171,7 @@ These are not style preferences; they are what makes the results trustworthy.
 
 1. **Never silently clamp a failed solve into a valid-looking state.** Throw
    the right exception with an actionable message. A sweep that reports
-   `169 points, 52 failed` is telling the truth; one that reports 169 successes
+   `169 points, 31 failed` is telling the truth; one that reports 169 successes
    by clamping is not.
 2. **Report residuals, don't assume them.** Every solve recomputes how well it
    satisfied its own equations and carries that number out to the caller.

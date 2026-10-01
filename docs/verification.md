@@ -82,7 +82,7 @@ EOS, ODE integration, orifice outflow). Running each on the other's answer:
 
 | | |
 |---|---:|
-| `SteadyEngine` at p<sub>c</sub> = 5.500 MPa, O/F = 3.399267 | ṁ = 48.03612 kg/s |
+| `SteadyEngine` at p<sub>c</sub> = 5.500 MPa, O/F = 3.399267, inviscid like the transient (`boundary_layer_losses: false`) | ṁ = 48.03612 kg/s |
 | Transient commanded flows (37.12 + 10.92) | ṁ = 48.0400 kg/s |
 | ⇒ steady model's implied plateau pressure | 5.50044 MPa |
 | Transient's actual plateau pressure | **5.50212 MPa** |
@@ -257,12 +257,14 @@ the message is specific:
 | Monte Carlo sample that raises | counted and classified by exception type, reported, never dropped |
 | Invalid nozzle geometry (ε ≤ 1, negative radius, θ<sub>e</sub> > θ<sub>i</sub>, …) | `ConfigError` explaining which constraint failed |
 
-The sweeps in `scripts/run_all.sh` exercise this for real: the
-chamber-pressure sweep reports `21 points, 2 failed` and prints the two
-`InfeasibleError` messages verbatim, and the cooling design-space sweep
-reports `169 points, 52 failed`. Those failures are genuine — at 11 MPa the
-shipped channel geometry cannot pass the flow — and they appear as failures,
-not as optimistic numbers.
+The sweeps in `scripts/run_all.sh` exercise this for real: the cooling
+design-space sweep reports `169 points, 31 failed` and prints the
+`InfeasibleError` messages verbatim. In the shallowest channels the jacket
+cannot pass the fuel flow (`the coolant pressure reached zero at
+x = 324.048 mm; the channel cannot pass 10.9177 kg/s`). Those failures are
+genuine, and they appear as failures, not as optimistic numbers. Under Bartz
+the chamber-pressure sweep also failed at 11.5 and 12 MPa. With the boundary
+layer and the 3 % film, all 21 of its points close.
 
 ---
 
@@ -284,7 +286,9 @@ from a clean tree after that commit, and only then did `run_all.sh` overwrite
 `results/`. A file cannot contain the hash of the commit that contains it, so
 the regenerated tree is committed one commit later. Between the two, no
 solver source, configuration or data file changed: only `results/`, the
-documentation, one figure caption and the benchmark driver did.
+documentation, one figure caption and the benchmark driver did. The benchmark
+report reads `v1.0.0-28-gfa97611`: it was re-run from a clean build of that
+commit, after the driver's labels were corrected to say what each row times.
 
 These outputs replace the `v1.0.0` tree. The integral boundary layer,
 boundary-layer losses, film cooling, finite-rate nozzle chemistry and the
@@ -294,28 +298,36 @@ describes the code.
 ### 6.1 Reproducing it
 
 The `results/` tree in this repository was produced by `scripts/run_all.sh`.
-To check that the `v1.0.0` tree could be reproduced, the branch was cloned into
-a fresh directory, built from scratch and run end to end:
+To check that it can be reproduced, the branch at the commit that holds it
+(`fa97611`) was cloned into a fresh directory, built from scratch and run end
+to end:
 
 ```bash
 git clone --branch <branch> <url> /tmp/clean && cd /tmp/clean
 rm -rf results && ./scripts/run_all.sh
 ```
 
-Result: **exit 0 in 13 min 49 s**, 75/75 tests passed, all 16 figures written.
-Comparing the fresh output against the committed one, with the two provenance
-lines (git hash, data path) excluded:
+Result: **exit 0 in 19 min 58 s** on 4 jobs, build included. 125/125 tests
+passed, all 17 figures were written, and the 1-thread and 4-thread Monte Carlo
+sample tables were byte-identical. Comparing the fresh output against the
+committed one, with the provenance lines (git describe, data path) excluded:
 
 | Compared | Files | Files with any difference | What the differences were |
 |---|---:|---:|---|
-| Human-readable reports | 9 | 4 | one `wall time …` line each |
-| CSV tables | 33 | 4 | the four benchmark timing tables |
+| Human-readable reports | 10 | 2 | the benchmark timings, and the transient's `table built in …` line |
+| CSV tables | 40 | 4 | the four benchmark timing tables |
+| JSON outputs | 21 | 10 | `wall_seconds`, `build_seconds` and throughput fields, and the benchmark timings |
+| Figures (16 PNG, 1 GIF) | 17 | 0 | — |
 
 Every physics number — composition, temperature, c\*, thrust, I<sub>sp</sub>,
-heat flux, wall temperature, pressure drop, every sweep point, every Monte
-Carlo sample, every residual — is **bit-identical**. The only things that move
-between runs are measured times, which is what should move. This was checked
-twice, at two different commits.
+kinetic efficiency, heat flux, wall temperature, pressure drop, every sweep
+point, every optimiser evaluation, every Monte Carlo sample, every residual —
+is **bit-identical**. The only things that move between runs are measured
+times, which is what should move. The fresh build stamps itself
+`v1.0.0-28-gfa97611-dirty`, because this procedure deletes the tracked
+`results/` before it builds; that is why the committed tree was generated
+from a clean build instead (§6.0). The same check, made on the `v1.0.0` tree
+at two commits, gave the same picture.
 
 This check also found a real bug: `run_all.sh` let the applications create
 their own output subdirectories but wrote the reports through `tee`, which

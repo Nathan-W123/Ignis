@@ -517,7 +517,10 @@ Full detail in [`docs/verification.md`](docs/verification.md).
   in Release, with `-Wall -Wextra -Wpedantic -Werror`. The 121 cases not
   tagged `[slow]` also pass in a GCC Debug build.
 * Every committed report names the build that produced it, by `git describe`
-  of a clean tree ([`verification.md` §6](docs/verification.md)).
+  of a clean tree, and the committed `results/` tree was **reproduced
+  bit-for-bit** from a fresh clone: 88 reports, tables and figures compared,
+  and the only differences were measured times
+  ([`verification.md` §6](docs/verification.md)).
 
 ---
 
@@ -528,18 +531,19 @@ in [`docs/benchmarks.md`](docs/benchmarks.md).
 
 | | |
 |---|---:|
-| Adiabatic equilibrium solve, 26 species | **0.058 ms** (24 Newton iterations) |
-| Isentropic equilibrium solve | 0.140 ms |
-| Chamber + throat + exit state | 7.99 ms |
-| Complete analysis (400 stations + cooling + feed) | 263 ms |
-| Equilibrium table build (51 701 solves) | 1.22 s |
-| Adaptive transient, 0.8 s physical | 1.24 s (**53× faster** than fixed-step RK4) |
-| Monte Carlo, 4 threads | **29.2 samples/s** (3.40× speed-up) |
-| Clean build, 45 translation units, `-j4` | 36 s |
-| Full reproduction (`run_all.sh`) from a fresh clone | 13 min 49 s |
+| Adiabatic equilibrium solve, 26 species | **0.059 ms** (24 Newton iterations) |
+| Isentropic equilibrium solve | 0.143 ms |
+| Chamber + throat + exit state, inviscid | 1.50 ms |
+| Complete M1 analysis (400 stations, boundary layer, finite-rate march, jacket, cycle, feed) | 351 ms |
+| The same without the finite-rate march | 218 ms |
+| Equilibrium table build (51 701 solves) | 1.44 s |
+| Adaptive transient, 0.8 s physical | 1.45 s (**50× faster** than fixed-step RK4) |
+| Monte Carlo, 4 threads | **16.1 samples/s** (3.35× speed-up) |
+| Clean build, 60 translation units, `-j4` | 56 s |
+| Full reproduction (`run_all.sh`) from a fresh clone | 19 min 58 s |
 
 The Newton system size is independent of species count; going from 8 to 26
-species costs 4.4× (a measured exponent of 1.27), which is the O(N·E) assembly
+species costs 5.3× (a measured exponent of 1.42), which is the O(N·E) assembly
 of the system, not the linear solve.
 
 ---
