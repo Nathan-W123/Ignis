@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import sys
+from dataclasses import replace
 from typing import Dict, List, Optional
 
 import matplotlib
@@ -77,6 +78,10 @@ class DesignPanel(QtWidgets.QWidget):
     def __init__(self, slot: str, design: Design) -> None:
         super().__init__()
         self.slot = slot
+        # The design the controls were last loaded from.  It carries the
+        # fields that have no control (jacket plumbing, chamber shape), and
+        # the exact values behind controls that round for display.
+        self._base = design
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(5)
@@ -120,34 +125,58 @@ class DesignPanel(QtWidgets.QWidget):
         self.mixture.set_value(p["mr_default"])
 
     def design(self) -> Design:
+        """The design the controls describe, built on the one last loaded.
+
+        Starting from that design rather than from defaults is what keeps a
+        preset's hidden fields -- the H1's 240 channels, the RS-25's coolant
+        split -- and starting from its exact values is what lets a preset
+        come back out of the panel as itself: a control showing 19.753 MPa
+        for a preset of 19.75348 MPa means the preset, not its rounding.
+        """
         name = self.propellant.value()
-        return Design(
+        base = self._base if name == self._base.propellant else self._base.with_propellant(name)
+
+        def keep(field: Field, exact: float, scale: float) -> float:
+            shown = round(exact * scale, field.spin.decimals())
+            value = field.value()
+            if abs(value - shown) <= 0.5 * 10.0 ** -field.spin.decimals():
+                return exact
+            return value / scale
+
+        return replace(
+            base,
             contour_file=self.contour_file,
             propellant=name,
-            chamber_pressure=self.pressure.value() * 1e6,
-            mixture_ratio=self.mixture.value(),
-            throat_radius=self.throat.value() * 1e-3,
-            expansion_ratio=self.expansion.value(),
-            altitude=self.altitude.value() * 1e3,
+            chamber_pressure=keep(self.pressure, base.chamber_pressure, 1e-6),
+            mixture_ratio=keep(self.mixture, base.mixture_ratio, 1.0),
+            throat_radius=keep(self.throat, base.throat_radius, 1e3),
+            expansion_ratio=keep(self.expansion, base.expansion_ratio, 1.0),
+            altitude=keep(self.altitude, base.altitude, 1e-3),
             composition=("equilibrium" if self.composition.value().startswith("shifting")
                          else "frozen"),
-            eta_c_star=self.eta.value(),
+            eta_c_star=keep(self.eta, base.eta_c_star, 1.0),
             cooling=self.cooling.isChecked(),
-            channel_height=self.channel.value() * 1e-3,
-            wall_thickness=self.wall.value() * 1e-3,
-            coolant_inlet_pressure=15.0e6 if name == "LOX / CH4" else 12.0e6,
+            channel_height=keep(self.channel, base.channel_height, 1e3),
+            wall_thickness=keep(self.wall, base.wall_thickness, 1e3),
         )
 
     def load(self, d: Design) -> None:
+        self._base = d
+        self.propellant.combo.blockSignals(True)
         self.propellant.combo.setCurrentText(d.propellant)
+        self.propellant.combo.blockSignals(False)
+        lo, hi = PROPELLANTS[d.propellant]["mr_range"]
+        self.mixture.set_range(lo, hi)
         self.pressure.set_value(d.chamber_pressure * 1e-6)
         self.mixture.set_value(d.mixture_ratio)
         self.throat.set_value(d.throat_radius * 1e3)
         self.expansion.set_value(d.expansion_ratio)
         self.altitude.set_value(d.altitude * 1e-3)
         self.eta.set_value(d.eta_c_star)
+        self.composition.combo.setCurrentText(
+            "shifting equilibrium" if d.composition == "equilibrium" else "frozen")
         self.channel.set_value(d.channel_height * 1e3)
-        self.wall.set_value(d.wall_thickness * 1e-3 * 1e3)
+        self.wall.set_value(d.wall_thickness * 1e3)
         self.cooling.setChecked(d.cooling)
 
 

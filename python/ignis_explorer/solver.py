@@ -65,12 +65,25 @@ class Design:
     channel_height: float = 5.0e-3      # m
     wall_thickness: float = 0.6e-3      # m
     coolant_inlet_pressure: float = 15.0e6  # Pa
+    # The fraction of the fuel that cools the jacket, where its coolant enters,
+    # and where the jacket stops.  An inlet temperature of 0 means the
+    # propellant pair's own default.
+    coolant_fraction: float = 1.0
+    coolant_inlet_temperature: float = 0.0  # K
+    jacket_end_area_ratio: float = 8.0
+    # Chamber and bell shape.  The Explorer's own engines use these defaults;
+    # a preset of a real engine sets them from that engine's published
+    # geometry, which is the only reason they are fields at all.
+    contraction_ratio: float = 2.8
+    chamber_length: float = 0.22        # m, cylindrical section
+    bell_length_fraction: float = 0.8   # of the equivalent 15-degree cone
 
     def with_propellant(self, name: str) -> "Design":
-        """Switch propellant, moving the mixture ratio to that pair's default."""
+        """Switch propellant, moving the propellant-specific settings with it."""
         p = PROPELLANTS[name]
         return replace(self, propellant=name, mixture_ratio=p["mr_default"],
-                       coolant_inlet_pressure=15.0e6 if name == "LOX / CH4" else 12.0e6)
+                       coolant_inlet_pressure=15.0e6 if name == "LOX / CH4" else 12.0e6,
+                       coolant_inlet_temperature=0.0)
 
 
 # The shipped designs.  They live here rather than in the window because the
@@ -166,15 +179,15 @@ def _config_text(d: Design) -> str:
     else:
         lines += [
             f"  throat_radius: {d.throat_radius!r}",
-            "  contraction_ratio: 2.8",
-            "  chamber_length: 0.22",
+            f"  contraction_ratio: {d.contraction_ratio!r}",
+            f"  chamber_length: {d.chamber_length!r}",
             "  converging_half_angle: 30.0",
             "  chamber_fillet_ratio: 0.5",
             "  throat_upstream_ratio: 1.5",
             "  throat_downstream_ratio: 0.382",
             f"  expansion_ratio: {d.expansion_ratio!r}",
             "  type: bell",
-            "  bell_length_fraction: 0.8",
+            f"  bell_length_fraction: {d.bell_length_fraction!r}",
             "  bell_initial_angle: 33.0",
             "  bell_exit_angle: 8.0",
             "  stations: 240",
@@ -203,11 +216,11 @@ def _config_text(d: Design) -> str:
             f"  channel_height: {d.channel_height!r}",
             f"  wall_thickness: {d.wall_thickness!r}",
             "  roughness: 5.0e-6",
-            "  coolant_fuel_fraction: 1.0",
-            f"  inlet_temperature: {p['coolant_inlet_temperature']!r}",
+            f"  coolant_fuel_fraction: {d.coolant_fraction!r}",
+            f"  inlet_temperature: {d.coolant_inlet_temperature or p['coolant_inlet_temperature']!r}",
             f"  inlet_pressure: {d.coolant_inlet_pressure!r}",
             "  counterflow: true",
-            "  x_end_area_ratio: 8.0",
+            f"  x_end_area_ratio: {d.jacket_end_area_ratio!r}",
             "  nusselt_correlation: dittus-boelter",
             "  segments: 160",
         ]

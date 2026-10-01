@@ -81,10 +81,13 @@ class Field(QtWidgets.QWidget):
         name.setObjectName("fieldLabel")
         name.setMinimumWidth(104)
         self.spin = QtWidgets.QDoubleSpinBox()
+        # Decimals before the value: a spin box rounds what it is given to the
+        # decimals it has at the time, and it starts with two -- so 0.996 set
+        # first would arrive as 1.00 and stay that way.
+        self.spin.setDecimals(decimals)
         self.spin.setRange(lo, hi)
         self.spin.setValue(value)
         self.spin.setSingleStep(step)
-        self.spin.setDecimals(decimals)
         self.spin.setMinimumWidth(92)
         self.spin.setKeyboardTracking(False)
         self.spin.valueChanged.connect(lambda _: self.changed.emit())
