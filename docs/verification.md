@@ -34,10 +34,16 @@ solver and compared with the isentropic area–Mach relations.
 | Quantity | Bound enforced | Largest observed |
 |---|---|---|
 | Sonic point p\*, T\*, c\* | 1e-8 rel | 4.5e-14 |
-| p, T at M = 0.1, 0.3, 0.6, 0.9, 1.5, 2, 3, 4, 5 (both branches) | 2e-6 rel | 7.1e-12 |
-| Recovered Mach from the area ratio | 2e-6 | 1.3e-10 |
-| Mass flux ρuA − ṁ at ε = 1.2 … 40 | 1e-9 rel | below reporter precision |
-| Stagnation enthalpy h + u²/2 − h₀ | 1e-12 rel | below reporter precision |
+| p, T at M = 0.1, 0.3, 0.6, 0.9, 1.5, 2, 3, 4, 5 (both branches) | 2e-6 rel | 1.8e-10 (p), 8.6e-11 (T) |
+| Recovered Mach from the area ratio | 2e-6 | 1.4e-10 |
+| Mass flux ρuA − ṁ at ε = 1.2 … 40 | 1e-9 rel | 3.5e-12 |
+| Stagnation enthalpy h + u²/2 − h₀ | 1e-12 rel | 1.5e-16 |
+
+The area-ratio search stops once ρu is within 10⁻¹¹ of its target. Near
+M = 1, ρu barely changes with pressure, so the pressure is fixed less finely
+there than the mass flux. With the bracketing search this replaced, the
+pressure error was 7.1e-12; with the Newton iteration it is 1.8e-10, still
+four orders inside the bound.
 | γ<sub>frozen</sub> and γ<sub>s</sub> from the equilibrium derivative machinery | 1e-12 rel | 0 (exactly 1.4) |
 
 The last row matters: the equilibrium-derivative code path is exercised on a
@@ -264,41 +270,32 @@ not as optimistic numbers.
 
 ### 6.0 Provenance of the committed tree
 
-Every report in `results/` identifies the binary that produced it on its first
-line, and every one of them reads:
+Every report in `results/` names the binary that produced it on its first
+line. The engine, nozzle, sweep, transient, optimisation and Monte Carlo
+reports read:
 
 ```
-Ignis 1.0.0 (v1.0.0)
+Ignis 1.0.0 (v1.0.0-27-g9eba90e)
 ```
 
-That string is `git describe --always --dirty` captured at configure time, so
-it is a clean tag with no local modifications. The tree was produced by
-cloning the `v1.0.0` tag into an empty directory, configuring and building
-there, and only then clearing `results/` and running every stage — configuring
-first is what keeps the tree clean, and clearing `results/` first is what
-made an earlier attempt report `v1.0.0-dirty`.
+That string is `git describe --always --dirty`, stamped at build time. It
+names commit `9eba90e` with no local modifications: the binaries were rebuilt
+from a clean tree after that commit, and only then did `run_all.sh` overwrite
+`results/`. A file cannot contain the hash of the commit that contains it, so
+the regenerated tree is committed one commit later. Between the two, no
+solver source, configuration or data file changed: only `results/`, the
+documentation, one figure caption and the benchmark driver did.
 
-One thing cannot be made to hold: a file cannot contain the hash of the commit
-that contains it, so the generating checkout and the tagged commit cannot be
-the same object. What *can* be stated, and checked, is exactly how they differ.
-Against the `v1.0.0` tag, the tree that produced these numbers differs only in:
-
-* `results/` itself — the output being committed;
-* `.github/workflows/ci.yml` and four `[slow]` test tags — CI scheduling, read
-  by no solver;
-* `python/ignis_viz/figures.py` and the one figure it re-plots
-  (`10_optimization_convergence.png`) — axis limits and an annotation, drawn
-  from the same committed CSV.
-
-`git diff v1.0.0..HEAD --stat` shows that list in full. No file that any
-solver reads differs, and every report, table and residual in `results/` is
-byte-for-byte what the `v1.0.0` build wrote.
+These outputs replace the `v1.0.0` tree. The integral boundary layer,
+boundary-layer losses, film cooling, finite-rate nozzle chemistry and the
+turbopump cycles all changed the answers, so the earlier tree no longer
+describes the code.
 
 ### 6.1 Reproducing it
 
 The `results/` tree in this repository was produced by `scripts/run_all.sh`.
-To check that it can be reproduced, the branch was cloned into a fresh
-directory, built from scratch and run end to end:
+To check that the `v1.0.0` tree could be reproduced, the branch was cloned into
+a fresh directory, built from scratch and run end to end:
 
 ```bash
 git clone --branch <branch> <url> /tmp/clean && cd /tmp/clean

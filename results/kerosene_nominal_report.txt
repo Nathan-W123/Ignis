@@ -1,0 +1,115 @@
+Ignis 1.0.0 (v1.0.0-27-g9eba90e)
+  build type : Release
+  compiler   : GNU 13.3.0
+  data dir   : /home/user/Ignis/data
+
+nozzle contour (bell)
+  throat radius        120.00000 mm  (At = 452.38934 cm^2)
+  chamber radius       189.73666 mm  (contraction 2.500)
+  exit radius          480.00000 mm  (expansion 16.000)
+  throat at x          444.43818 mm
+  exit at x            1524.09678 mm
+  divergent length     1079.65859 mm (80.0 % of 15 deg conical)
+  chamber volume       42677.04325 cm^3
+  characteristic L*    943.36978 mm
+  Bartz curvature      112.92000 mm (mean)
+  divergence angles    theta_n = 32.00 deg, theta_e = 9.00 deg
+  stations             401
+
+=== kerosene_nominal ===
+
+chamber (equilibrium expansion basis)
+  mixture ratio O/F     2.4000   (stoichiometric 3.4055, phi 1.4189)
+  reactant enthalpy     -806.5 kJ/kg
+  chamber pressure      6.0000 MPa
+  flame temperature     3603.72 K
+  molar mass            22.7105 g/mol
+  gas constant          366.11 J/(kg K)
+  density               4.5477 kg/m^3
+  cp (frozen / shift)   2070.4 / 5644.7 J/(kg K)
+  cv (frozen / shift)   1704.3 / 4787.8 J/(kg K)
+  gamma (frozen)        1.21481
+  gamma_s (isentropic)  1.14264
+  speed of sound        1227.82 m/s
+  entropy               11500.75 J/(kg K)
+  c* ideal              1803.30 m/s
+  eta_c*                0.9600
+  c* actual             1731.17 m/s
+  throat mass flux      3327.23 kg/(m^2 s)
+  throat temperature    3408.53 K
+  equilibrium residuals: element 1.79e-14, Gibbs 4.26e-14, enthalpy 2.30e-14, mass 1.02e-14
+
+nozzle performance (equilibrium expansion)
+  ambient pressure      101325.0 Pa  (0 m)
+  expansion ratio       16.000
+  mass flow             156.5910 kg/s  (ox 110.5348, fuel 46.0562)
+  exit Mach             3.4597
+  exit pressure         45004.4 Pa
+  exit temperature      1900.48 K
+  exit velocity         3085.08 m/s
+  momentum thrust       478.3 kN
+  pressure thrust       -40.8 kN
+  thrust (ideal)        443.0 kN
+  thrust (corrected)    433.6 kN
+  Isp (ideal)           288.09 s
+  Isp (corrected)       282.33 s
+  Isp (vacuum)          330.09 s
+  effective velocity    2768.7 m/s
+  Cf (ideal / corr.)    1.6320 / 1.5973
+  loss factors          eta_c* 0.9600, lambda_div 0.9938, eta_nozzle 1.0000
+  regime                over-expanded
+  boundary layer        C_d 0.99872;  delta* throat 0.077 mm, exit 4.191 mm;  theta exit 2.433 mm
+                        core expands to A/A* 15.742 (geometric 16.000)
+  boundary-layer loss   5.39 kN, 3.08 s vacuum Isp (0.92 %)
+  kinetic loss          1.04 kN (finite-rate recombination, kinetic efficiency 0.99794)
+  note                  over-expanded: the internal flow stays supersonic and the compression to ambient occurs outside the nozzle through oblique shocks (not modelled in quasi-1D)
+  chamber volume        42677.04 cm^3
+  characteristic L*     0.9434 m
+  residence time        1.239 ms
+  mass-flow residual    1.37e-15
+  energy residual       4.33e-16
+
+finite-rate nozzle (one-dimensional kinetics)
+  start                 A/At 1.0160 (frozen Mach 1.100), x = 453.7 mm, from shifting equilibrium
+  exit                  1858.1 K, 43451.6 Pa, 3085.7 m/s
+  vacuum Isp (inviscid) 335.96 s finite rate; 336.66 s shifting; 325.76 s frozen from the start
+  kinetic efficiency    0.99794 (recovers 93.6 % of the shifting-over-frozen impulse)
+  integration           2192 steps (0 rejected), 32881 evaluations; residuals: energy 3.6e-15, elements 4.7e-15
+  note: 2 of the mechanism's reactions involve species this gas does not contain and were left out
+
+regenerative cooling
+  cooled wetted area     2.89613 m^2
+  total heat load        21783.84 kW
+  peak heat flux         37.61 MW/m^2 at x = 439.9 mm
+  peak hot-wall temp     789.1 K at x = 373.1 mm
+  coolant in / out       298.15 K -> 486.46 K  (rise 188.31 K)
+  coolant pressure drop  8.4948 MPa  (outlet 7.5052 MPa)
+  hot-gas model          boundary_layer  (4 coupled passes)
+  wall film              2.306 kg/s at 486.5 K, V_g/V_c 19.06;  eta > 0.5 for 101.6 mm, > 0.2 for 182.9 mm
+  energy balance residual 8.55e-16
+  max local flux residual 3.33e-11
+  warnings:
+    - coolant-side wall reaches 745.528 K at x = 219.679 mm, above the 728 K limit set for dodecane (for a hydrocarbon fuel, its coking limit)
+
+film-cooling performance bracket (vacuum Isp)
+  film                  1.47 % of the total flow; core O/F 2.526
+  fully mixed and burnt 330.09 s
+  unmixed (two-stream)  327.13 s  (at most 0.90 % lower)
+
+engine cycle (gas_generator)
+  oxidizer pump       112.011 kg/s, 0.300 -> 7.500 MPa, 1005.4 kW (eta 0.700)
+                      real fluid, integrated along the 'oxygen' table
+  fuel pump           50.016 kg/s, 0.300 -> 16.000 MPa, 1400.5 kW (eta 0.700)
+                      incompressible at the library density: the 'dodecane' table is a surrogate, -6.9 % off the propellant's density
+  gas generator       O/F 0.3729 at 900.0 K, 6.000 MPa
+  turbine             5.436 kg/s, 900.0 K in, PR 20.0000, 2455.0 kW (eta 0.600)
+  power balance       pumps 2405.9 kW; residual 0.00e+00
+  fuel throttled      0.005 MPa: the pump delivers the jacket's configured inlet pressure, more than the injector needs
+  generator flow      5.4361 kg/s (3.36 % of the engine's)
+  exhaust             894.2 m/s ideal, to 45.00 kPa
+  delivered Isp (vac) 322.76 s with the exhaust's ideal thrust, 319.02 s dumped
+  overall O/F         2.2395
+  WARNING: the fuel-rich hydrocarbon generator gas is taken as chemical equilibrium; a real one makes soot and cracked fuel instead, so its composition (not its temperature) is approximate
+
+wrote results/kerosene_nominal/k1_engine.json
+      results/kerosene_nominal/k1_profile.csv

@@ -1,89 +1,99 @@
-Ignis 1.0.0 (v1.0.0)
+Ignis 1.0.0 (v1.0.0-27-g9eba90e)
   build type : Release
   compiler   : GNU 13.3.0
-  data dir   : /tmp/claude-0/-home-user-Ignis/a38ad4d7-ed64-5b14-92a4-ed770272dde9/scratchpad/rel/data
+  data dir   : /home/user/Ignis/data
 
 case optimization
 
 optimization result
-  objective            maximise performance.isp_ascent = 336.294894 s
-  evaluations          2500 (4 failed analyses)
+  objective            maximise performance.isp_ascent = 332.918682 s
+  evaluations          2500 (64 failed analyses)
   feasible             yes
   design variables
-    chamber.pressure                   10750036.443130  Pa
-    propellants.mixture_ratio                 3.412034  -
-    nozzle.expansion_ratio                   25.670067  -
-    nozzle.throat_radius                      0.050442  m
-    cooling.channel_height                    0.005259  m
-    cooling.wall_thickness                    0.000408  m
-    cooling.width_fraction                    0.485134  -
+    chamber.pressure                   10999371.448061  Pa
+    propellants.mixture_ratio                 3.375214  -
+    nozzle.expansion_ratio                   24.827265  -
+    nozzle.throat_radius                      0.050216  m
+    cooling.channel_height                    0.006001  m
+    cooling.wall_thickness                    0.000966  m
+    cooling.width_fraction                    0.520194  -
   constraints
-    performance.thrust_sea_level         149232.499348  >= 130000.000000  (normalised violation -1.48e-01)
-    performance.thrust_sea_level         149232.499348  <= 150000.000000  (normalised violation -5.12e-03)
-    geometry.exit_diameter                    0.511135  <= 0.700000  (normalised violation -1.89e-01)
-    geometry.total_length                     0.924869  <= 1.300000  (normalised violation -2.89e-01)
-    performance.separation_margin             0.072035  >= 0.020000  (normalised violation -5.20e-02)
-    cooling.max_wall_temperature            794.250594  <= 800.000000  (normalised violation -7.19e-03)
-    cooling.pressure_drop               3841407.114869  <= 4000000.000000  (normalised violation -3.96e-02)
-  wall time            232.44 s
+    performance.thrust_sea_level         149742.677610  >= 130000.000000  (normalised violation -1.52e-01)
+    performance.thrust_sea_level         149742.677610  <= 150000.000000  (normalised violation -1.72e-03)
+    geometry.exit_diameter                    0.500418  <= 0.700000  (normalised violation -2.00e-01)
+    geometry.total_length                     0.909132  <= 1.300000  (normalised violation -3.01e-01)
+    performance.separation_margin             0.109513  >= 0.020000  (normalised violation -8.95e-02)
+    cooling.max_wall_temperature            798.406883  <= 800.000000  (normalised violation -1.99e-03)
+    cooling.pressure_drop               1624894.256775  <= 4000000.000000  (normalised violation -5.94e-01)
+  wall time            418.51 s
 
 === optimization ===
 
 chamber (equilibrium expansion basis)
-  mixture ratio O/F     3.4120   (stoichiometric 3.9890, phi 1.1691)
-  reactant enthalpy     -1578.1 kJ/kg
-  chamber pressure      10.7500 MPa
-  flame temperature     3613.83 K
-  molar mass            21.8385 g/mol
-  gas constant          380.72 J/(kg K)
-  density               7.8132 kg/m^3
-  cp (frozen / shift)   2334.2 / 6681.4 J/(kg K)
-  cv (frozen / shift)   1953.5 / 5690.6 J/(kg K)
-  gamma (frozen)        1.19490
-  gamma_s (isentropic)  1.13276
-  speed of sound        1248.41 m/s
-  entropy               11997.87 J/(kg K)
-  c* ideal              1847.88 m/s
+  mixture ratio O/F     3.3752   (stoichiometric 3.9890, phi 1.1819)
+  reactant enthalpy     -1587.9 kJ/kg
+  chamber pressure      10.9994 MPa
+  flame temperature     3612.63 K
+  molar mass            21.7425 g/mol
+  gas constant          382.41 J/(kg K)
+  density               7.9620 kg/m^3
+  cp (frozen / shift)   2342.6 / 6585.0 J/(kg K)
+  cv (frozen / shift)   1960.2 / 5611.1 J/(kg K)
+  gamma (frozen)        1.19509
+  gamma_s (isentropic)  1.13340
+  speed of sound        1251.31 m/s
+  entropy               12025.03 J/(kg K)
+  c* ideal              1851.21 m/s
   eta_c*                0.9600
-  c* actual             1773.96 m/s
-  throat mass flux      5817.51 kg/(m^2 s)
-  throat temperature    3434.98 K
-  equilibrium residuals: element 1.91e-14, Gibbs 4.26e-14, enthalpy 7.23e-15, mass 1.24e-14
+  c* actual             1777.16 m/s
+  throat mass flux      5941.72 kg/(m^2 s)
+  throat temperature    3432.22 K
+  equilibrium residuals: element 5.30e-15, Gibbs 2.84e-14, enthalpy 8.94e-15, mass 8.44e-15
 
 nozzle performance (equilibrium expansion)
   ambient pressure      101325.0 Pa  (-0 m)
-  expansion ratio       25.670
-  mass flow             48.4396 kg/s  (ox 37.4606, fuel 10.9790)
-  exit Mach             3.6408
-  exit pressure         47829.0 Pa
-  exit temperature      1989.39 K
-  exit velocity         3323.58 m/s
-  momentum thrust       161.0 kN
-  pressure thrust       -11.0 kN
-  thrust (ideal)        150.0 kN
-  thrust (corrected)    149.2 kN
-  Isp (ideal)           315.80 s
-  Isp (corrected)       314.15 s
-  Isp (vacuum)          357.92 s
-  effective velocity    3080.8 m/s
-  Cf (ideal / corr.)    1.7458 / 1.7367
+  expansion ratio       24.827
+  mass flow             48.9534 kg/s  (ox 37.7646, fuel 11.1888)
+  exit Mach             3.6256
+  exit pressure         51626.4 Pa
+  exit temperature      1972.79 K
+  exit velocity         3312.64 m/s
+  momentum thrust       160.3 kN
+  pressure thrust       -9.8 kN
+  thrust (ideal)        152.7 kN
+  thrust (corrected)    149.7 kN
+  Isp (ideal)           317.48 s
+  Isp (corrected)       311.92 s
+  Isp (vacuum)          353.43 s
+  effective velocity    3058.9 m/s
+  Cf (ideal / corr.)    1.7519 / 1.7185
   loss factors          eta_c* 0.9600, lambda_div 0.9951, eta_nozzle 1.0000
   regime                over-expanded
+  boundary layer        C_d 0.99842;  delta* throat 0.040 mm, exit 2.521 mm;  theta exit 1.471 mm
+                        core expands to A/A* 24.368 (geometric 24.827)
+  boundary-layer loss   2.12 kN, 3.85 s vacuum Isp (1.08 %)
   note                  over-expanded: the internal flow stays supersonic and the compression to ambient occurs outside the nozzle through oblique shocks (not modelled in quasi-1D)
-  chamber volume        6202.86 cm^3
-  characteristic L*     0.7760 m
-  residence time        1.001 ms
-  mass-flow residual    9.40e-14
-  energy residual       4.43e-16
+  chamber volume        6141.61 cm^3
+  characteristic L*     0.7753 m
+  residence time        0.999 ms
+  mass-flow residual    2.54e-12
+  energy residual       1.47e-16
 
 regenerative cooling
-  cooled wetted area     0.28376 m^2
-  total heat load        11135.45 kW
-  peak heat flux         93.39 MW/m^2 at x = 308.6 mm
-  peak hot-wall temp     794.3 K at x = 308.6 mm
-  coolant in / out       111.66 K -> 380.17 K  (rise 268.51 K)
-  coolant pressure drop  3.8414 MPa  (outlet 11.1586 MPa)
-  energy balance residual 1.46e-10
-  max local flux residual 1.85e-10
+  cooled wetted area     0.28146 m^2
+  total heat load        8842.78 kW
+  peak heat flux         70.52 MW/m^2 at x = 307.2 mm
+  peak hot-wall temp     798.4 K at x = 53.6 mm
+  coolant in / out       111.66 K -> 308.68 K  (rise 197.02 K)
+  coolant pressure drop  1.6249 MPa  (outlet 13.3751 MPa)
+  hot-gas model          boundary_layer  (4 coupled passes)
+  wall film              0.336 kg/s at 308.7 K, V_g/V_c 16.57;  eta > 0.5 for 19.6 mm, > 0.2 for 34.4 mm
+  energy balance residual 3.14e-13
+  max local flux residual 6.41e-11
+
+film-cooling performance bracket (vacuum Isp)
+  film                  0.69 % of the total flow; core O/F 3.480
+  fully mixed and burnt 353.43 s
+  unmixed (two-stream)  351.49 s  (at most 0.55 % lower)
 
   wrote results/optimization/optimization_optimization_history.csv

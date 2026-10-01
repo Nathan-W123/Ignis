@@ -186,12 +186,17 @@ int main(int argc, char** argv) {
     // ---------------------------------------------------------------- nozzle
     std::cout << "\nnozzle\n";
     {
+      // The inviscid shifting-equilibrium nozzle alone: the boundary layer,
+      // the finite-rate march, the cycle and the jacket are timed below.
       auto c = cfg;
       c.cooling_enabled = false;
       c.feed_enabled = false;
+      c.cycle_enabled = false;
+      c.boundary_layer_losses = false;
+      c.kinetics_enabled = false;
       c.sample_profile = false;
       const SteadyEngine engine(c);
-      record(measure("chamber + throat + exit (no profile, no cooling)", "analysis", repeats,
+      record(measure("chamber + throat + exit (inviscid, no profile)", "analysis", repeats,
                      [&](int i) {
                        auto k = c;
                        k.chamber_pressure = 5.5e6 + i;
@@ -228,7 +233,7 @@ int main(int argc, char** argv) {
     {
       const SteadyEngine engine(cfg);
       double res_energy = 0.0, res_flux = 0.0, res_mass = 0.0;
-      auto t = measure("chamber + nozzle + profile + cooling + feed", "analysis",
+      auto t = measure("everything in methane_nominal.yaml", "analysis",
                        std::max(5, repeats / 4), [&](int i) {
                          auto k = cfg;
                          k.chamber_pressure = 5.5e6 + i;
@@ -242,16 +247,27 @@ int main(int argc, char** argv) {
                 << std::setprecision(2) << res_energy << ", local flux " << res_flux
                 << ", nozzle mass flow " << res_mass << std::fixed << "\n";
 
-      auto c2 = cfg;
-      c2.cooling_enabled = false;
-      c2.feed_enabled = false;
-      const SteadyEngine e2(c2);
-      record(measure("chamber + nozzle + profile (no cooling)", "analysis",
-                     std::max(5, repeats / 4), [&](int i) {
-                       auto k = c2;
-                       k.chamber_pressure = 5.5e6 + i;
-                       (void)e2.runWith(k);
-                     }));
+      // The same analysis with one stage left out at a time, so each stage's
+      // share can be read off as a difference.
+      auto timeWithout = [&](const std::string& label, auto&& drop) {
+        auto c2 = cfg;
+        drop(c2);
+        const SteadyEngine e2(c2);
+        record(measure(label, "analysis", std::max(5, repeats / 4), [&](int i) {
+          auto k = c2;
+          k.chamber_pressure = 5.5e6 + i;
+          (void)e2.runWith(k);
+        }));
+      };
+      timeWithout("  without the finite-rate march",
+                  [](EngineConfig& c) { c.kinetics_enabled = false; });
+      timeWithout("  without the boundary-layer losses",
+                  [](EngineConfig& c) { c.boundary_layer_losses = false; });
+      timeWithout("  without cooling, cycle and feed", [](EngineConfig& c) {
+        c.cooling_enabled = false;
+        c.cycle_enabled = false;
+        c.feed_enabled = false;
+      });
     }
 
     // ------------------------------------------------------------- transient

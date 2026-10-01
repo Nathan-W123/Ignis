@@ -289,9 +289,9 @@ for the conceptual engine. Each is a statement the physics must satisfy:
 | I<sub>sp</sub> rises monotonically with altitude for a fixed nozzle | Checked over 0–80 km. |
 | Thrust splits into momentum and pressure terms that sum exactly | Checked at every altitude; the pressure term is negative when over-expanded. |
 | Peak flame temperature occurs slightly fuel-rich of stoichiometric | Checked over O/F 2–5: the maximum sits near O/F 3.5 (φ ≈ 1.14), not at φ = 1, because dissociation costs more than the extra oxidiser returns. |
-| Ascent-averaged impulse has an interior optimum in expansion ratio | Scanned at p<sub>c</sub> = 5.5 MPa, O/F 3.4: ascent I<sub>sp</sub> 316.5 / **319.3** / 318.2 / 315.1 / 310.8 / 300.3 / 274.9 / 232.5 s at ε = 10 / 15 / 20 / 25 / 30 / 40 / 60 / 90, peaking near ε = 15, while vacuum I<sub>sp</sub> climbs monotonically 332.9 → 379.8 s over the same range. The separation margin goes negative between ε = 15 and 20. This is why the shipped study optimises the ascent average and not the vacuum value. |
+| Ascent-averaged impulse has an interior optimum in expansion ratio | Scanned on `configs/optimization.yaml` (p<sub>c</sub> = 5.5 MPa, O/F 3.4, boundary-layer losses on): ascent I<sub>sp</sub> 313.1 / **315.5** / 314.1 / 310.8 / 306.4 / 295.5 / 269.9 / 227.1 s at ε = 10 / 15 / 20 / 25 / 30 / 40 / 60 / 90, peaking near ε = 15, while vacuum I<sub>sp</sub> climbs monotonically 329.4 → 374.5 s over the same range. The separation margin goes negative between ε = 15 and 20. This is why the shipped study optimises the ascent average and not the vacuum value. |
 | Peak c\* and peak I<sub>sp</sub> occur richer still than peak T | Checked — c\* peaks near O/F 3.0, because c\* ∝ √(T/M) and M keeps falling. |
-| Heat flux peaks just downstream of the throat | Checked: 49.67 MW/m² at x = 346.8 mm with the throat at 345.5 mm. |
+| Heat flux peaks at the throat | Checked (within 50 mm): on the Ignis-M1, 41.98 MW/m² at x = 342.9 mm with the throat at 345.5 mm. Under the integral boundary layer the peak sits 2.6 mm upstream of the geometric throat; under Bartz it sat 1.3 mm downstream. |
 | Coolant temperature rises monotonically along its own flow path | Checked for both counter- and co-flow. |
 | Wall temperature falls with thinner walls, taller channels, more channels | Checked as separate one-at-a-time perturbations. |
 
@@ -587,7 +587,7 @@ chambers avoid with a film from the injector's outer row, which is also what
 Wang & Luong (1994) credit for the low flux measured near the SSME's
 faceplate, and the M1 now does the same: 3 % of its fuel as a wall film
 ([`theory.md` §12.4](theory.md)), which holds the whole jacket below 700 K at a
-bracketed cost of 0 – 0.65 % in vacuum specific impulse. That is a design
+bracketed cost of 0 – 0.64 % in vacuum specific impulse. That is a design
 change to a conceptual engine, made because the better model showed the
 previous design to be infeasible at its injector end, and it is recorded as
 such.

@@ -1,11 +1,11 @@
 {
   "ignis_version": "1.0.0",
-  "git": "v1.0.0",
+  "git": "v1.0.0-27-g9eba90e",
   "build_type": "Release",
   "compiler": "GNU 13.3.0",
   "config_file": "configs/hydrogen_nominal.yaml",
   "case_name": "hydrogen_nominal",
-  "description": "Generic LOX/hydrogen upper-stage engine.  Chamber pressure 5.5 MPa, mixture ratio 5.5, 60 mm throat radius, expansion ratio 60, regeneratively cooled with the full hydrogen flow, evaluated in vacuum.",
+  "description": "Generic LOX/hydrogen upper-stage engine.  Chamber pressure 5.5 MPa, mixture ratio 5.5, 60 mm throat radius, expansion ratio 60, regeneratively cooled with the full hydrogen flow, which then drives the turbopumps (expander cycle), evaluated in vacuum.",
   "problem": "hp",
   "mixture_ratio": 5.5,
   "equivalence_ratio": 1.4429112554112553,

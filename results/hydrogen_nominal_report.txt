@@ -1,7 +1,7 @@
-Ignis 1.0.0 (v1.0.0)
+Ignis 1.0.0 (v1.0.0-27-g9eba90e)
   build type : Release
   compiler   : GNU 13.3.0
-  data dir   : /tmp/claude-0/-home-user-Ignis/a38ad4d7-ed64-5b14-92a4-ed770272dde9/scratchpad/rel/data
+  data dir   : /home/user/Ignis/data
 
 nozzle contour (bell)
   throat radius        60.00000 mm  (At = 113.09734 cm^2)
@@ -42,65 +42,91 @@ chamber (equilibrium expansion basis)
 nozzle performance (equilibrium expansion)
   ambient pressure      0.0 Pa
   expansion ratio       60.000
-  mass flow             27.4330 kg/s  (ox 23.2125, fuel 4.2205)
-  exit Mach             4.5437
-  exit pressure         6525.6 Pa
-  exit temperature      1142.00 K
-  exit velocity         4354.30 m/s
-  momentum thrust       119.5 kN
-  pressure thrust       4.4 kN
+  mass flow             27.3939 kg/s  (ox 23.1794, fuel 4.2144)
+  exit Mach             4.5071
+  exit pressure         6927.5 Pa
+  exit temperature      1156.47 K
+  exit velocity         4344.28 m/s
+  momentum thrust       117.4 kN
+  pressure thrust       4.7 kN
   thrust (ideal)        123.9 kN
-  thrust (corrected)    123.5 kN
+  thrust (corrected)    121.3 kN
   Isp (ideal)           460.48 s
-  Isp (corrected)       459.05 s
-  Isp (vacuum)          459.05 s
-  effective velocity    4501.7 m/s
-  Cf (ideal / corr.)    1.9915 / 1.9853
+  Isp (corrected)       451.43 s
+  Isp (vacuum)          451.43 s
+  effective velocity    4427.0 m/s
+  Cf (ideal / corr.)    1.9915 / 1.9496
   loss factors          eta_c* 0.9700, lambda_div 0.9968, eta_nozzle 1.0000
   regime                under-expanded
+  boundary layer        C_d 0.99858;  delta* throat 0.043 mm, exit 10.637 mm;  theta exit 3.124 mm
+                        core expands to A/A* 57.367 (geometric 60.000)
+  boundary-layer loss   1.79 kN, 6.01 s vacuum Isp (1.31 %)
+  kinetic loss          0.43 kN (finite-rate recombination, kinetic efficiency 0.99646)
   chamber volume        11699.30 cm^3
   characteristic L*     1.0344 m
-  residence time        1.054 ms
-  mass-flow residual    4.37e-14
-  energy residual       4.52e-16
+  residence time        1.056 ms
+  mass-flow residual    2.90e-12
+  energy residual       2.26e-15
+
+finite-rate nozzle (one-dimensional kinetics)
+  start                 A/At 1.0137 (frozen Mach 1.100), x = 374.8 mm, from shifting equilibrium
+  exit                  1115.2 K, 6417.6 Pa, 4341.0 m/s
+  vacuum Isp (inviscid) 459.35 s finite rate; 460.98 s shifting; 449.37 s frozen from the start
+  kinetic efficiency    0.99646 (recovers 85.9 % of the shifting-over-frozen impulse)
+  integration           3184 steps (1 rejected), 38208 evaluations; residuals: energy 6.8e-15, elements 1.4e-15
+  note: 14 of the mechanism's reactions involve species this gas does not contain and were left out
 
 regenerative cooling
   cooled wetted area     0.51182 m^2
-  total heat load        13093.88 kW
-  peak heat flux         71.86 MW/m^2 at x = 370.2 mm
-  peak hot-wall temp     666.9 K at x = 364.7 mm
-  coolant in / out       25.00 K -> 248.63 K  (rise 223.63 K)
-  coolant pressure drop  1.8388 MPa  (outlet 10.1612 MPa)
-  energy balance residual 4.83e-09
-  max local flux residual 3.02e-10
+  total heat load        10796.64 kW
+  peak heat flux         56.03 MW/m^2 at x = 364.3 mm
+  peak hot-wall temp     762.6 K at x = 0.0 mm
+  coolant in / out       31.93 K -> 215.27 K  (rise 183.34 K)
+  coolant pressure drop  1.3599 MPa  (outlet 10.8290 MPa)
+  hot-gas model          boundary_layer  (3 coupled passes)
+  energy balance residual 3.41e-13
+  max local flux residual 2.82e-09
+  warnings:
+    - wall conductivity was extrapolated outside the fitted range [250, 900] K for CuCrZr (k(T) is clamped to the fit endpoints there): below the fit, converged mean wall temperature 154.261 to 247.065 K over x = 464.816 to 654.274 mm (67 stations); only the cold end is affected, which is the inlet of a cryogenic jacket; the peak-flux station is inside the fitted range.
+
+engine cycle (expander)
+  oxidizer pump       23.179 kg/s, 0.200 -> 6.875 MPa, 193.0 kW (eta 0.700)
+                      real fluid, integrated along the 'oxygen' table
+  fuel pump           4.214 kg/s, 0.200 -> 12.196 MPa, 964.2 kW (eta 0.700)
+                      real fluid, integrated along the 'hydrogen' table
+  turbine             4.214 kg/s, 215.3 K in, PR 1.5762, 1180.8 kW (eta 0.700)
+  power balance       pumps 1157.1 kW; residual 8.73e-13
+  best power ratio    1.390 (turbine at its best pressure ratio / pumps)
+  jacket inlet          set by the cycle: 12.189 MPa after 5 pass(es), 0.061 % from the final discharge
 
 feed system (pressure-fed)
   chamber pressure     5.5000 MPa
   mixture ratio        5.5000
-  total mass flow      27.4330 kg/s
+  total mass flow      27.3939 kg/s
   oxidizer
-    mass flow          23.2125 kg/s
-    line velocity      3.20 m/s (Re 1.728e+06, f 0.01208)
+    mass flow          23.1794 kg/s
+    line velocity      3.19 m/s (Re 1.726e+06, f 0.01208)
     injector velocity  43.91 m/s
-    dp lines           0.0158 MPa
+    dp lines           0.0157 MPa
     dp dynamic         0.0058 MPa
     dp injector        1.1000 MPa
-    injector area      593.927 mm^2
-    tank pressure      6.6216 MPa
+    injector area      593.081 mm^2
+    tank pressure      6.6215 MPa
     stiffness          0.2000
-    pump power (equiv) 186.60 kW
+    pump power (equiv) 186.33 kW
   fuel
-    mass flow          4.22 kg/s
-    line velocity      7.57 m/s (Re 4.134e+06, f 0.01124)
+    mass flow          4.21 kg/s
+    line velocity      7.56 m/s (Re 4.128e+06, f 0.01124)
     injector velocity  176.08 m/s
-    dp lines           0.0066 MPa
+    dp lines           0.0065 MPa
     dp dynamic         0.0020 MPa
     dp injector        1.1000 MPa
-    injector area      450.378 mm^2
+    injector area      449.736 mm^2
     tank pressure      6.6086 MPa
     stiffness          0.2000
-    pump power (equiv) 544.51 kW
-  total pump power     731.10 kW
+    pump power (equiv) 543.73 kW
+  total pump power     730.06 kW
+  (the feed block sizes a pressure-fed alternative; the turbopump cycle above is separate)
 
 wrote results/hydrogen_nominal/h1_engine.json
       results/hydrogen_nominal/h1_profile.csv

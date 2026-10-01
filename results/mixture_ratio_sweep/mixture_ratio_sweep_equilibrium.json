@@ -1,6 +1,6 @@
 {
   "ignis_version": "1.0.0",
-  "git": "v1.0.0",
+  "git": "v1.0.0-27-g9eba90e",
   "build_type": "Release",
   "compiler": "GNU 13.3.0",
   "config_file": "configs/mixture_ratio_sweep.yaml",

@@ -3,7 +3,7 @@
 [![CI](https://github.com/Nathan-W123/Ignis/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nathan-W123/Ignis/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C.svg)
-![Tests](https://img.shields.io/badge/tests-85%20cases%2C%2018%2C775%20assertions-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-125%20cases%2C%2021%2C359%20assertions-brightgreen.svg)
 
 **A thermochemical liquid-rocket propulsion simulator in C++17.**
 
@@ -155,8 +155,8 @@ and fetched automatically if not.
 
 ```bash
 git clone https://github.com/Nathan-W123/Ignis.git && cd Ignis
-./scripts/build.sh                 # configure + build, ~36 s on 4 cores
-./scripts/test.sh                  # 78 test cases, ~1 min on 4 cores
+./scripts/build.sh                 # configure + build, ~1 min on 4 cores
+./scripts/test.sh                  # 125 test cases, ~1.5 min on 4 cores
 ```
 
 Run the nominal LOX/methane engine:
@@ -255,13 +255,16 @@ All six take `--config`, `-o/--output`, `--prefix`, `--set KEY=VALUE`,
 
 ## Results
 
-Two conceptual engines are carried through the whole repository. **They are
-invented for this project and are not models of any real hardware.**
+Three conceptual engines are carried through the whole repository. **They are
+invented for this project and are not models of any real hardware.** Every
+number below is from the committed `results/` tree, which `run_all.sh`
+regenerates.
 
-### Ignis-M1 — LOX/methane booster, sea-level nozzle
+### Ignis-M1: LOX/methane booster, sea-level nozzle
 
 `configs/methane_nominal.yaml` · p<sub>c</sub> 5.5 MPa · O/F 3.4 · R<sub>t</sub>
-70 mm · ε 20 · η<sub>c\*</sub> 0.96 · 300 CuCrZr channels, full fuel flow
+70 mm · ε 20 · η<sub>c\*</sub> 0.96 · 300 CuCrZr channels with the full fuel
+flow and a 3 % fuel film · gas-generator cycle
 
 | | |
 |---|---:|
@@ -269,48 +272,89 @@ invented for this project and are not models of any real hardware.**
 | Mean molar mass | 21.6169 g/mol |
 | γ<sub>s</sub> (isentropic) | 1.12968 |
 | Characteristic velocity, ideal / corrected | 1835.93 / 1762.49 m/s |
-| Mass flow | 48.0377 kg/s |
-| Exit Mach / pressure | 3.4595 / 34.38 kPa |
-| Thrust at sea level | **134.1 kN** |
-| I<sub>sp</sub> at sea level | **284.69 s** |
-| I<sub>sp</sub> in vacuum | 350.91 s |
-| Thrust coefficient, ideal / corrected | 1.5930 / 1.5840 |
-| Peak heat flux | **49.67 MW/m²** at x = 346.8 mm |
-| Peak hot-wall temperature | **797.7 K** at x = 333.4 mm |
-| Coolant rise / pressure drop | 111.66 → 493.29 K / 3.33 MPa |
-| Tank pressures (ox / fuel) | 6.636 / 6.641 MPa |
+| Mass flow | 47.9728 kg/s (C<sub>d</sub> 0.99865) |
+| Exit Mach / pressure | 3.4476 / 35.27 kPa |
+| Thrust at sea level | **131.0 kN** |
+| I<sub>sp</sub> at sea level | **278.52 s** |
+| I<sub>sp</sub> in vacuum | 344.83 s |
+| Thrust coefficient, ideal / corrected | 1.5930 / 1.5476 |
+| Boundary-layer loss | 4.45 s of vacuum I<sub>sp</sub> (1.27 %) |
+| Kinetic efficiency (finite-rate nozzle) | 0.99530 |
+| Peak heat flux | **41.98 MW/m²** at x = 342.9 mm (throat 345.5 mm) |
+| Peak hot-wall temperature | **692.3 K** at x = 70.2 mm (617 K at the throat) |
+| Coolant rise / pressure drop | 111.66 → 389.54 K / 2.05 MPa |
+| Gas generator | 2.90 % of the flow; delivered vacuum I<sub>sp</sub> 338.74 s (exhaust expanded) to 334.84 s (dumped) |
 
-The nozzle is over-expanded at sea level — the pressure term is **−20.6 kN** —
+The nozzle is over-expanded at sea level. The pressure term is **−20.3 kN**,
 and separation is predicted at A/A<sub>t</sub> = 17.6. Ignis says so; it does
 not quietly report the attached-flow number as if it were the whole story.
+The hottest wall is not at the throat but 70 mm from the injector face, where
+the boundary layer is still thin and the film has mostly mixed away.
 
-### Ignis-H1 — LOX/hydrogen upper stage
+### Ignis-H1: LOX/hydrogen upper stage
 
 `configs/hydrogen_nominal.yaml` · p<sub>c</sub> 5.5 MPa · O/F 5.5 ·
-R<sub>t</sub> 60 mm · ε 60 · η<sub>c\*</sub> 0.97
+R<sub>t</sub> 60 mm · ε 60 · η<sub>c\*</sub> 0.97 · 240 channels · expander cycle
 
 | | |
 |---|---:|
 | Flame temperature | **3382.77 K** |
 | Mean molar mass | 12.6428 g/mol |
 | Characteristic velocity, ideal | 2337.60 m/s |
-| Mass flow | 27.4330 kg/s |
-| Vacuum thrust | **123.5 kN** |
-| Vacuum I<sub>sp</sub> | **459.05 s** |
-| Peak heat flux / wall temperature | 71.86 MW/m² / **666.9 K** |
-| Coolant rise / pressure drop | 25.0 → 248.63 K / 1.84 MPa |
+| Mass flow | 27.3939 kg/s (C<sub>d</sub> 0.99858) |
+| Vacuum thrust | **121.3 kN** |
+| Vacuum I<sub>sp</sub> | **451.43 s** |
+| Boundary-layer loss / kinetic efficiency | 6.01 s (1.31 %) / 0.99646 |
+| Peak heat flux / wall temperature | 56.03 MW/m² / **762.6 K** (518 K at the throat) |
+| Coolant rise / pressure drop | 31.93 → 215.27 K / 1.36 MPa |
+| Expander | fuel pump 12.20 MPa; turbine PR 1.576, 1181 kW; best power ratio 1.39 |
 
-Half the molar mass buys 108 s of vacuum impulse over the methane engine
-(459.05 s at ε = 60 against 350.91 s at ε = 20 — a comparison of the two
-*designs*, not of the propellants at matched geometry). Hydrogen drives 1.45×
-the peak heat flux, and its heat capacity still holds the wall 131 K cooler.
+Half the molar mass buys 107 s of vacuum impulse over the methane engine
+(451.43 s at ε = 60 against 344.83 s at ε = 20, a comparison of the two
+*designs*, not of the propellants at matched geometry). Hydrogen drives 1.33×
+the peak heat flux, yet its wall runs about 100 K cooler at the throat. The
+H1's hottest wall is at the injector face, where its boundary layer starts and
+no film protects it. The cycle sets the jacket's inlet: the hydrogen leaves
+the pump at 31.9 K and 12.2 MPa.
 
-### Frozen against shifting equilibrium
+### Ignis-K1: LOX/RP-1 booster
+
+`configs/kerosene_nominal.yaml` · p<sub>c</sub> 6.0 MPa · O/F 2.4 ·
+R<sub>t</sub> 120 mm · ε 16 · η<sub>c\*</sub> 0.96 · tapered channels with a 5 %
+fuel film · gas-generator cycle
+
+| | |
+|---|---:|
+| Flame temperature | **3603.72 K** |
+| Characteristic velocity, ideal | 1803.30 m/s |
+| Mass flow | 156.591 kg/s |
+| Thrust at sea level | **433.6 kN** |
+| I<sub>sp</sub> at sea level / vacuum | **282.33 s** / 330.09 s |
+| Boundary-layer loss / kinetic efficiency | 3.08 s (0.92 %) / 0.99794 |
+| Peak heat flux / wall temperature | 37.61 MW/m² / 789.1 K |
+| Coolant rise / pressure drop | 298.15 → 486.46 K / 8.49 MPa |
+| Gas generator | 3.36 % of the flow; delivered vacuum I<sub>sp</sub> 322.76 to 319.02 s |
+
+RP-1 is a poor coolant. The K1's jacket closes only with channels tapered to
+1.9 mm at the throat and a 5 % film, and even then the coolant-side wall reaches
+746 K, above the 728 K at which NASA measured RP-2 begin to deposit carbon.
+Ignis warns that this jacket would coke; the example exists to show it.
+
+### Frozen, finite-rate and shifting expansion
 
 LOX/CH<sub>4</sub> at p<sub>c</sub> = 5.5 MPa, O/F 3.4, ε = 45: shifting
-**370.41 s** against frozen **343.56 s** — recombination in the nozzle is worth
-**7.82 %** of vacuum impulse. Both are computed; neither is presented as *the*
-answer.
+**370.41 s** against frozen **343.56 s**, so recombination in the nozzle is
+worth up to **7.82 %** of vacuum impulse. How much of it a real nozzle gets is a
+rate question. The finite-rate march answers it, starting from shifting
+equilibrium just past the throat:
+
+| Inviscid vacuum I<sub>sp</sub> | Frozen from the start | Finite rate | Shifting | Kinetic efficiency | Share recovered |
+|---|---:|---:|---:|---:|---:|
+| Ignis-M1 | 338.23 s | 351.79 s | 353.45 s | 0.99530 | 89.1 % |
+| Ignis-H1 | 449.37 s | 459.35 s | 460.98 s | 0.99646 | 85.9 % |
+| Ignis-K1 | 325.76 s | 335.96 s | 336.66 s | 0.99794 | 93.6 % |
+
+The delivered thrust in the tables above carries the kinetic efficiency.
 
 ### Constrained ascent trade study
 
@@ -320,58 +364,64 @@ optimiser walks ε to whatever bound it is given and the answer *is* the bound.
 A booster delivers its impulse across a trajectory, and a first stage spends
 most of its burn low, where an over-expanded nozzle loses thrust and eventually
 separates. The shipped study therefore maximises the **time-weighted ascent
-specific impulse** under the constraints that actually size a booster:
+specific impulse** under the constraints that actually size a booster. Each of
+its 2500 evaluations is a complete M1 analysis with the boundary layer, film
+and jacket; it leaves out the finite-rate march and the cycle to keep the
+search affordable.
 
 | | Baseline | Optimised | |
 |---|---:|---:|---|
-| **Ascent I<sub>sp</sub>** (objective) | 318.19 s | **336.29 s** | +5.7 % |
-| Chamber pressure | 5.50 MPa | 10.75 MPa | |
-| Mixture ratio | 3.40 | 3.412 | |
-| Expansion ratio | 20.0 | **25.67** | interior to [6, 40] |
-| Throat radius | 70.0 mm | 50.4 mm | |
-| Sea-level thrust | 134.1 kN | 149.2 kN | ✓ 130–150 kN class (**active**) |
-| Peak wall temperature | 690.7 K | 794.3 K | ✓ ≤ 800 K (**active**) |
-| Jacket pressure drop | 1.69 MPa | 3.84 MPa | ✓ ≤ 4.0 MPa (**active**) |
-| Separation margin at lift-off | −6.1 % | +7.2 % | ✓ ≥ +2 % |
-| Exit diameter | 626 mm | 511 mm | ✓ ≤ 700 mm |
-| Engine length | 1074 mm | 925 mm | ✓ ≤ 1300 mm |
+| **Ascent I<sub>sp</sub>** (objective) | 314.10 s | **332.92 s** | +6.0 % |
+| Chamber pressure | 5.50 MPa | **11.00 MPa** | at its 11 MPa bound |
+| Mixture ratio | 3.40 | 3.375 | |
+| Expansion ratio | 20.0 | **24.83** | interior to [6, 40] |
+| Throat radius | 70.0 mm | 50.2 mm | near its 50 mm floor |
+| Sea-level thrust | 132.0 kN | 149.7 kN | ✓ 130–150 kN class (**active**) |
+| Peak wall temperature | 630.5 K | 798.4 K | ✓ ≤ 800 K (**active**) |
+| Jacket pressure drop | 1.22 MPa | 1.62 MPa | ✓ ≤ 4.0 MPa |
+| Separation margin at lift-off | −5.3 % | +11.0 % | ✓ ≥ +2 % |
+| Exit diameter | 626 mm | 500 mm | ✓ ≤ 700 mm |
+| Engine length | 1074 mm | 909 mm | ✓ ≤ 1300 mm |
 
 The story the numbers tell: held to a 130–150 kN sea-level thrust class, the
-optimiser raises chamber pressure until the **liner** and the **jacket** run
-out of margin, shrinks the throat to stay under the thrust ceiling, and settles
-the expansion ratio at 25.7 — where the flow still runs full at lift-off and
-the ascent-averaged impulse peaks. Three constraints from three different
-disciplines end active, and the expansion ratio lands well inside its bounds.
+optimiser raises chamber pressure to its ceiling and shrinks the throat to stay
+under the thrust limit, until the **liner** runs out of margin. It settles the
+expansion ratio at 24.8, where the flow still runs full at lift-off and the
+ascent-averaged impulse peaks. With the boundary layer and film, the jacket's
+pressure drop is no longer what binds; the wall temperature, the thrust class
+and the pressure ceiling are.
 
 An ε scan at fixed pressure shows why the objective matters: ascent
 I<sub>sp</sub> peaks near ε = 15 and the separation margin goes negative by
 ε = 20, while vacuum I<sub>sp</sub> is still climbing at ε = 90.
 
 It is a local method with Latin-hypercube multi-start, not a global proof, and
-12 starts are needed to find a feasible set this narrow — see
+12 starts are needed to find a feasible set this narrow. See
 [limitations](docs/limitations.md#6-optimisation-and-uncertainty).
 
-### Monte Carlo — 2000 samples, 10 dispersed inputs
+### Monte Carlo: 2000 samples, 10 dispersed inputs
 
-58.2 s at 34.4 samples/s on 4 threads, 0 failures:
+102.2 s at 19.6 samples/s on 4 threads, 0 failures. Each sample is an M1
+analysis with the boundary layer, film and jacket, without the finite-rate
+march or the cycle:
 
 | Output | mean | p5 | p95 | σ/mean |
 |---|---:|---:|---:|---:|
-| Thrust | 134.69 kN | 128.34 | 140.82 | 2.8 % |
-| I<sub>sp</sub> (sea level) | 284.77 s | 282.23 | 287.14 | 0.5 % |
-| I<sub>sp</sub> (vacuum) | 350.78 s | 350.11 | 351.33 | 0.1 % |
+| Thrust | 132.37 kN | 126.06 | 138.41 | 2.9 % |
+| I<sub>sp</sub> (sea level) | 280.25 s | 277.67 | 282.68 | 0.5 % |
+| I<sub>sp</sub> (vacuum) | 346.34 s | 345.66 | 346.89 | 0.1 % |
 | Flame temperature | 3523.4 K | 3514.0 | 3531.6 | 0.15 % |
-| **Peak wall temperature** | **799.4 K** | 664.2 | **945.3** | **10.7 %** |
-| Peak heat flux | 50.0 MW/m² | 41.8 | 59.2 | 10.7 % |
-| Jacket pressure drop | 3.40 MPa | 2.44 | 4.55 | 19.4 % |
+| **Peak wall temperature** | **690.8 K** | 581.6 | **804.4** | **9.9 %** |
+| Peak heat flux | 42.1 MW/m² | 34.4 | 50.6 | 11.9 % |
+| Jacket pressure drop | 2.09 MPa | 1.48 | 2.87 | 20.4 % |
 
-**The headline result is the asymmetry.** Performance is tight — vacuum
-I<sub>sp</sub> varies by 0.1 % — while the thermal answer is not: **973 of 2000
+**The headline result is the asymmetry.** Performance is tight: vacuum
+I<sub>sp</sub> varies by 0.1 %. The thermal answer is not: **118 of 2000
 samples exceed the wall-temperature limit**, and the single dominant cause is
-the Bartz correlation itself (SRC **0.994**, Spearman 0.992), not any
-manufacturing tolerance. That is the honest state of a conceptual regeneratively
-cooled engine: the performance is known, the cooling margin is a correlation
-away from being unknown.
+the hot-gas film coefficient's own uncertainty (SRC **0.992**, Spearman 0.993),
+not any manufacturing tolerance. That is the honest state of a conceptual
+regeneratively cooled engine: the performance is known, and the cooling margin
+is a correlation away from being unknown.
 
 ![Sensitivity ranking](results/figures/12_sensitivity_ranking.png)
 
@@ -387,11 +437,13 @@ away from being unknown.
 | Thrust split into momentum and pressure terms | Film coefficients, flux, wall temperatures, coolant pressure |
 | ![Cooling design space](results/figures/08_cooling_design_space.png) | ![Monte Carlo](results/figures/11_monte_carlo_histograms.png) |
 | Peak wall temperature and Δp over the channel design space | Output distributions with p5/p50/p95 |
+| ![Finite-rate nozzle](results/figures/19_finite_rate_nozzle.png) | ![Expansion-ratio trade](results/figures/06_expansion_ratio_trade.png) |
+| Recombination at finite rate against shifting equilibrium | Sea-level and vacuum I<sub>sp</sub> against expansion ratio |
 
-All 16 figures live in `results/figures/` and are regenerated by
-`python3 python/make_figures.py`. The volumetric renders and animations are
-separate — `python3 tools/make_cover.py`, documented in
-[`docs/rendering.md`](docs/rendering.md).
+The 17 figures `python3 python/make_figures.py` draws (16 PNGs and the
+start-up GIF) live in `results/figures/`. The volumetric renders, animations
+and Explorer screenshots are separate: `python3 tools/make_cover.py`,
+documented in [`docs/rendering.md`](docs/rendering.md).
 
 ---
 
@@ -438,10 +490,12 @@ Every solve recomputes how well it satisfied its own equations:
 | Element balance | 1.14e-14 | 3.17e-15 |
 | Gibbs stationarity | 1.42e-14 | 7.11e-15 |
 | Enthalpy closure | 7.36e-15 | 7.45e-15 |
-| Nozzle mass flux | 2.13e-14 | 4.37e-14 |
-| Nozzle stagnation enthalpy | 2.94e-16 | 4.52e-16 |
-| Cooling energy balance | 1.75e-10 | 4.83e-09 |
-| Cooling local flux consistency | 4.36e-10 | 3.02e-10 |
+| Nozzle mass flux | 2.43e-14 | 2.90e-12 |
+| Nozzle stagnation enthalpy | 2.94e-16 | 2.26e-15 |
+| Finite-rate march: energy / elements | 2.7e-15 / 2.5e-16 | 6.8e-15 / 1.4e-15 |
+| Cooling energy balance | 7.41e-14 | 3.41e-13 |
+| Cooling local flux consistency | 1.95e-09 | 2.82e-09 |
+| Turbopump power balance | 2.59e-16 | 8.73e-13 |
 
 Start-up transient: mass conservation **5.71e-15**, energy **2.60e-13** over
 0.8 s of physical time.
@@ -450,20 +504,20 @@ Start-up transient: mass conservation **5.71e-15**, energy **2.60e-13** over
 
 Full detail in [`docs/verification.md`](docs/verification.md).
 
-* The quasi-1D solver reproduces the analytic constant-γ nozzle to **7.1e-12**
-  in pressure across both branches, with mass and stagnation enthalpy exact.
+* The quasi-1D solver reproduces the analytic constant-γ nozzle to **1.8e-10**
+  in pressure across both branches, with mass flux to 3.5e-12 and stagnation
+  enthalpy to 1.5e-16.
 * The transient integrator converges at **order 4.15 / 4.05 / 4.17** on a
   smooth problem; the adaptive and fixed-step integrators agree to 2.4e-7.
 * Equilibrium from 12 random initial guesses lands on the same answer to 1e-8.
-* Monte Carlo at 1, 4 and 7 threads gives **byte-identical** sample matrices.
-* **78 test cases, 17,550 assertions, 0 failures** on GCC 13.3 and Clang 18.1,
-  Release and Debug, with `-Wall -Wextra -Wpedantic -Werror`.
-* Every committed report identifies its binary as `Ignis 1.0.0 (v1.0.0)` — a
-  clean tag, no local modifications — because the whole tree was regenerated
-  from a fresh clone of that tag.
-* The committed `results/` tree was **reproduced bit-for-bit** from a fresh
-  clone: 9 reports and 33 CSV tables compared, and the only differences were
-  measured wall times ([`verification.md` §6](docs/verification.md)).
+* Monte Carlo at 1, 4 and 7 threads gives **byte-identical** sample matrices,
+  and `run_all.sh` checks the shipped campaign at 1 and 4 threads every time
+  it regenerates the results.
+* **125 test cases, 21,359 assertions, 0 failures** on GCC 13.3 and Clang 18.1
+  in Release, with `-Wall -Wextra -Wpedantic -Werror`. The 121 cases not
+  tagged `[slow]` also pass in a GCC Debug build.
+* Every committed report names the build that produced it, by `git describe`
+  of a clean tree ([`verification.md` §6](docs/verification.md)).
 
 ---
 
@@ -508,10 +562,10 @@ include/ignis/ + src/          the library, 13 modules, no I/O in the physics
   uncertainty/  distributions, deterministic Monte Carlo, sensitivity
   io/           YAML config with path-qualified errors, JSON, CSV, CLI
 apps/           the six executables -- parse, call, print
-tests/          85 Catch2 cases: unit, verification, validation, integration
+tests/          125 Catch2 cases: unit, verification, validation, integration
 python/         ignis_viz (figures, renders) and ignis_explorer (the desktop UI)
 explorer.py     launcher for the Ignis Engine Explorer
-configs/        12 shipped scenarios
+configs/        13 shipped scenarios
 data/           species, propellants, materials, coolant tables, reaction
                 mechanism (all cited)
 tools/          the generators that build data/ and validation/reference/,

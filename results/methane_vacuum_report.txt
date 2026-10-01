@@ -1,7 +1,7 @@
-Ignis 1.0.0 (v1.0.0)
+Ignis 1.0.0 (v1.0.0-27-g9eba90e)
   build type : Release
   compiler   : GNU 13.3.0
-  data dir   : /tmp/claude-0/-home-user-Ignis/a38ad4d7-ed64-5b14-92a4-ed770272dde9/scratchpad/rel/data
+  data dir   : /home/user/Ignis/data
 
 nozzle contour (bell)
   throat radius        70.00000 mm  (At = 153.93804 cm^2)
@@ -42,65 +42,84 @@ chamber (equilibrium expansion basis)
 nozzle performance (equilibrium expansion)
   ambient pressure      0.0 Pa
   expansion ratio       45.000
-  mass flow             48.0377 kg/s  (ox 37.1200, fuel 10.9177)
-  exit Mach             3.9739
-  exit pressure         12161.5 Pa
-  exit temperature      1783.17 K
-  exit velocity         3449.82 m/s
-  momentum thrust       165.7 kN
-  pressure thrust       8.4 kN
+  mass flow             47.9747 kg/s  (ox 37.0714, fuel 10.9033)
+  exit Mach             3.9562
+  exit pressure         12585.9 Pa
+  exit temperature      1793.17 K
+  exit velocity         3443.53 m/s
+  momentum thrust       162.9 kN
+  pressure thrust       8.7 kN
   thrust (ideal)        174.1 kN
-  thrust (corrected)    173.3 kN
+  thrust (corrected)    169.7 kN
   Isp (ideal)           369.67 s
-  Isp (corrected)       367.95 s
-  Isp (vacuum)          367.95 s
-  effective velocity    3608.4 m/s
-  Cf (ideal / corr.)    2.0569 / 2.0473
+  Isp (corrected)       360.62 s
+  Isp (vacuum)          360.62 s
+  effective velocity    3536.5 m/s
+  Cf (ideal / corr.)    2.0569 / 2.0039
   loss factors          eta_c* 0.9600, lambda_div 0.9951, eta_nozzle 1.0000
   regime                under-expanded
+  boundary layer        C_d 0.99869;  delta* throat 0.046 mm, exit 6.568 mm;  theta exit 3.259 mm
+                        core expands to A/A* 43.807 (geometric 45.000)
+  boundary-layer loss   2.48 kN, 4.78 s vacuum Isp (1.30 %)
+  kinetic loss          1.20 kN (finite-rate recombination, kinetic efficiency 0.99296)
   chamber volume        12900.40 cm^3
   characteristic L*     0.8380 m
-  residence time        1.090 ms
-  mass-flow residual    7.29e-15
+  residence time        1.091 ms
+  mass-flow residual    3.55e-12
   energy residual       2.94e-16
+
+finite-rate nozzle (one-dimensional kinetics)
+  start                 A/At 1.0160 (frozen Mach 1.100), x = 350.9 mm, from shifting equilibrium
+  exit                  1671.7 K, 11617.6 Pa, 3432.4 m/s
+  vacuum Isp (inviscid) 367.80 s finite rate; 370.41 s shifting; 351.14 s frozen from the start
+  kinetic efficiency    0.99296 (recovers 86.5 % of the shifting-over-frozen impulse)
+  integration           1873 steps (1 rejected), 28095 evaluations; residuals: energy 2.7e-15, elements 7.4e-15
+  note: 2 of the mechanism's reactions involve species this gas does not contain and were left out
 
 regenerative cooling
   cooled wetted area     0.54450 m^2
-  total heat load        10975.78 kW
-  peak heat flux         52.67 MW/m^2 at x = 344.3 mm
-  peak hot-wall temp     697.0 K at x = 1.3 mm
-  coolant in / out       111.66 K -> 380.77 K  (rise 269.11 K)
-  coolant pressure drop  1.7817 MPa  (outlet 13.2183 MPa)
-  energy balance residual 4.54e-10
-  max local flux residual 1.71e-10
+  total heat load        8950.48 kW
+  peak heat flux         42.64 MW/m^2 at x = 340.8 mm
+  peak hot-wall temp     636.1 K at x = 60.8 mm
+  coolant in / out       111.66 K -> 319.34 K  (rise 207.68 K)
+  coolant pressure drop  1.2706 MPa  (outlet 13.7294 MPa)
+  hot-gas model          boundary_layer  (4 coupled passes)
+  wall film              0.328 kg/s at 319.3 K, V_g/V_c 10.53;  eta > 0.5 for 23.2 mm, > 0.2 for 42.2 mm
+  energy balance residual 4.00e-14
+  max local flux residual 1.87e-09
+
+film-cooling performance bracket (vacuum Isp)
+  film                  0.68 % of the total flow; core O/F 3.505
+  fully mixed and burnt 360.62 s
+  unmixed (two-stream)  358.77 s  (at most 0.51 % lower)
 
 feed system (pressure-fed)
   chamber pressure     5.5000 MPa
   mixture ratio        3.4000
-  total mass flow      48.0377 kg/s
+  total mass flow      47.9747 kg/s
   oxidizer
-    mass flow          37.1200 kg/s
-    line velocity      4.14 m/s (Re 2.488e+06, f 0.01161)
+    mass flow          37.0714 kg/s
+    line velocity      4.14 m/s (Re 2.484e+06, f 0.01161)
     injector velocity  43.91 m/s
-    dp lines           0.0262 MPa
+    dp lines           0.0261 MPa
     dp dynamic         0.0098 MPa
     dp injector        1.1000 MPa
-    injector area      949.773 mm^2
-    tank pressure      6.6360 MPa
+    injector area      948.527 mm^2
+    tank pressure      6.6359 MPa
     stiffness          0.2000
-    pump power (equiv) 317.06 kW
+    pump power (equiv) 316.64 kW
   fuel
-    mass flow          10.92 kg/s
-    line velocity      6.72 m/s (Re 1.655e+06, f 0.01244)
+    mass flow          10.90 kg/s
+    line velocity      6.71 m/s (Re 1.653e+06, f 0.01244)
     injector velocity  72.17 m/s
-    dp lines           0.0316 MPa
+    dp lines           0.0315 MPa
     dp dynamic         0.0095 MPa
     dp injector        1.1000 MPa
-    injector area      477.543 mm^2
-    tank pressure      6.6412 MPa
+    injector area      476.917 mm^2
+    tank pressure      6.6410 MPa
     stiffness          0.2000
-    pump power (equiv) 252.17 kW
-  total pump power     569.23 kW
+    pump power (equiv) 251.84 kW
+  total pump power     568.48 kW
 
 wrote results/methane_vacuum/m1vac_engine.json
       results/methane_vacuum/m1vac_profile.csv

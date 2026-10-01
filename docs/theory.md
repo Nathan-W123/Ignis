@@ -555,7 +555,7 @@ A cold wall makes the layer denser and `δ*` smaller (on an M1-like test engine 
 gives a third of the throat displacement a 1500 K wall does); in the limit it
 can go negative and `C_d` exceed one. Nothing clips that.
 
-On the shipped M1 the layer gives `C_d` = 0.9987, a core that expands to 19.6
+On the shipped M1 the layer gives `C_d` = 0.99865, a core that expands to 19.6
 instead of the geometric 20, and a vacuum-Isp loss of 1.27 % (4.5 s); on the H1,
 1.31 % (6.0 s). These are not validated against a measured loss: neither §5b
 experiment measured thrust. The coolant flow of the jacket is set from the
@@ -884,7 +884,7 @@ ratio). The other limit keeps it as a separate unburnt stream: the core burns
 at the mixture ratio the film leaves it, the film expands as a calorically
 perfect gas from its injection state to the core's exit pressure, and the two
 are mass-weighted in vacuum. On the M1 (3 % of the fuel) the bracket is
-350.91 s to 348.63 s, at most 0.65 %.
+344.83 s to 342.61 s, at most 0.64 %.
 
 **This is an engineering estimate, not a conjugate CFD solution.** There is no
 injector streak, no soot layer, no transpiration cooling and no combustion in

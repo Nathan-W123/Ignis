@@ -668,10 +668,11 @@ def finite_rate_nozzle(kinetics_csv: str, profile_csv: str, engine_json: str, ou
     ax.legend(ncols=4, loc="lower left")
 
     style.suptitle(fig, f"{case}: recombination through the nozzle")
+    # Two lines: one long line would widen the saved canvas past the axes.
     style.caption(fig, f"Vacuum Isp {kin['isp_vacuum']:.2f} s at finite rate, "
                        f"{kin['isp_vacuum_shifting']:.2f} s shifting, "
                        f"{kin['isp_vacuum_frozen']:.2f} s frozen from A/A* "
                        f"{kin['start_area_ratio']:.3f}; kinetic efficiency "
-                       f"{kin['kinetic_efficiency']:.4f}. Inviscid core; the march starts "
+                       f"{kin['kinetic_efficiency']:.4f}.\nInviscid core; the march starts "
                        "from shifting equilibrium at frozen Mach 1.10.")
     return _save(fig, out)
