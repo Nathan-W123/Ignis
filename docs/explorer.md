@@ -142,3 +142,38 @@ the grid allows.
 The grid selector's times are how long the march takes to stop changing, not
 how long before there is anything to see: frames begin arriving within a few
 seconds. `Stop` keeps every frame captured so far.
+
+### The 3-D volume view
+
+The Flow tab opens on **3-D volume**: the engine as lit geometry with a wedge
+cut out of it, and the flow drawn as a volume through and around it on the
+GPU, at the window's full resolution. When a march finishes, playback loops on
+its own -- the point is to watch the plume establish itself, again and again.
+
+*Why a volume is not a different simulation.* The plume solution is
+axisymmetric: it lives on (x, r), and the three-dimensional field is exactly
+that field swept around the axis. A ray through the scene that samples a point
+(x, y, z) reads the solution at (x, sqrt(y² + z²)) -- the real field at that
+point in space, not an extrusion of a slice. Inside the engine the gas is drawn
+from the quasi-1-D axial profile the solver produced, which is by definition
+uniform across each station.
+
+*What the brightness means.* Colour is the selected field through the
+selected ramp, matching the colour bar. How much a stretch of ray contributes
+is the jet fraction the plume solver carries, so ambient air is transparent,
+and hotter gas is made more opaque than cooler gas so the shock cells on the
+axis are not hidden behind the jet's outer layers. That is the standard
+emission-absorption picture a CFD post-processor draws for a scalar field --
+a visualisation choice, not a radiation calculation.
+
+| Mouse | Action |
+|---|---|
+| Left drag | orbit |
+| Right drag | pan along the axis |
+| Wheel | zoom |
+
+It needs OpenGL 3.3, which any GPU of the last decade and Mesa's software
+renderer both provide, and PyOpenGL (in `requirements-explorer.txt`). When a
+context cannot be had, the tab says why in its status line and falls back to
+the CPU-drawn view rather than showing a black rectangle. **Save video** writes
+whichever view is on screen.

@@ -45,7 +45,7 @@ import numpy as np
 from matplotlib import colormaps
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from . import cases, shell, styles, viewport3d
+from . import cases, glviewport, shell, styles, viewport3d
 from .solver import Result
 from .widgets import panel
 
@@ -297,7 +297,7 @@ class FlowTab(QtWidgets.QWidget):
         self._load_cases()
 
         self._timer = QtCore.QTimer(self)
-        self._timer.setInterval(60)
+        self._timer.setInterval(33)
         self._timer.timeout.connect(self._advance)
 
     # ------------------------------------------------------------------ build
@@ -340,10 +340,17 @@ class FlowTab(QtWidgets.QWidget):
         outer.addWidget(geometry)
 
         self.view = FieldView()
+        # The 3-D view is the GPU volume renderer when OpenGL is there, and
+        # the NumPy rasteriser only as a fallback.  Which one is in use is
+        # decided when the GL widget first tries to make a context, and said
+        # in the status line rather than left to be inferred from the look.
+        self.gl = glviewport.GLViewport() if glviewport.HAVE_PYOPENGL else None
         self.view3d = viewport3d.Viewport3D()
         self.stack = QtWidgets.QStackedWidget()
         self.stack.addWidget(self.view)
-        self.stack.addWidget(self.view3d)
+        self.stack.addWidget(self.gl if self.gl is not None else self.view3d)
+        if self.gl is not None:
+            self.gl.ready.connect(self._gl_ready)
         outer.addWidget(self.stack, 1)
 
         self.colorbar = shell.ColorBar(list(FIELDS), RAMPS)
@@ -366,7 +373,9 @@ class FlowTab(QtWidgets.QWidget):
         row.addWidget(self.play_button)
 
         self.view_box = QtWidgets.QComboBox()
-        self.view_box.addItems(["2-D slice", "3-D model"])
+        self.view_box.addItems(["2-D slice", "3-D volume"])
+        self.view_box.setCurrentIndex(1)
+        self.stack.setCurrentIndex(1)
         self.view_box.currentIndexChanged.connect(self._view_changed)
         row.addWidget(QtWidgets.QLabel("View"))
         row.addWidget(self.view_box)
@@ -439,12 +448,12 @@ class FlowTab(QtWidgets.QWidget):
     def _source_changed(self, _index: int) -> None:
         case = self.current_case()
         self._engine_meshes = None
+        self._gl_framed = False
+        self._gl_key = None
         for widget in (self.altitude_label, self.altitude_box):
             widget.setVisible(case is not None)
         if case is None:
-            self.geometry_label.setText(
-                "live solve" if self._result is not None
-                else "no solver - pick a saved engine")
+            self.geometry_label.setText(self._solve_label())
         else:
             floor = case.lowest_attached_altitude() / 1e3
             if self.altitude_box.value() < floor:
@@ -471,6 +480,15 @@ class FlowTab(QtWidgets.QWidget):
                                 f"{km:.1f} km")
         self._update_ready()
 
+    def _solve_label(self) -> str:
+        """Where the design's numbers came from, said rather than implied."""
+        r = self._result
+        if r is None:
+            return "no solver - pick a saved engine"
+        if r.replayed:
+            return f"replayed from a saved solve ({r.version}); plume solved live"
+        return "live solve"
+
     def _update_ready(self) -> None:
         case = self.current_case()
         if case is not None:
@@ -485,9 +503,9 @@ class FlowTab(QtWidgets.QWidget):
         self._result = result
         if self.current_case() is None:
             self._engine_meshes = None
-            self.geometry_label.setText(
-                "live solve" if result is not None
-                else "no solver - pick a saved engine")
+            self._gl_framed = False
+            self._gl_key = None
+            self.geometry_label.setText(self._solve_label())
         self._update_ready()
         if result is None and not self._cases:
             self.status.setText("Solve a design first.")
@@ -634,7 +652,14 @@ class FlowTab(QtWidgets.QWidget):
             last = self._frames[-1]
             self.status.setText(
                 f"{len(self._frames)} frames   "
-                f"{last.time * 1e3:.3f} ms of flow")
+                f"{last.time * 1e3:.3f} ms of flow   looping")
+            # Loop straight away.  A finished march that sits frozen on its
+            # last frame looks like it stopped working; the point is to watch
+            # the plume establish itself, over and over.
+            if not self._timer.isActive():
+                self.slider.setValue(0)
+                self._timer.start()
+                self.play_button.setText("Pause")
 
     # ----------------------------------------------------------------- display
     def _field_changed(self, _: str) -> None:
@@ -666,8 +691,85 @@ class FlowTab(QtWidgets.QWidget):
         if self.stack.currentIndex() == 0:
             self.view.show_field(values, self.colorbar.ramp(), lo, hi,
                                  caption, frame.extent)
+        elif self.stack.widget(1) is self.gl:
+            self._draw_gl(frame, key, values, lo, hi, caption)
         else:
             self._draw3d(frame, values, lo, hi, caption)
+
+    def _gl_ready(self, ok: bool) -> None:
+        if ok:
+            return
+        # No usable context: put the NumPy viewport where the GL one was.
+        self.stack.removeWidget(self.gl)
+        self.stack.insertWidget(1, self.view3d)
+        self.stack.setCurrentIndex(self.view_box.currentIndex())
+        self.status.setText(
+            f"GPU view unavailable ({self.gl.error}); using the CPU view")
+        self._draw()
+
+    def _engine_source(self):
+        """(x, r, axial profile or None) for whichever engine is selected."""
+        case = self.current_case()
+        if case is not None:
+            return case.contour[:, 0], case.contour[:, 1], None
+        if self._result is not None and self._result.profile:
+            prof = self._result.profile
+            return (np.asarray(prof["x"], float), np.asarray(prof["radius"], float),
+                    prof)
+        return None, None, None
+
+    def _draw_gl(self, frame: Frame, key: str, values: np.ndarray, lo: float,
+                 hi: float, caption: str) -> None:
+        """Push this frame to the GPU volume renderer.
+
+        The engine and the gas inside it only change with the source or the
+        field, so they are uploaded when those do; a frame of the march is one
+        small texture, which is why playback is smooth.
+        """
+        x, r, profile = self._engine_source()
+        if x is None:
+            return
+        span = float(x[-1])
+        gl_key = (id(self._result), id(self.current_case()), key,
+                  self.colorbar.ramp(), round(lo, 6), round(hi, 6))
+        if self._engine_meshes is None:
+            step = max(1, x.size // 160)
+            temperature = (np.asarray(profile["temperature"], float)
+                           if profile is not None else None)
+            self._engine_meshes = viewport3d.engine_meshes(
+                np.column_stack([x[::step], r[::step]]),
+                wall=max(0.006, 0.03 * float(r.min())),
+                scalar=None if temperature is None else temperature[::step],
+                ramp=self.colorbar.ramp(),
+                lo=0.0 if temperature is None else float(temperature.min()),
+                hi=1.0 if temperature is None else float(temperature.max()),
+                wall_colour=None if temperature is not None else (0.62, 0.65, 0.70),
+                n_theta=96)
+            self.gl.set_engine(self._engine_meshes)
+        if gl_key != getattr(self, "_gl_key", None):
+            self._gl_key = gl_key
+            self.gl.set_ramp(self.colorbar.ramp())
+            column = {"temperature": "temperature", "mach": "mach",
+                      "pressure": "pressure", "velocity_x": "velocity"}.get(key)
+            if profile is not None and (column in profile or key == "jet_fraction"):
+                inside = (np.ones(len(x)) if key == "jet_fraction"
+                          else np.asarray(profile[column], float))
+                span_v = (hi - lo) or 1.0
+                self.gl.set_inside(x, np.clip((inside - lo) / span_v, 0.0, 1.0), r)
+            else:
+                # A saved case stores the wall but not the gas state along it,
+                # so there is nothing true to fill the duct with.
+                self.gl.set_inside(None, None, None)
+
+        span_v = (hi - lo) or 1.0
+        length = float(frame.extent[0])
+        r_max = 0.5 * float(frame.extent[1])
+        self.gl.set_plume(np.clip((values - lo) / span_v, 0.0, 1.0),
+                          frame.data["jet_fraction"], span, length, r_max)
+        if not getattr(self, "_gl_framed", False):
+            self.gl.frame_scene(float(x[0]), span + length, r_max)
+            self._gl_framed = True
+        self.gl.caption = caption
 
     def _view_changed(self, index: int) -> None:
         self.stack.setCurrentIndex(index)
@@ -846,6 +948,18 @@ class FlowTab(QtWidgets.QWidget):
     def frames(self) -> List[Frame]:
         return list(self._frames)
 
+    def _grab_view(self) -> QtGui.QImage:
+        """The view on screen, whichever it is, as the video should show it.
+
+        A GL widget is read back from its own framebuffer: a plain widget grab
+        of it is not guaranteed to contain the GL content on every platform.
+        """
+        widget = self.stack.currentWidget()
+        if self.gl is not None and widget is self.gl:
+            return self.gl.grabFramebuffer()
+        widget.repaint()
+        return widget.grab().toImage()
+
     def _save_video(self) -> None:
         """Write the captured march out as an mp4, at the size on screen."""
         if not self._frames:
@@ -870,8 +984,7 @@ class FlowTab(QtWidgets.QWidget):
                 for index in range(len(self._frames)):
                     self.slider.setValue(index)
                     self._draw()
-                    self.view.repaint()
-                    image = self.view.grab().toImage().convertToFormat(
+                    image = self._grab_view().convertToFormat(
                         QtGui.QImage.Format_RGB888)
                     width, height = image.width(), image.height()
                     buf = image.constBits()

@@ -478,6 +478,13 @@ class Explorer(QtWidgets.QMainWindow):
         self._set_status(f"{name} theme")
 
     def _autostart_flow(self) -> None:
+        # Show the Flow tab as well as starting it.  With the frozen results
+        # the solver counts as available, so nothing else moves the window
+        # there -- the march used to run on a hidden tab while the window sat
+        # on a chart, and the GPU view was never shown and never initialised.
+        self._show_tab("Flow")
+        if self.tree.currentItem() is None and self.tree.topLevelItemCount():
+            self.tree.setCurrentItem(self.tree.topLevelItem(0))
         if self.flow.run_button.isEnabled() and not self.flow.frames():
             self.flow._start()
 
