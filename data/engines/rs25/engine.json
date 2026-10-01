@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "name": "RS-25",
+  "title": "RS-25 (Space Shuttle Main Engine), Block IIA",
+  "model": {
+    "file": "nasa_space_shuttle_d_eng.glb",
+    "sha256": "e31cfb57e3365f036d40cee79ac9e2f8b5f4c48849f6aa9e19aee4075846a0bc",
+    "source": "https://github.com/nasa/NASA-3D-Resources/blob/11ebb4ee043715aefbba6aeec8a61746fad67fa7/3D%20Models/Space%20Shuttle%20(D)/Space%20Shuttle%20(D)%20eng.glb",
+    "credit": "NASA 3D Resources (Space Shuttle (D), engine bell)",
+    "units_to_metres": 0.0254,
+    "draw": [
+      "eng out"
+    ],
+    "reference_surface": "eng in",
+    "rough_axis": "x",
+    "roll_deg": 0.0
+  },
+  "preset": "RS-25 (SSME)  6 km",
+  "frame": {
+    "method": "tools/fit_engine_model.py: circles fitted to the end rings of the 'eng in' surface",
+    "exit_centre": [
+      -91.693066,
+      -1.949413,
+      0.867522
+    ],
+    "upstream": [
+      0.99976908,
+      0.01929729,
+      -0.00945536
+    ],
+    "exit_radius": 44.965,
+    "top_radius": 16.0261,
+    "length": 102.0731,
+    "exit_ring_worst_residual": 0.0001,
+    "exit_ring_points_dropped": 40,
+    "top_ring_worst_residual": 0.0,
+    "top_ring_points_dropped": 0,
+    "exit_plane_tilt_deg": 0.845
+  },
+  "operating_point": "104.5 % of rated power level (NPL)",
+  "published": {
+    "source": "SSME Orientation (Space Transportation System Training Data), Boeing Rocketdyne, June 1998",
+    "rows": [
+      {
+        "label": "Vacuum thrust",
+        "ignis": "vacuum_thrust",
+        "unit": "kN",
+        "scale": 0.001,
+        "value": 2188080.2,
+        "as_published": "491,900 lbf",
+        "where": "engine summary: Nominal Power Level 104.5 % (491,900 lbs)"
+      },
+      {
+        "label": "Vacuum Isp",
+        "ignis": "performance.isp_vacuum",
+        "unit": "s",
+        "scale": 1.0,
+        "value": 452.0,
+        "as_published": "approximately 452 s",
+        "where": "engine summary: specific impulse at altitude 452 sec (approximate)"
+      },
+      {
+        "label": "Propellant flow",
+        "ignis": "performance.mdot",
+        "unit": "kg/s",
+        "scale": 1.0,
+        "value": 493.96,
+        "as_published": "155 + 934 lb/s",
+        "where": "Block IIA propellant flow schematic, 104.5 % RPL: hydrogen 155 lb/s, oxygen 934 lb/s"
+      },
+      {
+        "label": "Exit diameter",
+        "ignis": "geometry.exit_diameter",
+        "unit": "m",
+        "scale": 1.0,
+        "value": 2.2936,
+        "as_published": "90.3 in (inside)",
+        "where": "nozzle geometry: exit diameter inside/outside 90.3/94 in"
+      },
+      {
+        "label": "Chamber coolant exit T",
+        "ignis": "cooling.coolant_outlet_temperature",
+        "unit": "K",
+        "scale": 1.0,
+        "value": 264.8,
+        "as_published": "17 F",
+        "where": "main combustion chamber, Block IIA operating parameters at 104.5 % RPL"
+      },
+      {
+        "label": "Chamber coolant \u0394p",
+        "ignis": "cooling.coolant_pressure_drop",
+        "unit": "MPa",
+        "scale": 1e-06,
+        "value": 8315077.0,
+        "as_published": "5,647 - 4,441 psia",
+        "where": "main combustion chamber, Block IIA operating parameters at 104.5 % RPL"
+      },
+      {
+        "label": "Peak hot-gas wall T",
+        "ignis": "cooling.max_wall_temperature",
+        "unit": "K",
+        "scale": 1.0,
+        "value": 810.9,
+        "as_published": "1,000 F",
+        "where": "main combustion chamber, Block IIA operating parameters at 104.5 % RPL"
+      }
+    ],
+    "units": "every value is SI; scale converts it, and Ignis's number, to the unit shown"
+  }
+}

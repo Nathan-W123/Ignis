@@ -63,6 +63,14 @@ class Mesh:
     alpha_cutoff: float = 0.02
     emissive: bool = False                    # skip the lighting term
     name: str = ""
+    # Per-vertex normals from the source file.  Without them they are worked
+    # out from the faces, which is right for a revolved surface and wrong for
+    # a model whose author chose where its edges are sharp.
+    normals: Optional[np.ndarray] = None
+    # Cut the cutaway wedge out of this mesh when drawing it, instead of the
+    # wedge being left out of its geometry.  For models that are not built by
+    # revolving a profile, so have no seam at the cut to stop on.
+    cut_in_shader: bool = False
 
 
 def revolve(x: np.ndarray, r: np.ndarray, *, theta0: float, theta1: float,
@@ -457,6 +465,7 @@ def engine_meshes(contour: np.ndarray, *, wall: float,
                   lo: float = 0.0, hi: float = 1.0,
                   cut_deg: float = 80.0, cut_azimuth: float = np.pi,
                   wall_colour: Optional[Tuple[float, float, float]] = None,
+                  outer_colour: Tuple[float, float, float] = (0.30, 0.33, 0.38),
                   n_theta: int = 64):
     """The engine as an inner gas-side surface, an outer shell, and end caps.
 
@@ -477,7 +486,7 @@ def engine_meshes(contour: np.ndarray, *, wall: float,
                     flat_colour=wall_colour, flip_normals=True)
     inner.name = "wall (gas side)"
     outer = revolve(x, r + wall, theta0=theta0, theta1=theta1, n_theta=n_theta,
-                    flat_colour=(0.30, 0.33, 0.38))
+                    flat_colour=outer_colour)
     outer.name = "structure"
 
     # The two faces exposed by the cut, so the wall reads as having thickness

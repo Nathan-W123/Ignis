@@ -47,9 +47,39 @@ percentage terms, coloured green or amber according to which direction is
 better for that quantity. The two slots keep fixed hues everywhere — cyan for
 A, amber for B — so identity never moves when a chart is rescaled.
 
-**Presets.** Ignis-M1 at sea level, Ignis-M1 with the vacuum nozzle, and the
-Ignis-H1 LOX/hydrogen upper stage. They match the shipped configurations, so
-the Explorer and `scripts/run_all.sh` can be checked against each other.
+**Presets.** The RS-25 (below), Ignis-M1 at 10 km, at sea level and with the
+vacuum nozzle, and the Ignis-H1 LOX/hydrogen upper stage. The Ignis presets
+match the shipped configurations, so the Explorer and `scripts/run_all.sh` can
+be checked against each other. Without the compiled binaries the Explorer
+replays a saved solve of each preset (`data/results/`, written by
+`tools/make_case_library.py` through the Explorer's own solver wrapper), and
+says so in the status bar; any other design needs the binaries.
+
+## The RS-25
+
+The window opens on the RS-25 — the Space Shuttle Main Engine, Block IIA at
+104.5 % of rated power — because it is a real engine with a real 3-D model and
+published numbers to hold Ignis's against.
+
+* **The physics** is Ignis's, from Rocketdyne's published inputs: throat area,
+  contraction and expansion ratios, chamber and nozzle lengths, throat
+  stagnation pressure, mixture ratio, combustion efficiency, coolant split
+  and coolant inlet state. Three inputs the sources do not give are inferred
+  and labelled as such.
+* **The 3-D model** is NASA's model of the bell from its public 3-D Resources
+  collection, shipped unmodified. It is drawn only while the solved geometry
+  is the RS-25's; edit the throat or expansion ratio and it is replaced by the
+  solved contour, because the hardware no longer describes the nozzle being
+  solved. The chamber and throat, which NASA's model does not include, are
+  drawn from the solved contour.
+* **Against the real engine**, a panel in the results column, puts Ignis's
+  vacuum thrust, vacuum Isp, propellant flow, exit diameter and chamber
+  cooling beside Rocketdyne's figures whenever the design is that operating
+  point. Hover a row for where the number is printed. It is a sanity check,
+  not a validation, and the gaps are explained rather than tuned away.
+
+Every source, every inferred input and every gap is in
+[`data/engines/rs25/README.md`](../data/engines/rs25/README.md).
 
 ## The charts
 
@@ -110,7 +140,7 @@ solves.
 
 ## The Flow tab
 
-![The Flow tab, 7 ms into the M1 plume establishing itself](../results/figures/18_explorer_flow.png)
+![The Flow tab: the RS-25 at 6 km, 21 ms after its plume started flowing](../results/figures/18_explorer_flow.png)
 
 Every other tab shows a converged answer. This one shows the flow arriving.
 It takes the exit state of design A, marches the axisymmetric Euler equations
@@ -118,18 +148,22 @@ outward from it starting from rest, and streams frames back while it runs, so
 the plume can be watched building and scrubbed afterwards or written out as an
 mp4.
 
-What is on screen above is 7.0 ms after the nozzle started flowing: the jet
-column established back to the exit plane, the shock-cell train on the axis
-with its bright Mach disc, and the starting vortex still rolling up at the
-head. The engine wall to the left is the contour Ignis solved, drawn at the
-same metres-per-pixel as the flow rather than sketched in.
+What is on screen above is the RS-25 at 6 km, 21 ms after its plume started
+flowing, in the 3-D volume view: NASA's model of the bell, cut away to show
+the gas Ignis solved inside it, and the over-expanded jet necking into its
+first shock diamond with the Mach disc glowing on the axis beyond it. The
+chamber and throat are drawn from the contour Ignis solved, at the same scale
+as everything else. The results column on the right sets Ignis's numbers for
+the engine beside Rocketdyne's. The 2-D view shows the same march as a slice,
+with every cell drawn.
 
-The caption carries the colour limits and, in brackets, the true extremes of
-the field. Those differ on purpose: the ramp spans the 1st to 99.5th
+The colour bar carries the ramp's limits and the caption the field's true
+extremes. Those differ on purpose: the ramp spans the 1st to 99.5th
 percentile over the whole march, because the starting shock leaves a handful
-of cells near 4642 K that nothing else in the run approaches, and scaling to
-them would leave the rest of the plume black from beginning to end. Printing
-both makes the clipping visible instead of silent.
+of cells far hotter than anything else in the run -- 5515 K in the RS-25 march
+above, against a ramp that tops out at 3921 K -- and scaling to them would
+leave the rest of the plume black from beginning to end. Printing both makes
+the clipping visible instead of silent.
 
 **The line under the viewer is the important one.** The plume model is
 inviscid and axisymmetric. It solves shock structure and wave propagation;
@@ -160,11 +194,22 @@ uniform across each station.
 
 *What the brightness means.* Colour is the selected field through the
 selected ramp, matching the colour bar. How much a stretch of ray contributes
-is the jet fraction the plume solver carries, so ambient air is transparent,
-and hotter gas is made more opaque than cooler gas so the shock cells on the
-axis are not hidden behind the jet's outer layers. That is the standard
-emission-absorption picture a CFD post-processor draws for a scalar field --
-a visualisation choice, not a radiation calculation.
+follows the jet fraction the plume solver carries, through a smoothstep: air
+is transparent, and so is the thin fringe the inviscid shear layer smears
+across the domain -- mostly air with a trace of exhaust -- so the jet column
+reads as a column. Hotter gas is made more opaque than cooler gas so the
+shock cells on the axis are not hidden behind the jet's outer layers. That is
+the standard emission-absorption picture a CFD post-processor draws for a
+scalar field -- a visualisation choice, not a radiation calculation, and the
+2-D view shows the same field with nothing hidden.
+
+Two controls beside **View** change only the look. **Gas** picks which part
+of the jet carries opacity: *jet core* (the default — gas at least 90 %
+exhaust, so the shock cells show) or *whole jet* (the hot, slowed shear layer
+around the core too; it is real, and drawn at full weight it hides the core).
+**Backdrop** is *dark*, a studio gradient against which glowing gas reads as
+glowing gas, or *light*, the theme's own surface, against which it reads as
+smoke.
 
 | Mouse | Action |
 |---|---|

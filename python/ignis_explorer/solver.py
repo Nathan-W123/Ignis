@@ -86,13 +86,55 @@ class Design:
                        coolant_inlet_temperature=0.0)
 
 
+# The RS-25 -- the Space Shuttle Main Engine -- Block IIA at 104.5 % of rated
+# power.  Every input is Rocketdyne's own figure, from the SSME Orientation
+# training manual (Boeing Rocketdyne, 1998); data/engines/rs25/README.md gives
+# the page for each.  Three are not read straight off a page, and say so:
+#   * chamber_length and bell_length_fraction are the values that make Ignis's
+#     contour 14.7 in from injector face to throat and 121 in from throat to
+#     exit -- the two lengths the manual gives;
+#   * channel_height: the manual does not give this chamber's slot depths, so
+#     it is the mean of the throat and aft depths NASA published for the
+#     earlier 390-slot liner (0.093 and 0.247 in) -- Ignis's jacket has one
+#     depth, the real slots taper;
+#   * wall_thickness is not published in these sources at all; it is the
+#     value the H1 uses.
+_IN, _PSI = 0.0254, 6894.757293168
+RS25 = Design(
+    propellant="LOX / H2",
+    chamber_pressure=2865.0 * _PSI,     # throat stagnation pressure, psia
+    mixture_ratio=6.032,
+    throat_radius=(93.02 / 3.141592653589793) ** 0.5 * _IN,   # throat area 93.02 in^2
+    expansion_ratio=69.0,
+    altitude=6_000.0,
+    eta_c_star=0.996,                   # "two-stage combustion approximately 99.6 % efficient"
+    contraction_ratio=2.66,
+    chamber_length=0.13659,
+    bell_length_fraction=0.814,
+    num_channels=430,
+    channel_height=0.5 * (0.093 + 0.247) * _IN,
+    wall_thickness=0.7e-3,
+    coolant_fraction=29.0 / 155.0,      # MCC coolant 29 lb/s of 155 lb/s of hydrogen
+    coolant_inlet_temperature=(-366.0 + 459.67) * 5.0 / 9.0,  # -366 F
+    coolant_inlet_pressure=5647.0 * _PSI,
+    jacket_end_area_ratio=4.48,         # the chamber ends at the nozzle attach flange
+)
+
 # The shipped designs.  They live here rather than in the window because the
 # case-freezing tool has to see them without importing a GUI toolkit.
 #
-# "10 km" is first because it is where the M1 is worth looking at: at sea level
-# Ignis predicts the nozzle separates, so the Flow tab rightly refuses to march
-# an attached plume there -- correct, but a poor first thing to be shown.
+# The first is what the window opens on.  The RS-25 is first because it is a
+# real engine, with a real 3-D model and published numbers to hold Ignis's
+# against.  Neither it nor the M1 is shown at sea level: there Ignis's
+# separation criterion says both nozzles separate, so the Flow tab rightly
+# refuses to march an attached plume -- correct for the M1, conservative for
+# the RS-25 (see data/engines/rs25/README.md), and a poor first thing to be
+# shown either way.  The RS-25 is at 6 km, the lowest whole kilometre at which
+# the criterion agrees its nozzle flows full, so its over-expanded plume forms
+# the shock diamond and Mach disc of the familiar low-altitude picture; the M1
+# is at 10 km for the same reason.
 PRESETS: Dict[str, Design] = {
+    "RS-25 (SSME)  6 km": RS25,
     "Ignis-M1  10 km": Design(altitude=10_000.0),
     "Ignis-M1  sea level": Design(),
     "Ignis-M1  vacuum": Design(expansion_ratio=45.0, altitude=80_000.0),

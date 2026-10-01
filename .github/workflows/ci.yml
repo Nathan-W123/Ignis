@@ -122,3 +122,8 @@ jobs:
           python tools/build_coolant_tables.py --help > /dev/null
           python tools/make_reference_data.py --help > /dev/null
           python python/make_figures.py --help > /dev/null
+      - name: Explorer offline check
+        # Presets round-trip through the design panel, every preset replays
+        # from data/results, and the shipped engine model is the file its
+        # provenance names and sits on its solved wall.
+        run: QT_QPA_PLATFORM=offscreen python tools/check_explorer.py

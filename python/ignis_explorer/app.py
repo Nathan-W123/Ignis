@@ -23,15 +23,18 @@ from PySide6 import QtCore, QtGui, QtWidgets  # noqa: E402
 from . import styles  # noqa: E402
 from .charts import (AltitudeChart, AxialChart, CompositionChart,  # noqa: E402
                      ContourChart, ThermalChart)
-from . import shell  # noqa: E402
+from . import engines, shell  # noqa: E402
 from .flow import FlowTab  # noqa: E402
 from .solver import (PRESETS, PROPELLANTS, Design, FrozenSolver,  # noqa: E402
                      Result, Solver)
 from .widgets import Card, Choice, ConstraintRow, Field, panel  # noqa: E402
 
 ASSUMPTIONS = """\
-Ignis-M1 and Ignis-H1 are CONCEPTUAL engines invented for this project. Nothing \
-here has been compared with a test stand and nothing here is flight-ready.
+Ignis-M1 and Ignis-H1 are CONCEPTUAL engines invented for this project, and \
+nothing here is flight-ready. The RS-25 preset is the real Space Shuttle Main \
+Engine's published geometry and operating point; what Ignis predicts for it is \
+set against Rocketdyne's own figures above, as a sanity check rather than a \
+validation.
 
 • Gas-phase equilibrium only — no condensed carbon, no finite-rate kinetics. \
 Frozen and shifting expansion bracket the truth; neither is it.
@@ -380,6 +383,7 @@ class Explorer(QtWidgets.QMainWindow):
                 key.title(), [("state", "not solved yet")])
             return
         d = r.design
+        hardware = engines.for_design(d)
 
         def num(k: str, scale: float = 1.0, unit: str = "", fmt: str = "{:.4g}") -> str:
             v = r.get(k)
@@ -387,7 +391,9 @@ class Explorer(QtWidgets.QMainWindow):
 
         pages = {
             "engine": ("Engine", [
-                ("name", d.propellant if d else "-"),
+                ("hardware", hardware.title if hardware else "Ignis design (conceptual)"),
+                ("3-D model", hardware.credit if hardware else "none - drawn from the contour"),
+                ("propellants", d.propellant if d else "-"),
                 ("solved by", r.version or "-"),
                 ("thrust", num("performance.thrust", 1e-3, "kN")),
                 ("specific impulse", num("performance.isp", 1.0, "s")),
@@ -626,6 +632,20 @@ class Explorer(QtWidgets.QMainWindow):
         lay_con.addWidget(self.warning_box)
         lay.addWidget(frame_con)
 
+        # Ignis against the real engine's published numbers, shown only when
+        # the design is that engine at the operating point they are for.
+        self.frame_real, lay_real = panel("Against the real engine")
+        self.real_grid = QtWidgets.QGridLayout()
+        self.real_grid.setHorizontalSpacing(10)
+        self.real_grid.setVerticalSpacing(3)
+        lay_real.addLayout(self.real_grid)
+        self.real_note = QtWidgets.QLabel()
+        self.real_note.setWordWrap(True)
+        self.real_note.setObjectName("unitLabel")
+        lay_real.addWidget(self.real_note)
+        self.frame_real.setVisible(False)
+        lay.addWidget(self.frame_real)
+
         frame_note, lay_note = panel("Model assumptions and limitations")
         note = QtWidgets.QTextEdit()
         note.setReadOnly(True)
@@ -713,6 +733,56 @@ class Explorer(QtWidgets.QMainWindow):
             vb = b.get(key) * scale if (b and b.ok) else None
             card.set_values(va, vb)
         self._refresh_constraints(a)
+        self._refresh_real(a)
+
+    @staticmethod
+    def _ignis_value(r: Result, key: str) -> float:
+        if key == "vacuum_thrust":
+            return r.get("performance.mdot") * r.get("performance.isp_vacuum") * 9.80665
+        return r.get(key)
+
+    def _refresh_real(self, r: Optional[Result]) -> None:
+        """Fill the comparison with the published figures, or hide it."""
+        hardware = engines.for_design(r.design) if (r is not None and r.ok) else None
+        show = (hardware is not None and bool(hardware.published)
+                and hardware.is_published_point(r.design))
+        self.frame_real.setVisible(show)
+        if not show:
+            return
+        while self.real_grid.count():
+            item = self.real_grid.takeAt(0)
+            if item.widget() is not None:
+                item.widget().deleteLater()
+        decimals = {"K": 0, "kN": 0, "s": 1, "kg/s": 1, "m": 3, "MPa": 2}
+        heads = ["", "Ignis", "published", "Ignis - pub."]
+        for c, text in enumerate(heads):
+            head = QtWidgets.QLabel(text)
+            head.setObjectName("unitLabel")
+            head.setAlignment(QtCore.Qt.AlignRight if c else QtCore.Qt.AlignLeft)
+            self.real_grid.addWidget(head, 0, c)
+        for i, row in enumerate(hardware.published["rows"], start=1):
+            ours = self._ignis_value(r, row["ignis"]) * row["scale"]
+            theirs = row["value"] * row["scale"]
+            d = decimals.get(row["unit"], 2)
+            name = QtWidgets.QLabel(f"{row['label']} [{row['unit']}]")
+            name.setObjectName("fieldLabel")
+            cells = [name,
+                     QtWidgets.QLabel(f"{ours:,.{d}f}" if ours == ours else "-"),
+                     QtWidgets.QLabel(f"{theirs:,.{d}f}"),
+                     QtWidgets.QLabel(f"{100.0 * (ours - theirs) / theirs:+.1f} %"
+                                      if ours == ours else "-")]
+            tip = f"published: {row['as_published']}\n{row['where']}"
+            for c, cell in enumerate(cells):
+                cell.setToolTip(tip)
+                if c:
+                    cell.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+                self.real_grid.addWidget(cell, i, c)
+        self.real_note.setText(
+            f"{hardware.title} at {hardware.spec.get('operating_point', '')}. Published: "
+            f"{hardware.published['source']}. A sanity check, not a validation: "
+            "rounded manufacturer figures against an ideal-flow model. Hover a row "
+            "for where each number is printed; data/engines/rs25/README.md says "
+            "what accounts for each gap.")
 
     def _refresh_constraints(self, r: Optional[Result]) -> None:
         rows: List[tuple] = []

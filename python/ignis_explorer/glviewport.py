@@ -84,8 +84,15 @@ in vec3 vCol;
 uniform vec3 uEye;
 uniform vec3 uKey;
 uniform vec3 uFill;
+uniform int uCut;          // 1: cut the cutaway wedge out of this draw
+uniform vec2 uCutDir;      // the wedge's centre, as a direction in (y, z)
+uniform float uCutCos;     // cosine of the wedge's half angle
 out vec4 fragColor;
 void main() {
+    if (uCut == 1) {
+        float rr = length(vPos.yz);
+        if (rr > 1e-6 && dot(vPos.yz / rr, uCutDir) > uCutCos) discard;
+    }
     vec3 n = normalize(vNrm);
     vec3 v = normalize(uEye - vPos);
     // The cutaway shows inner and outer faces alike, so light both sides.
@@ -122,7 +129,8 @@ uniform sampler2D uInside;    // x -> R: normalised field, G: wall radius
 uniform sampler2D uRamp;      // 256 x 1 colour ramp
 uniform mat4 uInvViewProj;
 uniform vec3 uEye;
-uniform vec3 uBackground;
+uniform vec3 uBackTop;        // backdrop, top of the view
+uniform vec3 uBackBottom;     // ... and bottom
 uniform float uPlumeX0;
 uniform float uPlumeX1;
 uniform float uPlumeR;
@@ -135,6 +143,8 @@ uniform float uDensity;        // plume, per unit length
 uniform float uInsideDensity;  // inside the engine, per unit length
 uniform float uGain;
 uniform int uSteps;
+uniform float uCoverLo;        // jet fraction at which gas starts to show
+uniform float uCoverHi;        // ... and at which it counts in full
 out vec4 fragColor;
 
 bool cylinder(vec3 o, vec3 d, float R, float xa, float xb,
@@ -166,8 +176,11 @@ bool cylinder(vec3 o, vec3 d, float R, float xa, float xb,
 
 void main() {
     vec2 uv = vNdc * 0.5 + 0.5;
-    vec3 base = texture(uSceneColor, uv).rgb;
     float depth = texture(uSceneDepth, uv).r;
+    // Where no geometry was drawn the backdrop is a soft vertical gradient,
+    // as in any post-processor's 3-D view; a flat fill reads as a hole.
+    vec3 base = depth < 1.0 ? texture(uSceneColor, uv).rgb
+                            : mix(uBackBottom, uBackTop, smoothstep(0.0, 1.0, uv.y));
 
     vec4 far = uInvViewProj * vec4(vNdc, 1.0, 1.0);
     far /= far.w;
@@ -214,12 +227,17 @@ void main() {
             value = s.r;
             rho = uInsideDensity;
         }
-        if (cover < 0.004) continue;
+        // Opacity follows the jet fraction through a smoothstep, so the thin
+        // fringe the inviscid shear layer smears across the domain -- mostly
+        // ambient air with a trace of exhaust -- fades out and the jet column
+        // reads as a column.  A visualisation choice; the data are untouched.
+        float w = smoothstep(uCoverLo, uCoverHi, cover);
+        if (w < 0.002) continue;
         vec3 c = texture(uRamp, vec2(clamp(value, 0.0, 1.0), 0.5)).rgb;
         // Hot gas is made more opaque than cool gas.  With a flat opacity the
         // outer layers of the jet hide its core, and the shock cells -- which
         // sit on the axis -- vanish behind a uniform shell.
-        float a = 1.0 - exp(-rho * cover * (0.12 + 0.88 * value) * dt);
+        float a = 1.0 - exp(-rho * w * (0.12 + 0.88 * value) * dt);
         acc += trans * a * c * uGain;
         trans *= 1.0 - a;
         if (trans < 0.01) break;
@@ -227,6 +245,16 @@ void main() {
     fragColor = vec4(base * trans + acc, 1.0);
 }
 """
+
+
+# Jet-fraction windows for the volume's opacity: the core alone, or every
+# part of the jet that is mostly exhaust.
+CORE = (0.90, 0.99)
+WHOLE = (0.25, 0.85)
+
+# The studio backdrop, top and bottom: a blue-grey close to ParaView's default,
+# dark enough for emission to read as light.
+STUDIO = ((0.165, 0.192, 0.235), (0.031, 0.039, 0.055))
 
 
 # --- small matrix helpers ----------------------------------------------------
@@ -309,22 +337,46 @@ class GLViewport(QOpenGLWidget):
         self.inside_opacity = 5.0   # ... and across the chamber
         self.gain = 1.0
         self.steps = 160
+        # Where gas starts to show and where it counts in full, in jet
+        # fraction (see the volume shader).  The default is the jet core:
+        # the hot, slowed shear layer around it is real, but drawn at full
+        # weight it wraps the core -- and the shock cells in it -- in fog.
+        self.cover_lo, self.cover_hi = CORE
+        # "dark": a studio gradient, against which glowing gas reads as glowing
+        # gas; "light": the theme's own surface, against which it reads as smoke.
+        self.backdrop = "dark"
         self.caption = ""
 
         self._fbo = None
         self._size = (0, 0)
+        self._plain_count = 0
+        # The cutaway: a wedge of the engine removed so the gas inside shows.
+        # It matches viewport3d.engine_meshes' default, which leaves the same
+        # wedge out of the revolved geometry -- centred on theta = pi, facing
+        # the default camera.
+        self.cut_half = np.radians(40.0)
+        self.cut_azimuth = np.pi
 
     # ------------------------------------------------------------ scene API
     def set_engine(self, meshes) -> None:
-        """Engine meshes (viewport3d.Mesh) with per-vertex colour."""
-        parts = []
+        """Engine meshes (viewport3d.Mesh) with per-vertex colour.
+
+        Meshes built with the cutaway already left out are drawn as they are;
+        those marked `cut_in_shader` have the wedge cut away per fragment.
+        They are packed into one buffer, revolved ones first, so each group
+        is a single draw.
+        """
+        groups = {False: [], True: []}
         for m in meshes:
             if m.colors is None:
                 continue
-            n = vertex_normals(m.vertices, m.faces)
+            n = m.normals if m.normals is not None else vertex_normals(m.vertices, m.faces)
             idx = m.faces.reshape(-1)
-            parts.append(np.hstack([m.vertices[idx], n[idx], m.colors[idx]]))
+            groups[bool(m.cut_in_shader)].append(
+                np.hstack([m.vertices[idx], n[idx], m.colors[idx]]))
+        parts = groups[False] + groups[True]
         self._mesh = np.vstack(parts).astype(np.float32) if parts else None
+        self._plain_count = int(sum(len(p) for p in groups[False]))
         self._mesh_dirty = True
         self.update()
 
@@ -364,8 +416,15 @@ class GLViewport(QOpenGLWidget):
             self.update()
 
     def frame_scene(self, x_min: float, x_max: float, radius: float) -> None:
-        self.target = np.array([x_min + 0.42 * (x_max - x_min), 0.0, 0.0])
-        self.distance = 0.55 * (x_max - x_min) + 1.6 * radius
+        """Aim at a stretch of the axis and back off until all of it shows.
+
+        The default view looks from upstream and to one side, so the near
+        (upstream) end is magnified by perspective; the aim point sits a
+        little upstream of the middle and the distance allows for that.
+        """
+        span = x_max - x_min
+        self.target = np.array([x_min + 0.46 * span, 0.0, 0.0])
+        self.distance = 0.78 * span + 1.8 * radius
         self.update()
 
     # ----------------------------------------------------------- GL plumbing
@@ -433,8 +492,18 @@ class GLViewport(QOpenGLWidget):
             fill = np.array([-0.6, 0.4, 0.2])
             self._set_vec(self._mesh_prog, "uKey", key / np.linalg.norm(key))
             self._set_vec(self._mesh_prog, "uFill", fill / np.linalg.norm(fill))
+            prog = self._mesh_prog
+            GL.glUniform2f(GL.glGetUniformLocation(prog, "uCutDir"),
+                           float(np.cos(self.cut_azimuth)), float(np.sin(self.cut_azimuth)))
+            GL.glUniform1f(GL.glGetUniformLocation(prog, "uCutCos"), float(np.cos(self.cut_half)))
             GL.glBindVertexArray(self._mesh_vao)
-            GL.glDrawArrays(GL.GL_TRIANGLES, 0, self._mesh_count)
+            plain = min(self._plain_count, self._mesh_count)
+            GL.glUniform1i(GL.glGetUniformLocation(prog, "uCut"), 0)
+            if plain:
+                GL.glDrawArrays(GL.GL_TRIANGLES, 0, plain)
+            if self._mesh_count > plain:
+                GL.glUniform1i(GL.glGetUniformLocation(prog, "uCut"), 1)
+                GL.glDrawArrays(GL.GL_TRIANGLES, plain, self._mesh_count - plain)
 
         # Pass 2: march the flow over it, into the widget's own framebuffer.
         GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.defaultFramebufferObject())
@@ -452,7 +521,9 @@ class GLViewport(QOpenGLWidget):
             GL.glUniform1i(GL.glGetUniformLocation(p, name), unit)
         self._set_mat(p, "uInvViewProj", np.linalg.inv(view_proj))
         self._set_vec(p, "uEye", eye)
-        self._set_vec(p, "uBackground", np.array(background))
+        top, bottom = self._backdrop()
+        self._set_vec(p, "uBackTop", top)
+        self._set_vec(p, "uBackBottom", bottom)
         x0, x1, rp = self._plume_box
         xi0, xi1, ri = self._inside_box
         for name, value in [("uPlumeX0", x0), ("uPlumeX1", x1), ("uPlumeR", rp),
@@ -466,18 +537,38 @@ class GLViewport(QOpenGLWidget):
         GL.glUniform1i(GL.glGetUniformLocation(p, "uHasInside"),
                        int(self._inside is not None))
         GL.glUniform1i(GL.glGetUniformLocation(p, "uSteps"), int(self.steps))
+        GL.glUniform1f(GL.glGetUniformLocation(p, "uCoverLo"), float(self.cover_lo))
+        GL.glUniform1f(GL.glGetUniformLocation(p, "uCoverHi"), float(self.cover_hi))
         GL.glBindVertexArray(self._quad_vao)
         GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)
         GL.glActiveTexture(GL.GL_TEXTURE0)
 
         if self.caption:
             painter = QtGui.QPainter(self)
-            painter.setPen(QtGui.QColor(styles.TEXT_MUTED))
+            painter.setPen(self._caption_colour())
             painter.drawText(self.rect().adjusted(10, 8, -10, -8),
                              QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft, self.caption)
             painter.end()
 
     # -------------------------------------------------------------- helpers
+    def _backdrop(self):
+        """Top and bottom of the backdrop gradient."""
+        if self.backdrop == "dark":
+            return np.array(STUDIO[0]), np.array(STUDIO[1])
+
+        def rgb(name):
+            c = QtGui.QColor(name)
+            return np.array([c.redF(), c.greenF(), c.blueF()])
+        deep, panel = rgb(styles.BG_DEEP), rgb(styles.BG_PANEL)
+        if deep.mean() > 0.5:
+            # Light theme: near-white at the top, the deep tone at the bottom.
+            return 0.35 * deep + 0.65 * panel, deep * 0.94
+        return deep * 1.9 + 0.02, deep * 0.6
+
+    def _caption_colour(self) -> QtGui.QColor:
+        top, _ = self._backdrop()
+        return QtGui.QColor("#c3ccd8") if top.mean() < 0.5 else QtGui.QColor(styles.TEXT_MUTED)
+
     def _program(self, vs_src: str, fs_src: str) -> int:
         def compile_one(kind, src):
             shader = GL.glCreateShader(kind)

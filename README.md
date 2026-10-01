@@ -161,11 +161,24 @@ they returned, including the refusal when a design does not close. The model's
 limitations are pinned open next to the answer rather than hidden behind a
 menu. See [`docs/explorer.md`](docs/explorer.md).
 
+It opens on a real engine: the **RS-25**, the Space Shuttle Main Engine, solved
+from Rocketdyne's published geometry and operating point and drawn inside
+NASA's public-domain 3-D model of its nozzle. Ignis's numbers are set beside
+Rocketdyne's — vacuum Isp 460.5 s against ≈ 452 s, propellant flow +3.8 %, and
+a chamber heat load 1.85 times the published one, which is the Bartz
+over-prediction this project's own validation finds. Where each number comes
+from, and what accounts for each gap, is in
+[`data/engines/rs25/README.md`](data/engines/rs25/README.md). Without a
+compiler the Explorer replays saved solves of its presets, so it runs from a
+plain `pip install`.
+
 ![The Explorer's Flow tab](results/figures/18_explorer_flow.png)
 
 Its **Flow** tab takes the exit state of whatever design is solved and marches
-the axisymmetric Euler equations outward from it, starting from rest, so you
-watch the plume establish itself: the jet front driving into still air, the
+the axisymmetric Euler equations outward from it, starting from rest, and
+draws it in 3-D on the GPU -- the axisymmetric solution swept around its axis
+is the 3-D field, so this is the solution itself, not an extrusion of a slice.
+You watch the plume establish itself: the jet front driving into still air, the
 starting vortex, the shock cells forming from the exit plane outward and the
 Mach disc settling. Every frame is a solution at that instant — nothing is
 interpolated between frames and nothing is painted on — and the march can be

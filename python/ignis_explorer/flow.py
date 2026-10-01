@@ -45,7 +45,7 @@ import numpy as np
 from matplotlib import colormaps
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from . import cases, glviewport, shell, styles, viewport3d
+from . import cases, engines, glviewport, shell, styles, viewport3d
 from .solver import Result
 from .widgets import panel
 
@@ -332,7 +332,7 @@ class FlowTab(QtWidgets.QWidget):
         self.import_button = QtWidgets.QPushButton("Import engine...")
         self.import_button.clicked.connect(self._import)
         grow.addWidget(self.import_button)
-        self.revert_button = QtWidgets.QPushButton("Back to M1")
+        self.revert_button = QtWidgets.QPushButton("Remove import")
         self.revert_button.clicked.connect(lambda: self._use_contour(""))
         self.revert_button.setEnabled(False)
         grow.addWidget(self.revert_button)
@@ -379,6 +379,24 @@ class FlowTab(QtWidgets.QWidget):
         self.view_box.currentIndexChanged.connect(self._view_changed)
         row.addWidget(QtWidgets.QLabel("View"))
         row.addWidget(self.view_box)
+
+        # How the 3-D volume is drawn, not what is solved: which part of the
+        # jet carries opacity, and what it is drawn against.
+        self.gas_box = QtWidgets.QComboBox()
+        self.gas_box.addItems(["jet core", "whole jet"])
+        self.gas_box.setToolTip(
+            "Jet core: gas that is at least 90 % exhaust carries the opacity, so\n"
+            "the shock cells show.  Whole jet: the hot, slowed shear layer around\n"
+            "it too.  The 2-D view always shows every cell.")
+        self.gas_box.currentIndexChanged.connect(self._look_changed)
+        self.backdrop_box = QtWidgets.QComboBox()
+        self.backdrop_box.addItems(["dark", "light"])
+        self.backdrop_box.currentIndexChanged.connect(self._look_changed)
+        self._look_widgets = [QtWidgets.QLabel("Gas"), self.gas_box,
+                              QtWidgets.QLabel("Backdrop"), self.backdrop_box]
+        for widget in self._look_widgets:
+            row.addWidget(widget)
+            widget.setVisible(self.gl is not None)
 
         self.quality_box = QtWidgets.QComboBox()
         self.quality_box.addItems([f"{g[0]}x{g[1]}  ~{g[6]}" for g in GRIDS])
@@ -699,6 +717,8 @@ class FlowTab(QtWidgets.QWidget):
     def _gl_ready(self, ok: bool) -> None:
         if ok:
             return
+        for widget in self._look_widgets:
+            widget.setVisible(False)
         # No usable context: put the NumPy viewport where the GL one was.
         self.stack.removeWidget(self.gl)
         self.stack.insertWidget(1, self.view3d)
@@ -736,6 +756,14 @@ class FlowTab(QtWidgets.QWidget):
             step = max(1, x.size // 160)
             temperature = (np.asarray(profile["temperature"], float)
                            if profile is not None else None)
+            # Real hardware, when the solved nozzle is that hardware's nozzle:
+            # its model is drawn around the solution, and the parts of the
+            # engine it does not include are drawn in its colour from the
+            # solved contour, so the engine reads as one object.
+            hardware = (engines.for_design(self._result.design)
+                        if self.current_case() is None and self._result is not None
+                        else None)
+            skin = hardware.skin_colour() if hardware is not None else None
             self._engine_meshes = viewport3d.engine_meshes(
                 np.column_stack([x[::step], r[::step]]),
                 wall=max(0.006, 0.03 * float(r.min())),
@@ -744,7 +772,11 @@ class FlowTab(QtWidgets.QWidget):
                 lo=0.0 if temperature is None else float(temperature.min()),
                 hi=1.0 if temperature is None else float(temperature.max()),
                 wall_colour=None if temperature is not None else (0.62, 0.65, 0.70),
+                outer_colour=skin or (0.30, 0.33, 0.38),
                 n_theta=96)
+            if hardware is not None:
+                self._engine_meshes = self._engine_meshes + hardware.meshes(float(x[-1]))
+            self._hardware = hardware
             self.gl.set_engine(self._engine_meshes)
         if gl_key != getattr(self, "_gl_key", None):
             self._gl_key = gl_key
@@ -767,14 +799,33 @@ class FlowTab(QtWidgets.QWidget):
         self.gl.set_plume(np.clip((values - lo) / span_v, 0.0, 1.0),
                           frame.data["jet_fraction"], span, length, r_max)
         if not getattr(self, "_gl_framed", False):
-            self.gl.frame_scene(float(x[0]), span + length, r_max)
+            # The engine and the first stretch of its plume, where the shock
+            # cells are -- not the whole far field, which leaves the engine a
+            # speck on the left.  Wheel and drag reach the rest.
+            engine = span - float(x[0])
+            self.gl.frame_scene(float(x[0]), span + min(length, 1.6 * engine),
+                                min(r_max, 1.25 * float(np.max(r))))
             self._gl_framed = True
-        self.gl.caption = caption
+        hardware = getattr(self, "_hardware", None)
+        self.gl.caption = (caption if hardware is None else
+                           f"{caption}\n{hardware.spec.get('name', '')} bell: "
+                           f"{hardware.credit.split(' (')[0]} model.  Chamber, throat "
+                           f"and every flow field: Ignis")
 
     def _view_changed(self, index: int) -> None:
         self.stack.setCurrentIndex(index)
         self._scene_dirty = True
+        for widget in self._look_widgets:
+            widget.setVisible(index == 1 and self.stack.widget(1) is self.gl)
         self._draw()
+
+    def _look_changed(self, _index: int = 0) -> None:
+        if self.gl is None:
+            return
+        self.gl.cover_lo, self.gl.cover_hi = (
+            glviewport.CORE if self.gas_box.currentIndex() == 0 else glviewport.WHOLE)
+        self.gl.backdrop = self.backdrop_box.currentText()
+        self.gl.update()
 
     def _draw3d(self, frame: Frame, values: np.ndarray, lo: float, hi: float,
                 caption: str) -> None:
@@ -920,7 +971,7 @@ class FlowTab(QtWidgets.QWidget):
 
     def _use_contour(self, path: str) -> None:
         self.geometry_label.setText(
-            os.path.basename(path) if path else "Ignis-M1 (analytic bell)")
+            os.path.basename(path) if path else "the preset's own geometry")
         self.revert_button.setEnabled(bool(path))
         self._frames = []
         self._ranges = {}
