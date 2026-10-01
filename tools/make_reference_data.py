@@ -308,12 +308,19 @@ def write_cea(out_dir):
 def write_coolant(out_dir):
     import CoolProp.CoolProp as CP
     path = os.path.join(out_dir, "coolant_reference.csv")
+    # The last points of each cryogen are turbopump states: a pump inlet at a
+    # few bar on the cold liquid, and discharges up to the 41 MPa of a
+    # hydrogen pump and the 48 MPa of an oxygen preburner boost pump, where
+    # tests/validation/test_cycle_validation.cpp integrates the pump work.
     points = {
         "methane": [(120.0, 1.0e7), (150.0, 1.5e7), (200.0, 1.5e7), (300.0, 1.5e7),
-                    (400.0, 1.0e7), (600.0, 1.5e7), (800.0, 2.0e7), (500.0, 5.0e6)],
+                    (400.0, 1.0e7), (600.0, 1.5e7), (800.0, 2.0e7), (500.0, 5.0e6),
+                    (112.0, 3.0e5), (115.0, 1.0e7)],
         "hydrogen": [(30.0, 1.2e7), (60.0, 1.2e7), (100.0, 1.2e7), (200.0, 1.0e7),
-                     (400.0, 1.0e7), (700.0, 1.5e7)],
-        "oxygen": [(100.0, 1.0e7), (150.0, 1.0e7), (300.0, 1.0e7), (500.0, 1.5e7)],
+                     (400.0, 1.0e7), (700.0, 1.5e7),
+                     (21.0, 2.5e5), (21.0, 2.0e6), (25.0, 1.0e7), (32.0, 3.0e7), (45.0, 4.1e7)],
+        "oxygen": [(100.0, 1.0e7), (150.0, 1.0e7), (300.0, 1.0e7), (500.0, 1.5e7),
+                   (91.0, 7.0e5), (92.0, 2.8e7), (95.0, 4.8e7)],
         # The RP-1 surrogate: a cold inlet, the jacket's working range, and
         # near the critical temperature at a jacket pressure.
         "dodecane": [(300.0, 1.0e7), (400.0, 1.0e7), (500.0, 1.5e7), (600.0, 1.0e7),

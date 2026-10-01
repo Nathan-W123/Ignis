@@ -99,6 +99,24 @@ feed:
     viscosity: 1.2e-4             # Pa s, liquid methane near 112 K
     injector_cd: 0.75
 
+# Turbopump cycle (ignis/cycle/Cycle.hpp).  A fuel-rich gas generator drives one
+# turbine on both pumps and is dumped.  The efficiencies, the turbine inlet
+# temperature and its pressure ratio are typical conceptual-design values,
+# ASSUMED, not taken from any engine.  The jacket above is configured at a
+# 15 MPa inlet, about 6 MPa more than this injector needs; the fuel pump pays
+# to deliver it and the summary reports the excess as throttled.
+cycle:
+  type: gas_generator
+  pump_efficiency: 0.70
+  turbine_efficiency: 0.60
+  mechanical_efficiency: 0.98
+  pump_inlet_pressure: 3.0e5      # Pa, tank head at both pump inlets
+  injector_stiffness: 0.20        # main injector dp / p_c, as the feed block
+  line_loss_fraction: 0.05        # valves and lines, of p_c
+  turbine_inlet_temperature: 900.0  # K
+  fuel_rich: true
+  turbine_pressure_ratio: 20.0
+
 output:
   directory: results/methane_nominal
   prefix: m1

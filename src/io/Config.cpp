@@ -187,7 +187,7 @@ EngineConfig EngineConfig::load(const std::string& path) {
   cfg.document = std::make_shared<YAML::Node>(doc);
   ConfigNode root(doc, "", path);
   root.requireOnly({"name", "description", "species", "propellants", "chamber", "nozzle",
-                    "performance", "cooling", "feed", "transient", "sweep", "optimization",
+                    "performance", "cooling", "feed", "cycle", "transient", "sweep", "optimization",
                     "monte_carlo", "output"});
 
   cfg.name = root.optional("name").text("engine");
@@ -335,8 +335,10 @@ EngineConfig EngineConfig::load(const std::string& path) {
     s.min_land_width = c.optional("min_land_width").number(1e-5, 0.05, 5.0e-4);
     s.wall_thickness = c.optional("wall_thickness").number(1e-5, 0.05, 1.0e-3);
     s.roughness = c.optional("roughness").number(0.0, 1e-3, 5.0e-6);
-    s.inlet_temperature = c.optional("inlet_temperature").number(1.0, 2000.0, 0.0);
-    s.inlet_pressure = c.optional("inlet_pressure").number(1e4, 1e9, 0.0);
+    // Absent (or 0): the fuel's storage temperature, or the fuel pump's outlet under a cycle.
+    s.inlet_temperature = c.optional("inlet_temperature").number(0.0, 2000.0, 0.0);
+    // Absent (or 0): 1.6 p_c, or the fuel pump's discharge under a cycle.
+    s.inlet_pressure = c.optional("inlet_pressure").number(0.0, 1e9, 0.0);
     s.counterflow = c.optional("counterflow").boolean(true);
     s.x_start = c.optional("x_start").number(0.0);
     s.x_end = c.optional("x_end").number(-1.0);
@@ -424,6 +426,46 @@ EngineConfig EngineConfig::load(const std::string& path) {
     };
     if (f.has("oxidizer")) leg(f["oxidizer"], cfg.feed.oxidizer);
     if (f.has("fuel")) leg(f["fuel"], cfg.feed.fuel);
+  }
+
+  // --- turbopump cycle ---------------------------------------------------
+  if (root.has("cycle")) {
+    const auto c = root["cycle"];
+    c.requireOnly({"enabled", "type", "pump_efficiency", "pump_efficiency_oxidizer",
+                   "pump_efficiency_fuel", "boost_pump_efficiency", "turbine_efficiency",
+                   "mechanical_efficiency", "pump_inlet_pressure", "pump_inlet_pressure_oxidizer",
+                   "pump_inlet_pressure_fuel", "injector_stiffness", "line_loss_fraction",
+                   "turbine_inlet_temperature", "fuel_rich", "gas_generator_pressure",
+                   "turbine_pressure_ratio", "preburner_injector_stiffness",
+                   "hot_gas_injector_stiffness", "preburner_flow_fraction",
+                   "turbine_bypass_fraction"});
+    cfg.cycle_enabled = c.optional("enabled").boolean(true);
+    CycleSpec& y = cfg.cycle;
+    y.type = parseCycleType(c.optional("type").text("gas_generator"));
+    const double eta_pump = c.optional("pump_efficiency").number(0.05, 1.0, 0.70);
+    y.pump_efficiency_oxidizer = c.optional("pump_efficiency_oxidizer").number(0.05, 1.0, eta_pump);
+    y.pump_efficiency_fuel = c.optional("pump_efficiency_fuel").number(0.05, 1.0, eta_pump);
+    y.boost_pump_efficiency = c.optional("boost_pump_efficiency").number(0.05, 1.0, eta_pump);
+    y.turbine_efficiency = c.optional("turbine_efficiency").number(0.05, 1.0, 0.60);
+    y.mechanical_efficiency = c.optional("mechanical_efficiency").number(0.5, 1.0, 0.98);
+    const double p_inlet = c.optional("pump_inlet_pressure").number(1e3, 1e8, 3.0e5);
+    y.pump_inlet_pressure_oxidizer =
+        c.optional("pump_inlet_pressure_oxidizer").number(1e3, 1e8, p_inlet);
+    y.pump_inlet_pressure_fuel = c.optional("pump_inlet_pressure_fuel").number(1e3, 1e8, p_inlet);
+    // Shared with the feed block when there is one, so the two agree.
+    y.injector_stiffness = c.optional("injector_stiffness")
+                               .number(0.0, 0.9, cfg.feed_enabled ? cfg.injector_stiffness : 0.20);
+    y.line_loss_fraction = c.optional("line_loss_fraction").number(0.0, 1.0, 0.05);
+    y.turbine_inlet_temperature =
+        c.optional("turbine_inlet_temperature").number(300.0, 2500.0, 900.0);
+    y.fuel_rich = c.optional("fuel_rich").boolean(true);
+    y.gas_generator_pressure = c.optional("gas_generator_pressure").number(0.0, 1e9, 0.0);
+    y.turbine_pressure_ratio = c.optional("turbine_pressure_ratio").number(1.0001, 1000.0, 20.0);
+    y.preburner_injector_stiffness =
+        c.optional("preburner_injector_stiffness").number(0.0, 0.9, 0.15);
+    y.hot_gas_injector_stiffness = c.optional("hot_gas_injector_stiffness").number(0.0, 0.9, 0.10);
+    y.preburner_flow_fraction = c.optional("preburner_flow_fraction").number(0.01, 1.0, 1.0);
+    y.turbine_bypass_fraction = c.optional("turbine_bypass_fraction").number(0.0, 0.95, 0.0);
   }
 
   // --- output ----------------------------------------------------------

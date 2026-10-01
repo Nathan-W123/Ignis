@@ -24,6 +24,7 @@ are dimensionless).
 | `performance` | `ignis_engine`, `ignis_nozzle`, studies | no |
 | `cooling` | `ignis_engine`, studies | no (off by default) |
 | `feed` | `ignis_engine`, studies | no (off by default) |
+| `cycle` | `ignis_engine`, studies | no (off by default) |
 | `transient` | `ignis_transient` | yes for that tool |
 | `sweep` | `ignis_sweep` | yes for that tool |
 | `optimization` | `ignis_sweep --optimize` | yes for that mode |
@@ -51,7 +52,7 @@ is for deliberately frozen or reduced-mechanism studies.
 propellants:
   library: data/propellants/ignis_propellants.yaml   # optional
   oxidizer: LOX            # LOX, GOX
-  fuel: LCH4               # LCH4, LH2, GCH4, GH2
+  fuel: LCH4               # LCH4, LH2, RP1, GCH4, GH2
   oxidizer_temperature: 90.18   # K; omit or 0 => the library reference state
   fuel_temperature: 111.66      # K
   mixture_ratio: 3.4            # O/F by mass
@@ -63,6 +64,12 @@ chamber solve is a genuine constant-enthalpy problem from the tanks, not from
 gaseous reactants at 298.15 K. Setting a temperature away from the reference
 value applies the tabulated liquid c<sub>p</sub>; going far outside the
 tabulated range raises `RangeError` rather than extrapolating silently.
+
+`RP1` is the NASA CEA library's RP-1, written per carbon atom as CH<sub>1.95</sub>
+with CEA's enthalpy (Mehta et al., AIAA 95-2962), at the density NIST measured
+(Outcalt, Laesecke & Brumback 2009). Its cooling-jacket table is
+`coolant: dodecane`, the n-dodecane surrogate. Run with `species: { elements:
+[C, H, O] }`; `configs/kerosene_nominal.yaml` is the worked example.
 
 ## `chamber`
 
@@ -180,7 +187,7 @@ appears last in the parameter registry wins when a study drives them.
 ```yaml
 cooling:
   enabled: true
-  coolant: methane              # methane | hydrogen | oxygen (tabulated reference EOS)
+  coolant: methane              # methane | hydrogen | oxygen | dodecane (tabulated reference EOS)
   material: CuCrZr              # CuCrZr | Copper | Inconel718 | SS316
   num_channels: 300
   width_mode: fraction_of_pitch # fraction_of_pitch | fixed
@@ -190,8 +197,10 @@ cooling:
   wall_thickness: 0.6e-3        # m, hot-gas-side wall
   roughness: 5.0e-6             # m, absolute
   coolant_fuel_fraction: 1.0    # fraction of the fuel flow through the jacket
-  inlet_temperature: 111.66     # K
-  inlet_pressure: 15.0e6        # Pa
+  inlet_temperature: 111.66     # K; omit: the fuel's storage temperature, or
+                                # the fuel pump's outlet under a cycle
+  inlet_pressure: 15.0e6        # Pa; omit: 1.6 p_c, or the fuel pump's
+                                # discharge under a cycle
   counterflow: true             # coolant enters at the nozzle end
   x_end_area_ratio: 10.0        # jacket ends where A/At falls to this value
   nusselt_correlation: dittus-boelter  # dittus-boelter | gnielinski
@@ -203,6 +212,8 @@ cooling:
                                 # downstream of the injector; 0 => first station's
   gas_emissivity: 0.0           # 0 disables the radiation term
   segments: 240                 # jacket march segments
+  coolant_wall_limit: 0         # K; warn when the coolant-side wall passes this
+                                # (e.g. 728 K, RP-2's measured coking onset); 0 => none
   taper:                        # optional: channel size along the jacket
     x:      [0.00, 0.30, 0.36, 0.45]        # m from the injector face
     height: [5.0e-3, 3.0e-3, 3.0e-3, 5.0e-3] # m; linear between, constant beyond
@@ -251,6 +262,48 @@ feed:
   fuel:     { line_length: 1.8, line_diameter: 0.07, fitting_k: 3.0,
               viscosity: 1.2e-4, injector_cd: 0.75 }
 ```
+
+## `cycle`
+
+```yaml
+cycle:
+  enabled: true
+  type: gas_generator           # gas_generator | staged_combustion | expander
+  pump_efficiency: 0.70         # both main pumps (or pump_efficiency_oxidizer / _fuel)
+  boost_pump_efficiency: 0.70   # staged combustion's boost stage; default pump_efficiency
+  turbine_efficiency: 0.60
+  mechanical_efficiency: 0.98   # bearings, seals, gearing
+  pump_inlet_pressure: 3.0e5    # Pa, both pumps (or pump_inlet_pressure_oxidizer / _fuel)
+  injector_stiffness: 0.20      # main injector dp / p_c; default: the feed block's
+  line_loss_fraction: 0.05      # valves and lines, as a fraction of p_c
+  turbine_inlet_temperature: 900.0  # K, gas generator or preburner
+  fuel_rich: true               # generator / preburner side of stoichiometric
+  # gas generator
+  gas_generator_pressure: 0     # Pa; 0 => the chamber pressure
+  turbine_pressure_ratio: 20.0
+  # staged combustion
+  preburner_injector_stiffness: 0.15  # dp / p_preburner
+  hot_gas_injector_stiffness: 0.10    # (turbine outlet - p_c) / p_c
+  preburner_flow_fraction: 1.0        # of the preburner's major propellant
+  # expander
+  turbine_bypass_fraction: 0.0        # of the jacket flow, round the turbine
+```
+
+A pump-fed engine's turbopump power balance ([`theory.md`
+§14](theory.md#14-feed-system-and-turbopump-cycles)). A gas generator solves
+its flow in closed form and brackets its exhaust's thrust. A staged-combustion
+cycle solves its turbine pressure ratio, and an expander its fuel pump's
+discharge pressure. Either reports, rather than throws, when no operating point
+balances. The jacket, when the fuel cools it, sits between the fuel pump and
+everything downstream. With `cooling.inlet_pressure` and
+`cooling.inlet_temperature` left out, the engine iterates jacket and cycle
+until the jacket starts at the fuel pump's discharge. A configured inlet
+pressure above what the injector needs is delivered by the pump, and the
+excess is reported as throttled. Propellants with their own real-fluid table
+(oxygen, methane, hydrogen) are pumped along it; RP-1, whose table is a
+surrogate, is pumped as an incompressible liquid at its measured density.
+`ignis_engine --no-cycle` skips the analysis. With both a `feed` and a `cycle`
+block, the feed block describes a pressure-fed alternative.
 
 ## `transient`
 
@@ -391,6 +444,9 @@ cooling.hot_gas_multiplier      cooling.inlet_temperature
 cooling.inlet_pressure          cooling.coolant_fuel_fraction
 cooling.roughness               cooling.film_fuel_fraction
 cooling.film_slot_height        feed.injector_stiffness
+cycle.turbine_inlet_temperature cycle.turbine_efficiency
+cycle.pump_efficiency           cycle.turbine_pressure_ratio
+cycle.injector_stiffness
 ```
 
 `cooling.bartz_multiplier` is accepted as the older name of
@@ -419,7 +475,12 @@ geometry.total_length      geometry.divergent_length
 cooling.max_wall_temperature cooling.max_heat_flux    cooling.total_heat_load
 cooling.pressure_drop      cooling.outlet_temperature cooling.temperature_rise
 cooling.energy_balance_residual cooling.flux_residual
+cooling.max_coolant_side_wall_temperature
 feed.oxidizer_tank_pressure feed.fuel_tank_pressure   feed.total_pump_power
+cycle.isp_vacuum_delivered cycle.isp_delivered        cycle.isp_vacuum_dumped
+cycle.gas_generator_flow_fraction cycle.fuel_pump_discharge_pressure
+cycle.oxidizer_pump_discharge_pressure cycle.pump_power cycle.turbine_pressure_ratio
+cycle.max_power_ratio      cycle.feasible
 ```
 
 The residual metrics are deliberately exposed as sweepable quantities: a sweep

@@ -10,7 +10,8 @@
 ///   2. propellants  ->  chamber equilibrium  ->  c* and throat state
 ///   3. contour      ->  quasi-1D expansion   ->  thrust, Isp, Cf, regime
 ///   4. expansion + contour + chamber -> Bartz -> wall -> coolant channels
-///   5. mass flows   ->  feed system
+///   5. mass flows   ->  turbopump cycle (which sets the jacket inlet pressure)
+///                   ->  feed system
 ///
 /// Nothing here introduces new physics; it only wires the modules together and
 /// carries the results, so an application, a sweep, an optimiser and a Monte
@@ -20,6 +21,7 @@
 #include <string>
 
 #include "ignis/combustion/Chamber.hpp"
+#include "ignis/cycle/Cycle.hpp"
 #include "ignis/cycle/FeedSystem.hpp"
 #include "ignis/io/Config.hpp"
 #include "ignis/io/Json.hpp"
@@ -82,6 +84,15 @@ struct SteadyEngineResult {
   } film;
   bool has_feed = false;
   FeedSystemResult feed;
+  /// The turbopump cycle, and how it set the jacket's inlet pressure.
+  bool has_cycle = false;
+  CycleResult cycle;
+  struct CycleCoupling {
+    bool jacket_inlet_from_cycle = false;  ///< the cycle, not the config, set it
+    int passes = 0;                        ///< cooling solves while iterating
+    double jacket_inlet_pressure = 0.0;    ///< Pa, the jacket's final solve
+    double mismatch = 0.0;                 ///< final fuel discharge / that - 1
+  } cycle_coupling;
 
   std::string summary() const;
   Json toJson() const;

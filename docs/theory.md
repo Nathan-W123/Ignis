@@ -20,7 +20,7 @@ in the code.
 11. [Transport properties](#11-transport-properties)
 12. [Hot-gas heat transfer and wall conduction](#12-hot-gas-heat-transfer-and-wall-conduction)
 13. [Regenerative cooling](#13-regenerative-cooling)
-14. [Feed system](#14-feed-system)
+14. [Feed system and turbopump cycles](#14-feed-system-and-turbopump-cycles)
 15. [Transient chamber](#15-transient-chamber)
 16. [Optimisation](#16-optimisation)
 17. [Uncertainty and sensitivity](#17-uncertainty-and-sensitivity)
@@ -901,7 +901,9 @@ zero.
 
 ---
 
-## 14. Feed system
+## 14. Feed system and turbopump cycles
+
+### 14.1 Pressure-fed supply
 
 Pressure-fed, per propellant leg:
 
@@ -921,15 +923,135 @@ Injector stiffness `Δp_injector / p_c` is reported and checked against a
 configurable floor, because a soft injector invites combustion instability.
 **Ignis does not model combustion stability.**
 
-The isentropic pump power for the same duty is reported for comparison:
+The feed block also reports `P = ṁ Δp / (ρ η)` for the same duty, as a
+comparison figure. A pump-fed engine is the `cycle` block's job (14.2–14.3);
+when both blocks are present the feed block describes a pressure-fed
+alternative. Pressurant mass is the isothermal ideal-gas bound
+`m = p_tank V M / (R T)`, stated as a bound and not a prediction.
+
+### 14.2 Pumps, turbines, generators
+
+`ignis/cycle/Turbomachinery.hpp`.
+
+**Pump.** The isentropic work per kg is `∫ dp / ρ` along the isentrope. Where
+the propellant has its own real-fluid table (`data/coolants`: oxygen, methane,
+hydrogen) the integral is marched along the table, 400 midpoint steps from the
+inlet to the discharge pressure. On an isentrope `dh = v dp`, so marching `h`
+with `dp/ρ(T, p)` and recovering `T` from `(h, p)` follows the isentrope
+without the table carrying entropy. Liquid hydrogen is compressible enough
+that this matters: at the RS-25's high-pressure fuel pump (1.7 → 41 MPa) its
+density rises 17 %, and `Δp/ρ_inlet` overstates the work by 13 %. Where the
+table is a surrogate (RP-1's n-dodecane, 7 % lighter than RP-1) the pump would
+inherit the surrogate's density error, so the liquid is taken as
+incompressible at the propellant's measured density instead; a kerosene's
+compressibility over a few tens of MPa is under one percent. The pump's actual
+enthalpy rise is the isentropic one over its efficiency, and its outlet
+temperature follows from the table.
+
+**Gas turbine.** Generator or preburner gas of composition `n` expands at
+frozen composition: `s(T₂s, p₂) = s(T₁, p₁)` on the species
+thermodynamics, work `η_T [h(T₁) − h(T₂s)]` per kg.
+
+**Fluid turbine.** An expander's heated fuel expands along its real-fluid
+table, the pump's march in reverse.
+
+**Generator or preburner.** The mixture ratio whose adiabatic flame
+temperature is the requested turbine inlet temperature, on the fuel-rich or
+the oxidiser-rich side of stoichiometric. It is solved as the energy balance
+it is,
 
 ```
-P_pump = ṁ Δp / (ρ η_pump)
+h_reactants(MR) = h_eq(MR; T_turbine, p)
 ```
 
-with no turbine, gas generator, bearing, seal, shaft dynamics, cavitation
-(NPSH) or cycle balance behind it. Pressurant mass is the isothermal ideal-gas
-bound `m = p_tank V M / (R T)`, stated as a bound and not a prediction.
+with fixed-temperature equilibria, bisected in `log MR`. Comparing adiabatic
+flame temperatures with the target instead would ask for adiabatic states
+colder than the species data reach: cryogenic hydrogen far from
+stoichiometric burns below their 200 K floor. The reactants carry whatever the
+pumps and the jacket have put into them, which matters for hydrogen
+(14.3). The gas is chemical equilibrium at the turbine inlet temperature. For
+hydrogen that is a good description. A fuel-rich hydrocarbon generator makes
+soot and cracked fuel far from equilibrium, and Ignis carries no condensed
+carbon, so for methane or kerosene the composition is approximate. The run
+says so.
+
+### 14.3 Cycle closures
+
+`ignis/cycle/Cycle.hpp`. Each closure finds the operating point at which
+
+```
+η_mech P_turbine = P_pumps
+```
+
+with one equivalent turbine on all the pumps. A twin-shaft engine balances
+each shaft separately; this checks their sum.
+
+**Pressures.** A pump's discharge is what lies downstream of it: the main
+injector `p_c (1 + s_inj)`, valves and lines `f_line p_c`, and on the fuel
+side the jacket's pressure drop from the cooling solve. The jacket follows
+the fuel pump directly, so the fuel pump's discharge *is* the jacket's inlet
+pressure, and its outlet temperature the jacket's inlet temperature. Unless
+`cooling.inlet_pressure` and `cooling.inlet_temperature` are configured, the
+engine iterates the jacket and the cycle until they agree (0.1 % in pressure,
+0.05 K). When the inlet pressure is configured above what the injector needs,
+the pump delivers it and the excess is reported as throttled.
+
+**Gas generator (open).** The generator is fed from the main pump discharges
+and runs at the chamber pressure unless told otherwise; its turbine pressure
+ratio is an input. The pumps also lift the generator's propellant, so with `w`
+the work per kg each pump does, `x` the generator's propellant mass fractions
+and `Δh_T` the turbine's work per kg,
+
+```
+ṁ_gg = (ṁ_ox w_ox + ṁ_f w_f) / (η_m Δh_T − x_ox w_ox − x_f w_f)
+```
+
+in closed form. A non-positive denominator means each kilogram through the
+turbine yields less than it costs to pump, and no flow closes the cycle. The
+exhaust leaves through its own duct, and its contribution is bracketed:
+nothing (dumped), or an ideal frozen expansion to the main nozzle's exit
+pressure. That expansion stops where the frozen isentrope reaches the species
+data's lower limit, before water would condense. The delivered specific
+impulse is main chamber plus exhaust over main plus generator flow, given at
+both ends of the bracket.
+
+**Staged combustion (closed).** All of one propellant passes through a
+preburner, or a set fraction of it: the fuel for a fuel-rich preburner, the
+oxidiser for an oxidiser-rich one. It burns with a little of the other,
+drives the turbine and is injected into the main chamber. The unknown is the
+turbine pressure ratio `PR`:
+
+```
+p_pb   = PR · p_c (1 + s_hg)                     s_hg: hot-gas injector stiffness
+p_feed = p_pb (1 + s_pb) + f_line p_c            the preburner's supply
+```
+
+The major propellant's pump delivers `p_feed`, through the jacket first on a
+fuel-rich cycle. The minor propellant reaches it through a boost stage from
+its main pump's discharge, as on the RS-25. A larger `PR` gives the turbine
+more work per kg but asks more of the pump feeding it, so the balance
+`g(PR) = η_m P_T − P_pumps` rises from `−P_pumps` at `PR = 1`, peaks and falls.
+Ignis takes its smallest root, found on a 48-point grid in `log PR` and closed
+by bisection. `PR` is searched up to 10, or to the point where a pump reaches
+its property table's ceiling. The preburner gas depends weakly on `PR`
+(through the pump work it carries and its pressure), so gas and ratio
+alternate until the mixture ratio settles to 1e-10. When `g` never reaches
+zero the cycle does not close. The result reports the best power ratio
+`η_m P_T / P_pumps` any admissible `PR` reaches, and is marked infeasible.
+
+**Expander (closed).** The jacket's heated fuel drives the turbine and then
+goes to the injector. The turbine expands from the jacket outlet to the
+injector supply, `p_c (1 + s_inj + f_line)`. The unknown is the fuel pump's
+discharge `p_d`, with `PR = (p_d − Δp_jacket) / p_c (1 + s_inj + f_line)`,
+solved as above. An optional bypass sends part of the jacket flow round the
+turbine. A film drawn from the jacket outlet never reaches it.
+
+**What the closures leave out.** Pump and turbine maps and speeds, NPSH and
+cavitation, bearing-coolant, igniter and tank-pressurisation bleeds, heat
+exchangers, the start transient, and turbine-inlet temperature limits beyond
+the one requested. Efficiencies are inputs, not predictions. The low-pressure
+boost turbopumps of an engine like the RS-25 are represented only by the
+pump inlet pressure.
 
 ---
 

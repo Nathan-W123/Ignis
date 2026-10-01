@@ -327,7 +327,15 @@ double PengRobinsonFluid::compressibility(double T, double p) const {
   // Solve by Newton from both ends and keep the physical roots.
   auto f = [&](double Z) { return ((Z + c2) * Z + c1) * Z + c0; };
   auto df = [&](double Z) { return (3.0 * Z + 2.0 * c2) * Z + c1; };
-  double best = 1.0;
+  // ln(fugacity coefficient) of a root.  Where the cubic has a liquid and a
+  // vapour root, the stable phase is the one with the lower Gibbs energy,
+  // i.e. the lower fugacity at the same T and p.
+  const double s2 = std::sqrt(2.0);
+  auto ln_phi = [&](double Z) {
+    return Z - 1.0 - std::log(Z - B) -
+           A / (2.0 * s2 * B) * std::log((Z + (1.0 + s2) * B) / (Z + (1.0 - s2) * B));
+  };
+  double best = 1.0, best_ln_phi = 0.0;
   bool found = false;
   for (double Z0 : {B * 1.0001 + 1e-9, 0.3, 1.0, 3.0}) {
     double Z = Z0;
@@ -341,9 +349,8 @@ double PengRobinsonFluid::compressibility(double T, double p) const {
       Z = Zn;
     }
     if (!ok || Z <= B) continue;
-    // Prefer the root with the lower molar Gibbs energy; for a single phase
-    // there is only one real root anyway.
-    if (!found || Z > best) { best = Z; found = true; }
+    const double g = ln_phi(Z);
+    if (!found || g < best_ln_phi) { best = Z; best_ln_phi = g; found = true; }
   }
   if (!found) throw ConvergenceError("Peng-Robinson: no physical compressibility root");
   return best;

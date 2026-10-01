@@ -1,0 +1,295 @@
+# Ignis nozzle-recombination mechanism: the H/O/CO/HCO subset of GRI-Mech 3.0
+# generated 2026-10-01T04:20:44Z by tools/build_kinetics.py from Cantera 3.2.0's gri30.yaml
+# source: G. P. Smith et al., GRI-Mech 3.0, http://combustion.berkeley.edu/gri-mech/
+# forward rates only; reverse rates follow from Ignis's own species
+# thermodynamics by detailed balance
+# units: A in (m^3/mol)^(n-1)/s for overall order n (third body counted), b dimensionless, Ea in J/mol
+species: [H2, H, O, O2, OH, H2O, HO2, H2O2, CO, CO2, HCO]
+reactions:
+- equation: "2 O + M <=> O2 + M"
+  gri: 1
+  type: three-body
+  reactants: {O: 2}
+  products: {O2: 1}
+  rate: {A: 120000, b: -1, Ea: 0}
+  default_efficiency: 1
+  efficiencies: {AR: 0.83, C2H6: 3, CH4: 2, CO: 1.75, CO2: 3.6, H2: 2.4, H2O: 15.4}
+- equation: "H + O + M <=> OH + M"
+  gri: 2
+  type: three-body
+  reactants: {H: 1, O: 1}
+  products: {OH: 1}
+  rate: {A: 500000, b: -1, Ea: 0}
+  default_efficiency: 1
+  efficiencies: {AR: 0.7, C2H6: 3, CH4: 2, CO: 1.5, CO2: 2, H2: 2, H2O: 6}
+- equation: "H2 + O <=> H + OH"
+  gri: 3
+  type: elementary
+  reactants: {H2: 1, O: 1}
+  products: {H: 1, OH: 1}
+  rate: {A: 0.0387, b: 2.7, Ea: 26191.84}
+- equation: "HO2 + O <=> O2 + OH"
+  gri: 4
+  type: elementary
+  reactants: {HO2: 1, O: 1}
+  products: {O2: 1, OH: 1}
+  rate: {A: 20000000, b: 0, Ea: 0}
+- equation: "H2O2 + O <=> HO2 + OH"
+  gri: 5
+  type: elementary
+  reactants: {H2O2: 1, O: 1}
+  products: {HO2: 1, OH: 1}
+  rate: {A: 9.63, b: 2, Ea: 16736}
+- equation: "CO + O (+M) <=> CO2 (+M)"
+  gri: 12
+  type: falloff
+  reactants: {CO: 1, O: 1}
+  products: {CO2: 1}
+  high: {A: 18000, b: 0, Ea: 9978.84}
+  low: {A: 602, b: 0, Ea: 12552}
+  default_efficiency: 1
+  efficiencies: {AR: 0.5, C2H6: 3, CH4: 2, CO: 1.5, CO2: 3.5, H2: 2, H2O: 6, O2: 6}
+- equation: "HCO + O <=> CO + OH"
+  gri: 13
+  type: elementary
+  reactants: {HCO: 1, O: 1}
+  products: {CO: 1, OH: 1}
+  rate: {A: 30000000, b: 0, Ea: 0}
+- equation: "HCO + O <=> CO2 + H"
+  gri: 14
+  type: elementary
+  reactants: {HCO: 1, O: 1}
+  products: {CO2: 1, H: 1}
+  rate: {A: 30000000, b: 0, Ea: 0}
+- equation: "CO + O2 <=> CO2 + O"
+  gri: 31
+  type: elementary
+  reactants: {CO: 1, O2: 1}
+  products: {CO2: 1, O: 1}
+  rate: {A: 2500000, b: 0, Ea: 199995.2}
+- equation: "H + O2 + M <=> HO2 + M"
+  gri: 33
+  type: three-body
+  reactants: {H: 1, O2: 1}
+  products: {HO2: 1}
+  rate: {A: 2800000, b: -0.86, Ea: 0}
+  default_efficiency: 1
+  efficiencies: {AR: 0, C2H6: 1.5, CO: 0.75, CO2: 1.5, H2O: 0, N2: 0, O2: 0}
+- equation: "H + O2 + O2 <=> HO2 + O2"
+  gri: 34
+  type: three-body
+  reactants: {H: 1, O2: 1}
+  products: {HO2: 1}
+  rate: {A: 20800000, b: -1.24, Ea: 0}
+  default_efficiency: 0
+  efficiencies: {O2: 1}
+- equation: "H + O2 + H2O <=> HO2 + H2O"
+  gri: 35
+  type: three-body
+  reactants: {H: 1, O2: 1}
+  products: {HO2: 1}
+  rate: {A: 11260000, b: -0.76, Ea: 0}
+  default_efficiency: 0
+  efficiencies: {H2O: 1}
+- equation: "H + O2 + N2 <=> HO2 + N2"
+  gri: 36
+  type: three-body
+  reactants: {H: 1, O2: 1}
+  products: {HO2: 1}
+  rate: {A: 26000000, b: -1.24, Ea: 0}
+  default_efficiency: 0
+  efficiencies: {N2: 1}
+- equation: "H + O2 + AR <=> HO2 + AR"
+  gri: 37
+  type: three-body
+  reactants: {H: 1, O2: 1}
+  products: {HO2: 1}
+  rate: {A: 700000, b: -0.8, Ea: 0}
+  default_efficiency: 0
+  efficiencies: {AR: 1}
+- equation: "H + O2 <=> O + OH"
+  gri: 38
+  type: elementary
+  reactants: {H: 1, O2: 1}
+  products: {O: 1, OH: 1}
+  rate: {A: 2.65e+10, b: -0.6707, Ea: 71299.544}
+- equation: "2 H + M <=> H2 + M"
+  gri: 39
+  type: three-body
+  reactants: {H: 2}
+  products: {H2: 1}
+  rate: {A: 1000000, b: -1, Ea: 0}
+  default_efficiency: 1
+  efficiencies: {AR: 0.63, C2H6: 3, CH4: 2, CO2: 0, H2: 0, H2O: 0}
+- equation: "2 H + H2 <=> H2 + H2"
+  gri: 40
+  type: three-body
+  reactants: {H: 2}
+  products: {H2: 1}
+  rate: {A: 90000, b: -0.6, Ea: 0}
+  default_efficiency: 0
+  efficiencies: {H2: 1}
+- equation: "2 H + H2O <=> H2 + H2O"
+  gri: 41
+  type: three-body
+  reactants: {H: 2}
+  products: {H2: 1}
+  rate: {A: 60000000, b: -1.25, Ea: 0}
+  default_efficiency: 0
+  efficiencies: {H2O: 1}
+- equation: "2 H + CO2 <=> H2 + CO2"
+  gri: 42
+  type: three-body
+  reactants: {H: 2}
+  products: {H2: 1}
+  rate: {A: 550000000, b: -2, Ea: 0}
+  default_efficiency: 0
+  efficiencies: {CO2: 1}
+- equation: "H + OH + M <=> H2O + M"
+  gri: 43
+  type: three-body
+  reactants: {H: 1, OH: 1}
+  products: {H2O: 1}
+  rate: {A: 2.2e+10, b: -2, Ea: 0}
+  default_efficiency: 1
+  efficiencies: {AR: 0.38, C2H6: 3, CH4: 2, H2: 0.73, H2O: 3.65}
+- equation: "H + HO2 <=> H2O + O"
+  gri: 44
+  type: elementary
+  reactants: {H: 1, HO2: 1}
+  products: {H2O: 1, O: 1}
+  rate: {A: 3970000, b: 0, Ea: 2807.464}
+- equation: "H + HO2 <=> H2 + O2"
+  gri: 45
+  type: elementary
+  reactants: {H: 1, HO2: 1}
+  products: {H2: 1, O2: 1}
+  rate: {A: 44800000, b: 0, Ea: 4468.512}
+- equation: "H + HO2 <=> 2 OH"
+  gri: 46
+  type: elementary
+  reactants: {H: 1, HO2: 1}
+  products: {OH: 2}
+  rate: {A: 84000000, b: 0, Ea: 2656.84}
+- equation: "H + H2O2 <=> H2 + HO2"
+  gri: 47
+  type: elementary
+  reactants: {H: 1, H2O2: 1}
+  products: {H2: 1, HO2: 1}
+  rate: {A: 12.1, b: 2, Ea: 21756.8}
+- equation: "H + H2O2 <=> H2O + OH"
+  gri: 48
+  type: elementary
+  reactants: {H: 1, H2O2: 1}
+  products: {H2O: 1, OH: 1}
+  rate: {A: 10000000, b: 0, Ea: 15062.4}
+- equation: "H + HCO <=> CO + H2"
+  gri: 55
+  type: elementary
+  reactants: {H: 1, HCO: 1}
+  products: {CO: 1, H2: 1}
+  rate: {A: 73400000, b: 0, Ea: 0}
+- equation: "H2 + OH <=> H + H2O"
+  gri: 84
+  type: elementary
+  reactants: {H2: 1, OH: 1}
+  products: {H: 1, H2O: 1}
+  rate: {A: 216, b: 1.51, Ea: 14351.12}
+- equation: "2 OH (+M) <=> H2O2 (+M)"
+  gri: 85
+  type: falloff
+  reactants: {OH: 2}
+  products: {H2O2: 1}
+  high: {A: 74000000, b: -0.37, Ea: 0}
+  low: {A: 2300000, b: -0.9, Ea: -7112.8}
+  troe: [0.7346, 94, 1756, 5182]
+  default_efficiency: 1
+  efficiencies: {AR: 0.7, C2H6: 3, CH4: 2, CO: 1.5, CO2: 2, H2: 2, H2O: 6}
+- equation: "2 OH <=> H2O + O"
+  gri: 86
+  type: elementary
+  reactants: {OH: 2}
+  products: {H2O: 1, O: 1}
+  rate: {A: 0.0357, b: 2.4, Ea: -8828.24}
+- equation: "HO2 + OH <=> H2O + O2"
+  gri: 87
+  type: elementary
+  reactants: {HO2: 1, OH: 1}
+  products: {H2O: 1, O2: 1}
+  rate: {A: 14500000, b: 0, Ea: -2092}
+  duplicate: true
+- equation: "H2O2 + OH <=> H2O + HO2"
+  gri: 88
+  type: elementary
+  reactants: {H2O2: 1, OH: 1}
+  products: {H2O: 1, HO2: 1}
+  rate: {A: 2000000, b: 0, Ea: 1786.568}
+  duplicate: true
+- equation: "H2O2 + OH <=> H2O + HO2"
+  gri: 89
+  type: elementary
+  reactants: {H2O2: 1, OH: 1}
+  products: {H2O: 1, HO2: 1}
+  rate: {A: 1.7e+12, b: 0, Ea: 123051.44}
+  duplicate: true
+- equation: "CO + OH <=> CO2 + H"
+  gri: 99
+  type: elementary
+  reactants: {CO: 1, OH: 1}
+  products: {CO2: 1, H: 1}
+  rate: {A: 47.6, b: 1.228, Ea: 292.88}
+- equation: "HCO + OH <=> CO + H2O"
+  gri: 100
+  type: elementary
+  reactants: {HCO: 1, OH: 1}
+  products: {CO: 1, H2O: 1}
+  rate: {A: 50000000, b: 0, Ea: 0}
+- equation: "2 HO2 <=> H2O2 + O2"
+  gri: 115
+  type: elementary
+  reactants: {HO2: 2}
+  products: {H2O2: 1, O2: 1}
+  rate: {A: 130000, b: 0, Ea: -6819.92}
+  duplicate: true
+- equation: "2 HO2 <=> H2O2 + O2"
+  gri: 116
+  type: elementary
+  reactants: {HO2: 2}
+  products: {H2O2: 1, O2: 1}
+  rate: {A: 420000000, b: 0, Ea: 50208}
+  duplicate: true
+- equation: "CO + HO2 <=> CO2 + OH"
+  gri: 120
+  type: elementary
+  reactants: {CO: 1, HO2: 1}
+  products: {CO2: 1, OH: 1}
+  rate: {A: 150000000, b: 0, Ea: 98742.4}
+- equation: "HCO + H2O <=> CO + H + H2O"
+  gri: 166
+  type: three-body
+  reactants: {HCO: 1}
+  products: {CO: 1, H: 1}
+  rate: {A: 1.5e+12, b: -1, Ea: 71128}
+  default_efficiency: 0
+  efficiencies: {H2O: 1}
+- equation: "HCO + M <=> CO + H + M"
+  gri: 167
+  type: three-body
+  reactants: {HCO: 1}
+  products: {CO: 1, H: 1}
+  rate: {A: 1.87e+11, b: -1, Ea: 71128}
+  default_efficiency: 1
+  efficiencies: {C2H6: 3, CH4: 2, CO: 1.5, CO2: 2, H2: 2, H2O: 0}
+- equation: "HCO + O2 <=> CO + HO2"
+  gri: 168
+  type: elementary
+  reactants: {HCO: 1, O2: 1}
+  products: {CO: 1, HO2: 1}
+  rate: {A: 13450000, b: 0, Ea: 1673.6}
+- equation: "HO2 + OH <=> H2O + O2"
+  gri: 287
+  type: elementary
+  reactants: {HO2: 1, OH: 1}
+  products: {H2O: 1, O2: 1}
+  rate: {A: 5000000000, b: 0, Ea: 72508.72}
+  duplicate: true

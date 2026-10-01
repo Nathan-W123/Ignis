@@ -41,6 +41,7 @@ SteadyEngine cheapEngine() {
   auto cfg = EngineConfig::load(configDir() + "/methane_nominal.yaml");
   cfg.cooling_enabled = false;
   cfg.feed_enabled = false;
+  cfg.cycle_enabled = false;
   cfg.sample_profile = false;
   return SteadyEngine(cfg);
 }

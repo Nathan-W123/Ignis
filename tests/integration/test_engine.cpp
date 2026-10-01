@@ -95,8 +95,31 @@ TEST_CASE("the nominal methane engine runs end to end and is self-consistent",
   SECTION("the summary mentions every major section") {
     const auto text = res.summary();
     for (const char* needle : {"chamber", "nozzle performance", "regenerative cooling",
-                               "feed system", "c* ideal", "Isp (vacuum)"})
+                               "feed system", "c* ideal", "Isp (vacuum)", "engine cycle"})
       REQUIRE(text.find(needle) != std::string::npos);
+  }
+  SECTION("the gas generator closes, and pays for the jacket's configured pressure") {
+    REQUIRE(res.has_cycle);
+    const auto& c = res.cycle;
+    REQUIRE(c.type == CycleType::kGasGenerator);
+    REQUIRE(c.feasible);
+    REQUIRE(std::abs(c.power_balance_residual) < 1e-10);
+    // The jacket is configured at 15 MPa: the fuel pump delivers it.
+    REQUIRE_FALSE(res.cycle_coupling.jacket_inlet_from_cycle);
+    REQUIRE(c.fuel_discharge_pressure == Approx(cfg.cooling.inlet_pressure).epsilon(1e-14));
+    REQUIRE(c.fuel_throttle_loss > 0.0);
+    REQUIRE(c.fuel_throttle_loss ==
+            Approx(cfg.cooling.inlet_pressure -
+                   cfg.chamber_pressure * (1.0 + cfg.cycle.injector_stiffness +
+                                           cfg.cycle.line_loss_fraction) -
+                   res.cooling.coolant_pressure_drop)
+                .epsilon(1e-9));
+    // The main chamber's flows are the engine's, less the generator's.
+    REQUIRE(c.total_mass_flow == Approx(res.mdot + c.gg_mass_flow).epsilon(1e-14));
+    REQUIRE(c.isp_vacuum_dumped < c.isp_vacuum_delivered);
+    REQUIRE(c.isp_vacuum_delivered < res.performance.isp_vacuum);
+    const auto json = res.toJson().dump();
+    REQUIRE(json.find("\"gas_generator_flow_fraction\"") != std::string::npos);
   }
 }
 
@@ -114,6 +137,48 @@ TEST_CASE("the nominal hydrogen engine runs end to end", "[integration][engine][
   REQUIRE(res.has_cooling);
   REQUIRE(res.cooling.energy_balance_residual < 1.0e-8);
   REQUIRE(res.cooling.coolant_temperature_rise > 0.0);
+
+  SECTION("the expander closes, and sets the jacket's inlet state") {
+    REQUIRE(res.has_cycle);
+    const auto& c = res.cycle;
+    INFO(c.summary());
+    REQUIRE(c.type == CycleType::kExpander);
+    REQUIRE(c.feasible);
+    REQUIRE(std::abs(c.power_balance_residual) < 1e-9);
+    // The configuration leaves the jacket's inlet open, so the cycle closes
+    // it: the jacket starts where the fuel pump leaves the hydrogen.
+    REQUIRE(res.cycle_coupling.jacket_inlet_from_cycle);
+    REQUIRE(std::abs(res.cycle_coupling.mismatch) < 2.0e-3);
+    REQUIRE(res.cooling.coolant_inlet_temperature == Approx(c.fuel_pump.t_out).margin(0.1));
+    REQUIRE(c.fuel_pump.t_out > c.fuel_pump.t_in);
+    // The turbine runs on the jacket's outlet and passes no more than the pump.
+    REQUIRE(c.turbine.t_in == Approx(res.cooling.coolant_outlet_temperature).epsilon(1e-12));
+    REQUIRE(c.turbine.mass_flow <= c.fuel_pump.mass_flow * (1.0 + 1e-12));
+    REQUIRE(c.max_power_ratio > 1.0);
+    // A closed cycle delivers what its chamber does.
+    REQUIRE(c.isp_vacuum_delivered == Approx(res.performance.isp_vacuum).epsilon(1e-12));
+  }
+}
+
+TEST_CASE("the nominal kerosene engine runs end to end", "[integration][engine][kerosene]") {
+  const auto cfg = EngineConfig::load(configDir() + "/kerosene_nominal.yaml");
+  const SteadyEngine engine(cfg);
+  const auto res = engine.run();
+  INFO(res.summary());
+  REQUIRE(res.chamber.state.T > 3300.0);
+  REQUIRE(res.chamber.state.T < 3800.0);
+  REQUIRE(res.has_cooling);
+  REQUIRE(res.cooling.energy_balance_residual < 1.0e-8);
+  REQUIRE_FALSE(res.cooling.wall_limit_exceeded);
+  // The example's point: the wetted wall passes the coking onset.
+  REQUIRE(res.cooling.coolant_wall_limit_exceeded);
+  REQUIRE(res.has_cycle);
+  REQUIRE(res.cycle.feasible);
+  REQUIRE(std::abs(res.cycle.power_balance_residual) < 1e-10);
+  // RP-1 is pumped at its own measured density, not the surrogate's.
+  REQUIRE_FALSE(res.cycle.fuel_pump.real_fluid);
+  REQUIRE(res.cycle.fuel_pump_model.find("surrogate") != std::string::npos);
+  REQUIRE(res.cycle.isp_vacuum_delivered < res.performance.isp_vacuum);
 }
 
 TEST_CASE("altitude changes performance in the expected direction",
@@ -172,6 +237,7 @@ TEST_CASE("a sweep reproduces the single-point analysis exactly",
     auto nozzle_only = cfg;
     nozzle_only.cooling_enabled = false;   // a pure performance grid
     nozzle_only.feed_enabled = false;
+    nozzle_only.cycle_enabled = false;
     const SteadyEngine nozzle_engine(nozzle_only);
     SweepSpec two;
     two.axes.push_back(SweepAxis::linear("propellants.mixture_ratio", 3.0, 3.8, 3));

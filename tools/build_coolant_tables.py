@@ -73,10 +73,18 @@ def _coolprop():
 # smooth well above it, so the grid is refined below 1.5 T_crit and coarsened
 # at high temperature.  This keeps the interpolation error small without
 # inflating the committed file.
+#
+# The cryogens are also PUMPED (ignis/cycle/Turbomachinery.hpp), so their
+# tables reach the tank-side and turbopump-discharge pressures as well as the
+# jacket's: a hydrogen pump feeds a 20 MPa chamber at 40+ MPa, an oxygen
+# preburner boost pump at nearly 50 MPa, and the pump inlets sit at one to a
+# few bar on a liquid near its normal boiling point.  Liquid hydrogen spans only 14-33 K,
+# so its temperature step below 1.5 T_crit is 1 K rather than 2 K.
 FLUIDS = {
-    "methane":  dict(cp_name="Methane",  t_min=95.0, t_max=1100.0, p=(0.5e6, 40.0e6, 41)),
-    "hydrogen": dict(cp_name="Hydrogen", t_min=22.0, t_max=1100.0, p=(0.5e6, 40.0e6, 41)),
-    "oxygen":   dict(cp_name="Oxygen",   t_min=60.0, t_max=1000.0, p=(0.5e6, 40.0e6, 41)),
+    "methane":  dict(cp_name="Methane",  t_min=95.0, t_max=1100.0, p=(0.1e6, 60.0e6, 61)),
+    "hydrogen": dict(cp_name="Hydrogen", t_min=15.0, t_max=1100.0, p=(0.1e6, 60.0e6, 61),
+                     t_step=1.0),
+    "oxygen":   dict(cp_name="Oxygen",   t_min=60.0, t_max=1000.0, p=(0.1e6, 60.0e6, 61)),
     # RP-1 has no reference equation of state of its own in CoolProp; NIST's
     # RP-1 surrogates (Huber et al., Energy & Fuels 2009) need four components
     # CoolProp does not carry.  n-dodecane is the single-component SURROGATE:
@@ -87,9 +95,9 @@ FLUIDS = {
 }
 
 
-def temperature_axis(t_min, t_max, t_crit):
-    """Refined below 1.5 T_crit, moderate to 2.5 T_crit, coarse above."""
-    knees = [(t_min, min(1.5 * t_crit, t_max), 2.0),
+def temperature_axis(t_min, t_max, t_crit, t_step=2.0):
+    """Refined (t_step) below 1.5 T_crit, moderate to 2.5 T_crit, coarse above."""
+    knees = [(t_min, min(1.5 * t_crit, t_max), t_step),
              (min(1.5 * t_crit, t_max), min(2.5 * t_crit, t_max), 8.0),
              (min(2.5 * t_crit, t_max), t_max, 25.0)]
     pts = []
@@ -120,7 +128,7 @@ def main(argv=None) -> int:
         spec = FLUIDS[name]
         cpn = spec["cp_name"]
         Tc = CP.PropsSI("Tcrit", cpn)
-        T = temperature_axis(spec["t_min"], spec["t_max"], Tc)
+        T = temperature_axis(spec["t_min"], spec["t_max"], Tc, spec.get("t_step", 2.0))
         p = np.geomspace(spec["p"][0], spec["p"][1], spec["p"][2])
 
         pc = CP.PropsSI("pcrit", cpn)

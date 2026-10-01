@@ -19,6 +19,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include "ignis/combustion/Propellant.hpp"
+#include "ignis/cycle/Cycle.hpp"
 #include "ignis/cycle/FeedSystem.hpp"
 #include "ignis/nozzle/NozzleFlow.hpp"
 #include "ignis/nozzle/NozzleGeometry.hpp"
@@ -123,6 +124,11 @@ struct EngineConfig {
   FeedSystemSpec feed;
   double injector_stiffness = 0.2;
   bool feed_capability_mode = false;
+
+  /// Turbopump cycle (pump-fed engines).  When the jacket's inlet pressure
+  /// is not configured, the cycle sets it: it is the fuel pump's discharge.
+  bool cycle_enabled = false;
+  CycleSpec cycle;
 
   /// Sample the axial flow profile during a steady analysis.  Sweeps, Monte
   /// Carlo and the optimiser turn this off: the profile costs a nozzle solve at

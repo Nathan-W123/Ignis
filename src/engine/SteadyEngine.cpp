@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
+#include <memory>
 #include <sstream>
 
 namespace ignis {
@@ -96,15 +97,89 @@ SteadyEngineResult SteadyEngine::analyse(const EngineConfig& cfg, double p_ambie
   if (cfg.sample_profile) res.profile = sampleAxialProfile(flow, geom);
 
   CoolingSpec cs = cfg.cooling;
+  // The cycle sees the jacket only when the fuel cools it, straight from the
+  // fuel pump.
+  const bool fuel_cooled =
+      cfg.cooling_enabled && cs.coolant == propellants_->at(cfg.fuel).coolant_table;
+  std::unique_ptr<CoolantFluid> jacket_fluid;
+  // The jacket's share of the fuel.  The jacket is solved on the inviscid
+  // flow; the cycle carries the same share of the final one, so that the
+  // turbine never passes more fuel than the pump delivers.
+  double jacket_fuel_share = 0.0;
+  auto cycleInputs = [&]() {
+    CycleInputs ci;
+    ci.chamber_pressure = cfg.chamber_pressure;
+    ci.oxidizer_mass_flow = res.mdot_oxidizer;
+    ci.fuel_mass_flow = res.mdot_fuel;
+    ci.oxidizer = &propellants_->at(cfg.oxidizer);
+    ci.fuel = &propellants_->at(cfg.fuel);
+    ci.oxidizer_temperature = mix.oxidizerTemperature();
+    ci.fuel_temperature = mix.fuelTemperature();
+    if (res.has_cooling && fuel_cooled) {
+      ci.jacket = true;
+      // A film drawn from the jacket outlet leaves before the turbine.
+      const bool film_from_jacket = res.cooling.has_film && cs.film_temperature <= 0.0 &&
+                                    (cs.film_coolant.empty() || cs.film_coolant == cs.coolant);
+      ci.jacket_mass_flow = jacket_fuel_share * res.mdot_fuel *
+                            (1.0 - (film_from_jacket ? res.cooling.film_mass_flow /
+                                                           cs.coolant_mass_flow
+                                                     : 0.0));
+      ci.jacket_pressure_drop = res.cooling.coolant_pressure_drop;
+      ci.jacket_outlet_temperature = res.cooling.coolant_outlet_temperature;
+      ci.jacket_heat = res.cooling.total_heat_load;
+      ci.jacket_fluid = jacket_fluid.get();
+    }
+    if (res.has_cooling && fuel_cooled && cfg.cooling.inlet_pressure > 0.0)
+      ci.fuel_discharge_floor = cfg.cooling.inlet_pressure;
+    ci.exit_pressure = res.performance.p_exit;
+    ci.ambient_pressure = p_ambient;
+    ci.thrust = res.performance.thrust;
+    ci.thrust_vacuum = res.performance.isp_vacuum * constants::g0 * res.mdot;
+    return ci;
+  };
+
   if (cfg.cooling_enabled) {
     if (!(cs.coolant_mass_flow > 0.0))
       cs.coolant_mass_flow = cfg.coolant_fuel_fraction * res.mdot_fuel;
     if (!(cs.inlet_temperature > 0.0))
       cs.inlet_temperature = propellants_->at(cfg.fuel).reference_temperature;
     if (!(cs.inlet_pressure > 0.0)) cs.inlet_pressure = 1.6 * cfg.chamber_pressure;
+    // Under a cycle an unconfigured inlet temperature is the fuel pump's
+    // outlet; start from it, since a cryogen at its storage temperature can
+    // be solid at a turbopump's discharge pressure.
+    if (cfg.cycle_enabled && fuel_cooled && !(cfg.cooling.inlet_temperature > 0.0))
+      cs.inlet_temperature = pumpDischargeTemperature(
+          propellants_->at(cfg.fuel), mix.fuelTemperature(), cfg.cycle.pump_inlet_pressure_fuel,
+          cs.inlet_pressure, cfg.cycle.pump_efficiency_fuel);
     if (cfg.film_fuel_fraction > 0.0) cs.film_mass_flow = cfg.film_fuel_fraction * res.mdot_fuel;
+    jacket_fuel_share = cs.coolant_mass_flow / res.mdot_fuel;
     res.cooling = solveRegenerativeCooling(flow, geom, res.chamber, cs, *transport_);
     res.has_cooling = true;
+    if (cfg.cycle_enabled && fuel_cooled)
+      jacket_fluid = std::make_unique<CoolantFluid>(CoolantFluid::load(cs.coolant));
+    // Unless they are configured, the jacket's inlet pressure and temperature
+    // are the fuel pump's discharge, which the cycle decides and which depends
+    // on the jacket's own pressure drop (and, in an expander, its outlet
+    // temperature): iterate.
+    const bool set_p = !(cfg.cooling.inlet_pressure > 0.0);
+    const bool set_t = !(cfg.cooling.inlet_temperature > 0.0);
+    if (cfg.cycle_enabled && fuel_cooled && (set_p || set_t)) {
+      auto& cc = res.cycle_coupling;
+      cc.jacket_inlet_from_cycle = set_p;
+      for (int pass = 0; pass < 8; ++pass) {
+        const auto trial = solveCycle(cfg.cycle, cycleInputs(), *solver_);
+        cc.passes = pass + 1;
+        if (!trial.feasible || !(trial.fuel_discharge_pressure > 0.0)) break;
+        const double p_new = set_p ? trial.fuel_discharge_pressure : cs.inlet_pressure;
+        const double t_new = set_t ? trial.fuel_pump.t_out : cs.inlet_temperature;
+        if (std::abs(p_new - cs.inlet_pressure) <= 1.0e-3 * cs.inlet_pressure &&
+            std::abs(t_new - cs.inlet_temperature) <= 0.05)
+          break;
+        cs.inlet_pressure = p_new;
+        cs.inlet_temperature = t_new;
+        res.cooling = solveRegenerativeCooling(flow, geom, res.chamber, cs, *transport_);
+      }
+    }
   }
 
   // --- boundary-layer losses ---------------------------------------------
@@ -169,6 +244,28 @@ SteadyEngineResult SteadyEngine::analyse(const EngineConfig& cfg, double p_ambie
     fp.isp_vacuum_mixed = res.performance.isp_vacuum;
     fp.isp_vacuum_unmixed = (1.0 - f) * core_perf.isp_vacuum + f * film_isp_vac;
     fp.isp_vacuum_penalty = 1.0 - fp.isp_vacuum_unmixed / fp.isp_vacuum_mixed;
+  }
+
+  // --- turbopump cycle ---------------------------------------------------
+  if (cfg.cycle_enabled) {
+    res.cycle = solveCycle(cfg.cycle, cycleInputs(), *solver_);
+    res.has_cycle = true;
+    auto& cc = res.cycle_coupling;
+    if (res.has_cooling && fuel_cooled) {
+      cc.jacket_inlet_pressure = cs.inlet_pressure;
+      cc.mismatch = res.cycle.fuel_discharge_pressure / cs.inlet_pressure - 1.0;
+      if (!cc.jacket_inlet_from_cycle && std::abs(cc.mismatch) > 0.05) {
+        std::ostringstream os;
+        os << std::fixed << std::setprecision(2) << "the jacket was solved at its configured "
+           << cs.inlet_pressure * 1e-6 << " MPa inlet pressure, but the cycle's fuel pump delivers "
+           << res.cycle.fuel_discharge_pressure * 1e-6
+           << " MPa; leave cooling.inlet_pressure unset to let the cycle decide it";
+        res.cycle.warnings.push_back(os.str());
+      }
+    } else if (res.has_cooling) {
+      res.cycle.warnings.push_back("the jacket is not cooled by the fuel, so the cycle carries "
+                                   "neither its pressure drop nor its heat");
+    }
   }
 
   if (cfg.feed_enabled) {
@@ -254,7 +351,20 @@ std::string SteadyEngineResult::summary() const {
        << "  unmixed (two-stream)  " << film.isp_vacuum_unmixed << " s  (at most "
        << 100.0 * film.isp_vacuum_penalty << " % lower)\n";
   }
-  if (has_feed) os << "\n" << feed.summary() << "\n";
+  if (has_cycle) {
+    os << "\n" << cycle.summary();
+    if (cycle_coupling.jacket_inlet_from_cycle)
+      os << "  jacket inlet          set by the cycle: " << std::fixed << std::setprecision(3)
+         << cycle_coupling.jacket_inlet_pressure * 1e-6 << " MPa after "
+         << cycle_coupling.passes << " pass(es), " << std::setprecision(3)
+         << 100.0 * cycle_coupling.mismatch << " % from the final discharge\n";
+  }
+  if (has_feed) {
+    os << "\n" << feed.summary() << "\n";
+    if (has_cycle)
+      os << "  (the feed block sizes a pressure-fed alternative; the turbopump cycle above is "
+            "separate)\n";
+  }
   return os.str();
 }
 
@@ -508,6 +618,85 @@ Json SteadyEngineResult::toJson() const {
     f["stiffness_ok"] = Json(feed.stiffness_ok);
     if (!feed.notes.empty()) f["notes"] = Json(feed.notes);
     j["feed"] = f;
+  }
+  if (has_cycle) {
+    const auto& cy = cycle;
+    Json y = Json::object();
+    y["type"] = Json(toString(cy.type));
+    y["feasible"] = Json(cy.feasible);
+    if (!cy.feasible) y["infeasibility"] = Json(cy.infeasibility);
+    auto pumpJson = [](const PumpResult& pump, const std::string& model) {
+      Json q = Json::object();
+      q["mass_flow"] = Json(pump.mass_flow);
+      q["inlet_pressure"] = Json(pump.p_in);
+      q["discharge_pressure"] = Json(pump.p_out);
+      q["inlet_temperature"] = Json(pump.t_in);
+      q["outlet_temperature"] = Json(pump.t_out);
+      q["isentropic_head"] = Json(pump.isentropic_head);
+      q["efficiency"] = Json(pump.efficiency);
+      q["power"] = Json(pump.power);
+      q["real_fluid"] = Json(pump.real_fluid);
+      if (!model.empty()) q["model"] = Json(model);
+      return q;
+    };
+    y["oxidizer_pump"] = pumpJson(cy.oxidizer_pump, cy.oxidizer_pump_model);
+    y["fuel_pump"] = pumpJson(cy.fuel_pump, cy.fuel_pump_model);
+    if (cy.has_boost_pump) {
+      y["boost_pump"] = pumpJson(cy.boost_pump, "");
+      y["boost_propellant"] = Json(cy.boost_propellant);
+    }
+    if (cy.has_combustor) {
+      Json gas = Json::object();
+      gas["mixture_ratio"] = Json(cy.combustor.mixture_ratio);
+      gas["temperature"] = Json(cy.combustor.temperature);
+      gas["pressure"] = Json(cy.combustor_pressure);
+      gas["molar_mass"] = Json(cy.combustor.molar_mass);
+      gas["enthalpy_residual"] = Json(cy.combustor.enthalpy_residual);
+      y[cy.type == CycleType::kGasGenerator ? "gas_generator" : "preburner"] = gas;
+    }
+    Json t = Json::object();
+    t["mass_flow"] = Json(cy.turbine.mass_flow);
+    t["inlet_temperature"] = Json(cy.turbine.t_in);
+    t["outlet_temperature"] = Json(cy.turbine.t_out);
+    t["inlet_pressure"] = Json(cy.turbine.p_in);
+    t["outlet_pressure"] = Json(cy.turbine.p_out);
+    t["pressure_ratio"] = Json(cy.turbine.pressure_ratio);
+    t["efficiency"] = Json(cy.turbine.efficiency);
+    t["power"] = Json(cy.turbine_power);
+    y["turbine"] = t;
+    y["pump_power"] = Json(cy.pump_power);
+    y["power_balance_residual"] = Json(cy.power_balance_residual);
+    if (cy.max_power_ratio > 0.0) y["max_power_ratio"] = Json(cy.max_power_ratio);
+    y["oxidizer_discharge_pressure"] = Json(cy.oxidizer_discharge_pressure);
+    y["fuel_discharge_pressure"] = Json(cy.fuel_discharge_pressure);
+    if (cy.type == CycleType::kGasGenerator) {
+      y["gas_generator_mass_flow"] = Json(cy.gg_mass_flow);
+      y["gas_generator_flow_fraction"] = Json(cy.gg_flow_fraction);
+      y["exhaust_velocity"] = Json(cy.exhaust_velocity);
+      y["exhaust_exit_pressure"] = Json(cy.exhaust_exit_pressure);
+      y["exhaust_thrust_vacuum"] = Json(cy.exhaust_thrust_vacuum);
+    }
+    if (cy.type == CycleType::kStagedCombustion) {
+      y["preburner_major_flow"] = Json(cy.preburner_major_flow);
+      y["preburner_minor_flow"] = Json(cy.preburner_minor_flow);
+    }
+    y["total_mass_flow"] = Json(cy.total_mass_flow);
+    y["overall_mixture_ratio"] = Json(cy.overall_mixture_ratio);
+    y["thrust_vacuum_delivered"] = Json(cy.thrust_vacuum_delivered);
+    y["thrust_delivered"] = Json(cy.thrust_delivered);
+    y["isp_vacuum_delivered"] = Json(cy.isp_vacuum_delivered);
+    y["isp_delivered"] = Json(cy.isp_delivered);
+    y["isp_vacuum_dumped"] = Json(cy.isp_vacuum_dumped);
+    if (cycle_coupling.jacket_inlet_from_cycle || cycle_coupling.jacket_inlet_pressure > 0.0) {
+      Json k = Json::object();
+      k["jacket_inlet_from_cycle"] = Json(cycle_coupling.jacket_inlet_from_cycle);
+      k["passes"] = Json(static_cast<double>(cycle_coupling.passes));
+      k["jacket_inlet_pressure"] = Json(cycle_coupling.jacket_inlet_pressure);
+      k["mismatch"] = Json(cycle_coupling.mismatch);
+      y["jacket_coupling"] = k;
+    }
+    y["warnings"] = Json::of(cy.warnings);
+    j["cycle"] = y;
   }
   return j;
 }

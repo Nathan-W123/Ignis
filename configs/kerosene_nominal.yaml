@@ -86,3 +86,23 @@ cooling:
   film:
     fuel_fraction: 0.05           # of the fuel flow
     slot_height: 0.2e-3           # m; keeps V_g/V_c inside Hatch & Papell's fitted range
+
+# Turbopump cycle (ignis/cycle/Cycle.hpp).  A fuel-rich gas generator, as on
+# most kerosene booster engines.  The efficiencies, turbine inlet temperature
+# and pressure ratio are typical conceptual-design values, ASSUMED.  Ignis
+# takes the generator gas as chemical equilibrium, which a fuel-rich kerosene
+# generator is not (it makes soot and cracked fuel), so the run warns that the
+# gas composition is approximate; its temperature is the one asked for.  RP-1
+# is pumped as an incompressible liquid at its measured density, since the
+# n-dodecane table is a surrogate 7 % lighter than RP-1.
+cycle:
+  type: gas_generator
+  pump_efficiency: 0.70
+  turbine_efficiency: 0.60
+  mechanical_efficiency: 0.98
+  pump_inlet_pressure: 3.0e5      # Pa
+  injector_stiffness: 0.20
+  line_loss_fraction: 0.05
+  turbine_inlet_temperature: 900.0  # K
+  fuel_rich: true
+  turbine_pressure_ratio: 20.0

@@ -17,12 +17,13 @@ int main(int argc, char** argv) {
         {"ambient", "PA", "evaluate at this ambient pressure instead of the configured one", ""},
         {"no-cooling", "", "skip the regenerative-cooling analysis", ""},
         {"no-feed", "", "skip the feed-system analysis", ""},
+        {"no-cycle", "", "skip the turbopump cycle balance", ""},
         {"contour", "", "also export the bare nozzle contour", ""},
     };
     if (!parseCommandLine(argc, argv, "ignis_engine",
                           "Run one complete steady-state engine analysis: chamber equilibrium,\n"
                           "quasi-1D nozzle expansion, thrust and specific impulse, regenerative\n"
-                          "cooling and feed-system sizing.",
+                          "cooling, turbopump cycle balance and feed-system sizing.",
                           options, cli))
       return 0;
 
@@ -38,6 +39,7 @@ int main(int argc, char** argv) {
     }
     if (flagPresent(cli, "no-cooling")) cfg.cooling_enabled = false;
     if (flagPresent(cli, "no-feed")) cfg.feed_enabled = false;
+    if (flagPresent(cli, "no-cycle")) cfg.cycle_enabled = false;
 
     const SteadyEngine engine(cfg);
     const auto geom = NozzleGeometry::build(cfg.nozzle);

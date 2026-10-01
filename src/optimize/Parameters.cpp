@@ -111,6 +111,24 @@ const std::map<std::string, ParamEntry>& paramTable() {
       {"feed.injector_stiffness",
        {"-", [](EngineConfig& c, double v) { c.injector_stiffness = v; },
         [](const EngineConfig& c) { return c.injector_stiffness; }}},
+      {"cycle.turbine_inlet_temperature",
+       {"K", [](EngineConfig& c, double v) { c.cycle.turbine_inlet_temperature = v; },
+        [](const EngineConfig& c) { return c.cycle.turbine_inlet_temperature; }}},
+      {"cycle.turbine_efficiency",
+       {"-", [](EngineConfig& c, double v) { c.cycle.turbine_efficiency = v; },
+        [](const EngineConfig& c) { return c.cycle.turbine_efficiency; }}},
+      // Both main pumps together.
+      {"cycle.pump_efficiency",
+       {"-", [](EngineConfig& c, double v) {
+          c.cycle.pump_efficiency_oxidizer = v;
+          c.cycle.pump_efficiency_fuel = v; },
+        [](const EngineConfig& c) { return c.cycle.pump_efficiency_fuel; }}},
+      {"cycle.turbine_pressure_ratio",
+       {"-", [](EngineConfig& c, double v) { c.cycle.turbine_pressure_ratio = v; },
+        [](const EngineConfig& c) { return c.cycle.turbine_pressure_ratio; }}},
+      {"cycle.injector_stiffness",
+       {"-", [](EngineConfig& c, double v) { c.cycle.injector_stiffness = v; },
+        [](const EngineConfig& c) { return c.cycle.injector_stiffness; }}},
   };
   return table;
 }
@@ -119,6 +137,11 @@ struct MetricEntry {
   const char* units;
   double (*get)(const SteadyEngineResult&);
 };
+
+const CycleResult& cycleOf(const SteadyEngineResult& r) {
+  if (!r.has_cycle) throw ConfigError("metric requires a cycle analysis (a 'cycle' block)");
+  return r.cycle;
+}
 
 double coolingValue(const SteadyEngineResult& r, double CoolingResult::*m) {
   if (!r.has_cooling)
@@ -201,6 +224,16 @@ const std::map<std::string, MetricEntry>& metricTable() {
       {"feed.total_pump_power", {"W", [](const SteadyEngineResult& r) {
          if (!r.has_feed) throw ConfigError("metric requires a feed-system analysis");
          return r.feed.total_pump_power; }}},
+      {"cycle.isp_vacuum_delivered", {"s", [](const SteadyEngineResult& r) { return cycleOf(r).isp_vacuum_delivered; }}},
+      {"cycle.isp_delivered", {"s", [](const SteadyEngineResult& r) { return cycleOf(r).isp_delivered; }}},
+      {"cycle.isp_vacuum_dumped", {"s", [](const SteadyEngineResult& r) { return cycleOf(r).isp_vacuum_dumped; }}},
+      {"cycle.gas_generator_flow_fraction", {"-", [](const SteadyEngineResult& r) { return cycleOf(r).gg_flow_fraction; }}},
+      {"cycle.fuel_pump_discharge_pressure", {"Pa", [](const SteadyEngineResult& r) { return cycleOf(r).fuel_discharge_pressure; }}},
+      {"cycle.oxidizer_pump_discharge_pressure", {"Pa", [](const SteadyEngineResult& r) { return cycleOf(r).oxidizer_discharge_pressure; }}},
+      {"cycle.pump_power", {"W", [](const SteadyEngineResult& r) { return cycleOf(r).pump_power; }}},
+      {"cycle.turbine_pressure_ratio", {"-", [](const SteadyEngineResult& r) { return cycleOf(r).turbine_pressure_ratio; }}},
+      {"cycle.max_power_ratio", {"-", [](const SteadyEngineResult& r) { return cycleOf(r).max_power_ratio; }}},
+      {"cycle.feasible", {"-", [](const SteadyEngineResult& r) { return cycleOf(r).feasible ? 1.0 : 0.0; }}},
   };
   return table;
 }
